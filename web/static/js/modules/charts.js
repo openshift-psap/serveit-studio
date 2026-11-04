@@ -54,7 +54,7 @@ function _renderChartsImpl(data, runId, content) {
     }
 
     let html = '';
-    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secVLLM = '', secEppTuning = '', secTraffic = '', secLora = '';
+    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secEppTuning = '', secLora = '';
 
 
     // Lookup from test_id/config_name to all_results entry (used across multiple sections)
@@ -2834,50 +2834,7 @@ function _renderChartsImpl(data, runId, content) {
     secCacheSweep = html; html = '';
 
     // ============================================================
-    // vLLM ENGINE METRICS CHARTS
-    // ============================================================
-    if (charts.vllm && charts.vllm.configs.length) {
-        html += '<div class="chart-card" style="margin-top:24px; border-left:6px solid #8b5cf6;">';
-        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#6366f1); color:white; font-size:1.2em;">vLLM Engine Metrics</div>';
-        html += '<div style="padding:8px 20px; color:#1e293b; font-size:0.95em;">Prometheus metrics collected from the vLLM engine during each test. These metrics show engine-level behavior across all configurations — latency distributions, token throughput, request queuing, and processing time breakdown.</div>';
-        html += '</div>';
 
-        html += chartCard(
-            'vLLM TTFT Percentiles',
-            'Time-to-First-Token as reported by the vLLM engine histogram (averaged over the test window). Lower bars mean faster first-token delivery. Compare P50 (typical) vs P99 (worst-case) across configurations.',
-            'chart-vllm-ttft'
-        );
-        html += chartCard(
-            'vLLM ITL Percentiles',
-            'Inter-Token Latency from vLLM engine histograms. This is the delay between consecutive generated tokens — it determines how "smooth" streaming feels to the user. Lower is better.',
-            'chart-vllm-itl'
-        );
-        html += chartCard(
-            'vLLM E2E Request Latency',
-            'End-to-end request latency from vLLM (includes TTFT + all token generation). Shows the full time a request spends in the engine. Compare tail latency (P99) across configurations to spot saturation.',
-            'chart-vllm-e2e'
-        );
-        html += chartCard(
-            'Token Throughput',
-            'Average prompt (input) and generation (output) token processing rates across all pods. Higher bars = more tokens processed per second. Generation rate directly impacts how many users can be served concurrently.',
-            'chart-vllm-tokens'
-        );
-        html += chartCard(
-            'Request Queue & KV Cache',
-            'Average concurrent requests running and waiting in queue, plus KV cache utilization (%). High waiting counts indicate the engine is saturated. High KV cache usage means the model is near memory capacity.',
-            'chart-vllm-queue'
-        );
-        html += chartCard(
-            'Processing Time & Preemptions',
-            'How engine time is split between prefill (prompt processing), decode (token generation), and queuing. Preemptions show how often the engine evicts running requests to make room — high preemptions indicate memory pressure.',
-            'chart-vllm-time'
-        );
-
-        // Network charts moved to Traffic tab
-    }
-
-    // Flush vLLM metrics
-    secVLLM = html; html = '';
 
 
     // === Build Estimator section ===
@@ -2889,58 +2846,6 @@ function _renderChartsImpl(data, runId, content) {
     if (wl.osl_stdev) wlDesc += '&plusmn;' + wl.osl_stdev;
     if (wl.turns > 1) wlDesc += ', <strong>' + wl.turns + ' turns</strong>';
     wlDesc += '.';
-    let secEst = '<div class="chart-card" style="margin-top:16px; border:2px solid #d97706; border-left:6px solid #d97706;">' +
-        '<div class="chart-card-header" style="background:linear-gradient(135deg,#d97706,#b45309);">GPU Estimator</div>' +
-        '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">' +
-            'Estimate how many GPUs/replicas are needed to meet your SLA targets using the measured performance data. ' + wlDesc +
-        '</div>' +
-        '<div style="padding:12px 20px 0;">' +
-            '<div class="estimator-form">' +
-                '<div class="estimator-row">' +
-                    '<div class="estimator-group">' +
-                        '<div class="estimator-group-label">Throughput SLA</div>' +
-                        '<label class="estimator-field">' +
-                            '<span>Target Throughput</span>' +
-                            '<div class="estimator-input-wrap"><span class="estimator-icon">&#9889;</span><input type="number" id="est-tput-target' + estSuffix + '" value="100" min="1" step="1"><span class="estimator-unit">req/s</span></div>' +
-                        '</label>' +
-                    '</div>' +
-                    '<div class="estimator-group">' +
-                        '<div class="estimator-group-label">TTFT SLA</div>' +
-                        '<label class="estimator-field">' +
-                            '<span>Max TTFT</span>' +
-                            '<div class="estimator-input-wrap"><span class="estimator-icon">&#9201;</span><input type="number" id="est-ttft-target' + estSuffix + '" value="500" min="1"><span class="estimator-unit">ms</span></div>' +
-                        '</label>' +
-                        '<label class="estimator-field">' +
-                            '<span>Percentile</span>' +
-                            '<select id="est-ttft-pctl' + estSuffix + '" style="padding:10px 12px;border:2px solid #e2e8f0;border-radius:10px;font-size:0.95em;background:#f8fafc;">' +
-                                '<option value="p90">P90</option><option value="p95">P95</option><option value="p99" selected>P99</option>' +
-                            '</select>' +
-                        '</label>' +
-                    '</div>' +
-                    '<div class="estimator-group">' +
-                        '<div class="estimator-group-label">ITL SLA</div>' +
-                        '<label class="estimator-field">' +
-                            '<span>Max ITL</span>' +
-                            '<div class="estimator-input-wrap"><span class="estimator-icon">&#9881;</span><input type="number" id="est-itl-target' + estSuffix + '" value="20" min="0.1" step="0.1"><span class="estimator-unit">ms</span></div>' +
-                        '</label>' +
-                        '<label class="estimator-field">' +
-                            '<span>Percentile</span>' +
-                            '<select id="est-itl-pctl' + estSuffix + '" style="padding:10px 12px;border:2px solid #e2e8f0;border-radius:10px;font-size:0.95em;background:#f8fafc;">' +
-                                '<option value="p90" selected>P90</option><option value="p95">P95</option><option value="p99">P99</option>' +
-                            '</select>' +
-                        '</label>' +
-                    '</div>' +
-                '</div>' +
-            '</div>' +
-            '<div id="est-scaling-info' + estSuffix + '" style="background:#fffbeb;border-top:1px solid #fde68a;border-bottom:1px solid #fde68a;padding:14px 20px;margin:0 -20px;font-size:0.9em;color:#92400e;width:calc(100% + 40px);"></div>' +
-            '<div style="padding:0 20px;display:flex;gap:12px;align-items:center;">' +
-                '<button class="action-button" onclick="runEstimator(\'' + estSuffix + '\')" style="margin-top:16px;padding:10px 28px;font-size:0.95em;border-radius:8px;background:linear-gradient(135deg,#d97706,#b45309);border:none;color:white;cursor:pointer;font-weight:600;box-shadow:0 2px 8px rgba(217,119,6,0.3);">Estimate</button>' +
-                '<button onclick="downloadEstimatorReport(\'' + estSuffix + '\')" style="margin-top:16px;padding:10px 24px;font-size:0.9em;border-radius:8px;background:#f1f5f9;border:1px solid #cbd5e1;color:#475569;cursor:pointer;font-weight:600;">Download Report</button>' +
-            '</div>' +
-            '<div id="est-results' + estSuffix + '"></div>' +
-            '<div id="est-chart' + estSuffix + '" style="width:100%;margin-top:16px;"></div>' +
-        '</div></div>';
-
     // === Build subtab structure ===
     const subtabDefs = [];
     // Build EPP Tuning section — per-architecture charts + tables
@@ -3232,176 +3137,6 @@ const deltaTag = (t.delta_vs_baseline && !t.is_baseline) ? ` <span style="color:
         secEppTuning = eppHtml;
     }
 
-    // --- Traffic & Errors tab ---
-    if (data.all_results && data.all_results.length) {
-        var stepGroups = {
-            'TP Calibration': { prefix: ['step2-', 'step3-'], results: [] },
-            'Aggregated': { prefix: ['step6-'], results: [] },
-            'PD/EP Splits': { prefix: ['step7-'], results: [] },
-            'EPP Tuning': { prefix: ['step9-', 'step11-epp-'], results: [] },
-            'Concurrency Sweep': { prefix: ['step11-sweep-'], results: [] },
-            'Cache Sweep': { prefix: ['step13-'], results: [] },
-        };
-        data.all_results.forEach(function(r) {
-            var tid = r.test_id || r.config_name || '';
-            Object.keys(stepGroups).forEach(function(group) {
-                stepGroups[group].prefix.forEach(function(pfx) {
-                    if (tid.indexOf(pfx) === 0) stepGroups[group].results.push(r);
-                });
-            });
-        });
-
-        var trafficHtml = '';
-        var trafficChartIds = [];
-        var _trafficSuffix = runId ? '-' + runId : '';
-
-        // For concurrency sweep, sub-group by config
-        function splitByConfig(results) {
-            var byConfig = {};
-            results.forEach(function(r) {
-                var tid = r.test_id || '';
-                // Extract config part: step11-sweep-pd-3p1d-tp2-2-c5 -> pd-3p1d-tp2-2
-                var cfgMatch = tid.replace('step11-sweep-', '').replace(/-c\d+$/, '');
-                var label = r.config_name || cfgMatch;
-                if (!byConfig[cfgMatch]) byConfig[cfgMatch] = { label: label, results: [] };
-                byConfig[cfgMatch].results.push(r);
-            });
-            return byConfig;
-        }
-
-        Object.keys(stepGroups).forEach(function(group) {
-            var results = stepGroups[group].results;
-            if (!results.length) return;
-
-            if (group === 'Concurrency Sweep') {
-                var byConfig = splitByConfig(results);
-                Object.keys(byConfig).sort().forEach(function(cfgKey) {
-                    var cfg = byConfig[cfgKey];
-                    var hasErrors = cfg.results.some(function(r) { return (r.request_errored || 0) > 0 || (r.nixl_errors || 0) > 0; });
-                    var chartId = 'chart-traffic-sweep-' + cfgKey.replace(/[^a-z0-9]/g, '-') + _trafficSuffix;
-                    trafficChartIds.push({ id: chartId, group: group, results: cfg.results, hasErrors: hasErrors, isSweep: true });
-                    trafficHtml += '<div class="chart-card" style="margin-top:16px;' + (hasErrors ? 'border-left:4px solid #dc2626;' : '') + '">';
-                    trafficHtml += '<div class="chart-card-header">Sweep: ' + cfg.label + (hasErrors ? ' <span style="color:#dc2626;font-size:0.8em;">&#9888; errors</span>' : '') + '</div>';
-                    trafficHtml += '<div id="' + chartId + '" style="width:100%;height:850px;"></div></div>';
-                });
-            } else {
-                var hasErrors = results.some(function(r) { return (r.request_errored || 0) > 0 || (r.nixl_errors || 0) > 0; });
-                var chartId = 'chart-traffic-' + group.toLowerCase().replace(/[^a-z]/g, '-') + _trafficSuffix;
-                trafficChartIds.push({ id: chartId, group: group, results: results, hasErrors: hasErrors });
-                trafficHtml += '<div class="chart-card" style="margin-top:16px;' + (hasErrors ? 'border-left:4px solid #dc2626;' : '') + '">';
-                trafficHtml += '<div class="chart-card-header">' + group + ' Traffic' + (hasErrors ? ' <span style="color:#dc2626;font-size:0.8em;">&#9888; errors detected</span>' : '') + '</div>';
-                trafficHtml += '<div style="padding:4px 16px;font-size:0.82em;color:#64748b;">Request totals, HTTP errors, and NIXL transfer errors per test configuration.</div>';
-                trafficHtml += '<div id="' + chartId + '" style="width:100%;height:850px;"></div></div>';
-            }
-        });
-
-        // Traffic Overview stat cards
-        var totalReqs = 0, totalErrs = 0, totalNixlErrs = 0;
-        coreResults.forEach(function(r) {
-            totalReqs += r.request_total || 0;
-            totalErrs += r.request_errored || 0;
-            totalNixlErrs += r.nixl_errors || 0;
-        });
-        var errRate = totalReqs > 0 ? (totalErrs / totalReqs * 100).toFixed(2) : '0';
-        var overviewHtml = '<div class="chart-card" style="border-left:6px solid #475569;">' +
-            '<div class="chart-card-header" style="background:linear-gradient(135deg,#475569,#64748b); color:white;">Traffic Overview</div>' +
-            '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;padding:20px;">' +
-            '<div style="text-align:center;"><div style="font-size:2em;font-weight:800;color:#1e293b;">' + totalReqs.toLocaleString() + '</div><div style="color:#64748b;font-size:0.85em;">Total Requests</div></div>' +
-            '<div style="text-align:center;"><div style="font-size:2em;font-weight:800;color:' + (totalErrs > 0 ? '#dc2626' : '#1e293b') + ';">' + totalErrs.toLocaleString() + '</div><div style="color:#64748b;font-size:0.85em;">HTTP Request Errors</div></div>';
-        if (totalNixlErrs > 0) {
-            overviewHtml += '<div style="text-align:center;"><div style="font-size:2em;font-weight:800;color:#f59e0b;">' + totalNixlErrs.toLocaleString() + '</div><div style="color:#64748b;font-size:0.85em;">NIXL Transfer Retries</div></div>';
-        }
-        overviewHtml += '<div style="text-align:center;"><div style="font-size:2em;font-weight:800;color:#1e293b;">' + errRate + '%</div><div style="color:#64748b;font-size:0.85em;">Error Rate</div></div>' +
-            '</div></div>';
-        // Prepend network throughput charts before overview
-        var netHtml = '';
-        if (charts.vllm && charts.vllm.network && charts.vllm.network.pod_tx && charts.vllm.network.pod_tx.some(v => v > 0)) {
-            netHtml += chartCard(
-                'Pod Network Throughput',
-                'Management (eth0) network traffic per configuration.',
-                'chart-net-pod'
-            );
-            var hasNIXL2 = (charts.vllm.network.nixl_tx && charts.vllm.network.nixl_tx.some(v => v > 0)) ||
-                           (charts.vllm.network.ib_rx && charts.vllm.network.ib_rx.some(v => v > 0));
-            if (hasNIXL2) {
-                netHtml += chartCard(
-                    'NIXL KV Transfer Throughput',
-                    'RDMA traffic for KV cache transfer between prefill and decode pods.',
-                    'chart-net-ib'
-                );
-            }
-        }
-        trafficHtml = overviewHtml + netHtml + trafficHtml;
-
-        if (trafficHtml) {
-            secTraffic = trafficHtml;
-            chartQueue.push(function() {
-                trafficChartIds.forEach(function(tc) {
-                    // Sort sweep results by concurrency
-                    if (tc.isSweep) {
-                        tc.results.sort(function(a, b) {
-                            var ca = parseInt((a.test_id || '').match(/c(\d+)$/)?.[1] || '0');
-                            var cb = parseInt((b.test_id || '').match(/c(\d+)$/)?.[1] || '0');
-                            return ca - cb;
-                        });
-                    }
-                    var labels = tc.results.map(function(r) {
-                        var tid = r.test_id || '';
-                        if (tid.indexOf('step11-sweep-') === 0) {
-                            var cMatch = tid.match(/c(\d+)$/);
-                            return cMatch ? 'c=' + cMatch[1] : tid.replace('step11-sweep-', '');
-                        }
-                        return tid.replace(/^step\d+-/, '');
-                    });
-                    var totals = tc.results.map(function(r) { return r.request_total || 0; });
-                    var errors = tc.results.map(function(r) { return r.request_errored || 0; });
-                    var nixl = tc.results.map(function(r) { return r.nixl_errors || 0; });
-
-                    var degraded = tc.results.map(function(r) { return r.nixl_degraded ? 1 : 0; });
-                    var hasDegraded = degraded.some(function(d) { return d; });
-                    var traces = [
-                        { x: labels, y: totals, name: 'Total Requests', mode: 'lines+markers+text',
-                          text: totals.map(function(v) { return v > 0 ? v.toLocaleString() : ''; }),
-                          textposition: 'top center', textfont: { size: 13, color: '#059669' },
-                          line: { color: '#059669', width: 2 }, marker: { size: 8 } },
-                        { x: labels, y: errors, name: 'HTTP Errors', mode: 'lines+markers+text',
-                          text: errors.map(function(v) { return v > 0 ? v.toLocaleString() : ''; }),
-                          textposition: 'top center', textfont: { size: 13, color: '#dc2626' },
-                          line: { color: '#dc2626', width: 2 }, marker: { size: 8 } },
-                        { x: labels, y: nixl, name: 'NIXL Retries', mode: 'lines+markers+text',
-                          text: nixl.map(function(v) { return v > 0 ? v.toLocaleString() : ''; }),
-                          textposition: 'top center', textfont: { size: 13, color: '#f59e0b' },
-                          line: { color: '#f59e0b', width: 2 }, marker: { size: 8 } }
-                    ];
-                    if (hasDegraded) {
-                        var dgLabels = [], dgY = [], dgText = [];
-                        tc.results.forEach(function(r, i) {
-                            if (r.nixl_degraded) {
-                                dgLabels.push(labels[i]);
-                                dgY.push(totals[i]);
-                                dgText.push('DEGRADED — results unreliable');
-                            }
-                        });
-                        traces.push({
-                            x: dgLabels, y: dgY, text: dgText,
-                            name: 'NIXL Degraded', mode: 'markers',
-                            marker: { color: '#dc2626', size: 16, symbol: 'x', line: { width: 3, color: '#dc2626' } },
-                            hovertemplate: '<b>%{x}</b><br>%{text}<extra></extra>'
-                        });
-                    }
-                    Plotly.newPlot(tc.id, traces, {
-                        ...plotlyLayout, height: 850,
-                        xaxis: { title: '', gridcolor: '#e2e8f0', tickangle: -35 },
-                        yaxis: { title: 'Count', gridcolor: '#e2e8f0' },
-                        showlegend: true,
-                        legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
-                        margin: { t: 20, b: 100, l: 60, r: 20 },
-                        plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
-                    }, { responsive: true });
-                });
-            });
-        }
-    }
 
     if (secRec) subtabDefs.push({ id: 'recommendation', label: 'Recommendation', icon: '&#9733;' });
     if (secTP) subtabDefs.push({ id: 'tp-calibration', label: 'TP Calibration', icon: '&#9881;' });
@@ -3411,17 +3146,14 @@ const deltaTag = (t.delta_vs_baseline && !t.is_baseline) ? ` <span style="color:
     if (secCal) subtabDefs.push({ id: 'calibrated-load', label: 'Concurrency Sweep', icon: '&#9878;' });
     if (secCacheSweep) subtabDefs.push({ id: 'cache-sweep', label: 'Cache Sweep', icon: '&#128451;' });
     if (secLora) subtabDefs.push({ id: 'lora-serving', label: 'LoRA Serving', icon: '&#127919;' });
-    if (secVLLM) subtabDefs.push({ id: 'vllm-metrics', label: 'vLLM Metrics', icon: '&#9889;' });
     if (secEppTuning) subtabDefs.push({ id: 'epp-tuning', label: 'EPP Tuning', icon: '&#9881;' });
-    if (secTraffic) subtabDefs.push({ id: 'traffic', label: 'Traffic', icon: '&#128678;' });
-    subtabDefs.push({ id: 'estimator', label: 'Estimator', icon: '&#128200;' });
 
     const sectionMap = {
         'recommendation': secRec, 'tp-calibration': secTP, 'configurations': secCfg,
         'comparison': secCmp, 'latency-search': secStep9,
-        'calibrated-load': secCal, 'cache-sweep': secCacheSweep, 'vllm-metrics': secVLLM, 'epp-tuning': secEppTuning,
+        'calibrated-load': secCal, 'cache-sweep': secCacheSweep, 'epp-tuning': secEppTuning,
         'lora-serving': secLora,
-        'traffic': secTraffic, 'estimator': secEst
+        'estimator': secEst
     };
 
     // ── Modular tabs (web/static/report/tabs/) ── injected by position ──
@@ -4392,7 +4124,7 @@ const deltaTag = (t.delta_vs_baseline && !t.is_baseline) ? ` <span style="color:
     // ============================================================
     // vLLM ENGINE METRICS — Plotly rendering
     // ============================================================
-    if (charts.vllm && charts.vllm.configs.length) {
+   if (charts.vllm && charts.vllm.configs.length) {
         const vllm = charts.vllm;
         const vllmLayout = { ...plotlyLayout, margin: { ...plotlyLayout.margin, b: 100 }, showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' } };
         const pColors = { p50: '#60a5fa', p90: '#3b82f6', p95: '#f59e0b', p99: '#ef4444' };
