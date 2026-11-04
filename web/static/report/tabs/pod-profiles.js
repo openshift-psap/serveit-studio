@@ -30,6 +30,28 @@
         return pct > 20 ? main : (pct > 10 ? mid : light);
     }
 
+    // EPP tuning strategy explanations — the short names in the chart map to
+    // these full descriptions (from the EPP Tuning tab's glossary)
+    var EPP_STRATEGY_INFO = {
+        'preset': 'Your original EPP routing preset (control arm) — the config you deployed with before any tuning.',
+        'baseline': 'opt-baseline — llm-d optimized baseline: prefix-cache-affinity-filter gates candidates to cache-warm pods, then a single load scorer ranks survivors.',
+        'max': 'weighted-max — multi-scorer stack (prefix-cache + kv-cache + queue + active-request) with smart-derived weights and the deterministic max-score picker.',
+        'rand': 'weighted-rand — same weighted stack but with the probabilistic weighted-random picker (spreads load instead of always picking the argmax).',
+        'off': 'abl-filter-off — ablation: removed the affinity filter from the winner to test if the filter actually pays.',
+        'kv': 'abl-kv — ablation: added/removed the kv-cache scorer.',
+        'session': 'abl-session-off — ablation: removed session affinity.',
+        'single': 'The main (non-EPP-tuning) test — the actual workload run, not a routing variant.',
+        'final': 'final-* — full-duration validation of the best EPP variant (apples-to-apples vs baseline).'
+    };
+
+    function strategyTooltip(label) {
+        // Try to match the short name in the label (e.g. "· baseline", "· preset")
+        for (var key in EPP_STRATEGY_INFO) {
+            if (label.toLowerCase().indexOf(key) >= 0) return EPP_STRATEGY_INFO[key];
+        }
+        return null;
+    }
+
     // ════════════════════════════════════════════════════════════════
     // BUILD
     // ════════════════════════════════════════════════════════════════
@@ -128,8 +150,23 @@
             var xId = ctx.chartId('pprof-epp-cmp');
             s += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #0891b2;">' +
                 '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee);">EPP CPU% Across Tests</div>' +
-                '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.93em;">EPP router CPU utilization during the load window per test — spot routing-stack regressions at a glance.</div>' +
-                '<div id="' + xId + '" style="width:100%; height:' + Math.max(300, eppTests.length * 44 + 80) + 'px;"></div></div>';
+                '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.93em;">EPP router CPU utilization during the load window per test — spot routing-stack regressions at a glance. Hover over a bar for what the strategy does.</div>';
+
+            // Strategy legend — collapsible
+            s += '<details style="margin:8px 20px;"><summary style="cursor:pointer;font-weight:600;font-size:0.82em;color:#0369a1;">What do the strategy names mean?</summary>';
+            s += '<div style="font-size:0.82em;color:#475569;line-height:1.8;padding:8px 0;">';
+            s += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px;">';
+            s += '<div><strong style="color:#0891b2;">preset</strong> — your original EPP config (control arm, before any tuning)</div>';
+            s += '<div><strong style="color:#0891b2;">baseline</strong> — llm-d optimized-baseline: affinity-filter + single load scorer</div>';
+            s += '<div><strong style="color:#0891b2;">max</strong> — multi-scorer stack, deterministic max-score picker</div>';
+            s += '<div><strong style="color:#0891b2;">rand</strong> — same stack, weighted-random picker (spreads load)</div>';
+            s += '<div><strong style="color:#0891b2;">off</strong> — ablation: filter removed from the winner</div>';
+            s += '<div><strong style="color:#0891b2;">kv</strong> — ablation: kv-cache scorer toggled</div>';
+            s += '<div><strong style="color:#0891b2;">0p6 / w-thr</strong> — weight tuning: affinity threshold adjusted</div>';
+            s += '<div><strong style="color:#0891b2;">final-*</strong> — full-duration validation of the best variant</div>';
+            s += '</div></div></details>';
+
+            s += '<div id="' + xId + '" style="width:100%; height:' + Math.max(300, eppTests.length * 44 + 80) + 'px;"></div></div>';
         }
 
         return s;
@@ -432,7 +469,11 @@
             text: sorted.map(function(e) { return e.pprof.epp.cpu_pct + '%'; }).reverse(),
             textposition: 'outside', textfont: { size: 12 },
             cliponaxis: false, constraintext: 'none',
-            hovertemplate: '<b>%{y}</b><br>EPP CPU: %{x:.1f}%<extra></extra>'
+            customdata: sorted.map(function(e) {
+                var tip = strategyTooltip(e.config_name || e.name || e.test_id || '');
+                return tip || 'EPP routing variant';
+            }).reverse(),
+            hovertemplate: '<b>%{y}</b><br>EPP CPU: %{x:.1f}%<br><span style="font-size:0.85em;color:#94a3b8;">%{customdata}</span><extra></extra>'
         }], {
             margin: { l: lMargin, r: 60, t: 10, b: 40 },
             xaxis: { title: 'EPP CPU during load (%)' },
