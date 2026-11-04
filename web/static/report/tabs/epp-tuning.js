@@ -214,12 +214,12 @@ const deltaTag = (t.delta_vs_baseline && !t.is_baseline) ? ` <span style="color:
                             font: {color: '#ef4444', size: 11}, xanchor: 'right', yanchor: 'bottom', yshift: 5, bgcolor: 'rgba(255,255,255,0.85)'});
                     }
                     Plotly.newPlot(el, traces, {
-                        ...plotlyLayout, height: 850, margin: {t: 30, b: 80, l: 60, r: 60},
+                        height: 850, margin: {t: 30, b: 80, l: 60, r: 60},
                         xaxis: {title: 'EPP Strategy'},
                         yaxis: {title: `TTFT ${pctl.label} (ms)`, side: 'left', titlefont: {color: pctl.color}, tickfont: {color: pctl.color}},
                         yaxis2: {title: `Tokens/s`, side: 'right', overlaying: 'y', titlefont: {color: '#f59e0b'}, tickfont: {color: '#f59e0b'}},
                         showlegend: true, legend: {x: 0, y: 1.18, orientation: 'h'}, shapes, annotations,
-                    }, plotlyConfig);
+                    }, { responsive: true, displayModeBar: false });
                 });
             });
                 // E2E per workload (guidellm) — one trace per workload shape
@@ -250,11 +250,11 @@ const deltaTag = (t.delta_vs_baseline && !t.is_baseline) ? ` <span style="color:
                 }).filter(tr => tr.y.some(v => v != null));
                 if (traces.length) {
                     Plotly.newPlot(wlEl, traces, {
-                        ...plotlyLayout, height: 600, margin: {t: 30, b: 90, l: 60, r: 40},
+                        height: 600, margin: {t: 30, b: 90, l: 60, r: 40},
                         xaxis: {title: 'EPP Strategy', tickangle: -25},
                         yaxis: {title: 'E2E P90 (s)', tickformat: ',.1f'},
                         showlegend: true, legend: {x: 0, y: 1.12, orientation: 'h'},
-                    }, plotlyConfig);
+                    }, { responsive: true, displayModeBar: false });
                 }
             });
 
