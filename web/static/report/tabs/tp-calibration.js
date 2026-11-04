@@ -196,7 +196,7 @@
         id: 'tp-calibration',
         label: 'TP Calibration',
         icon: '&#9881;',
-        position: 'after:recommendation',
+        position: 'after:configurations',
         build: build,
         render: render
     });

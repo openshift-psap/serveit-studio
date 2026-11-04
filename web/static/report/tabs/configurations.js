@@ -416,7 +416,7 @@
     }
     ReportTabs.register({
         id: 'configurations', label: 'Configurations', icon: '&#9776;',
-        position: 'after:tp-calibration',
+        position: 'after:recommendation',
         build: build,
         render: function(data, ctx) {
             if (typeof Plotly === 'undefined') return;

@@ -1,7 +1,10 @@
 // tabs/estimator.js — GPU Estimator report tab. One implementation for live + offline.
 (function() {
 
+    var _lastData = null;
+
     function build(data, ctx) {
+        _lastData = data;
         var wl = data.recommendation ? data.recommendation.workload : {};
         var wlDesc = 'Tested with <strong>' + (wl.users || '?') + ' users</strong>, ISL <strong>' + (wl.isl || '?') + '</strong>';
         if (wl.isl_stdev) wlDesc += '&plusmn;' + wl.isl_stdev;
@@ -43,7 +46,7 @@
     // Expose the runner as a global so the inline onclick can reach it.
     window.runEstimatorTab = function(suffix) {
         if (typeof Plotly === 'undefined') return;
-        var allResults = (window.__reportData && window.__reportData.all_results) || [];
+        var allResults = (_lastData && _lastData.all_results) || [];
         if (!allResults.length) return;
 
         var targetTput = parseFloat(document.getElementById('est-tput-target' + suffix).value) || 100;
