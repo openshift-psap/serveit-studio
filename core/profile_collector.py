@@ -158,25 +158,34 @@ class ProfileCollector:
         r = self._run_kubectl([
             "get", "pods", "-n", self.namespace,
             "-l", f"inferencepool=gaie-{arch}-epp",
-            "-o", "jsonpath={range .items[*]}{.metadata.name}{\" \"}{.status.podIP}{\"\\n\"}{end}",
+            "-o",
+            "jsonpath={range .items[*]}{.metadata.name}{\" \"}{.status.podIP}{\" \"}{.spec.nodeName}{\"\\n\"}{end}",
         ])
         if r.returncode != 0 or not r.stdout.strip():
             return None
         line = r.stdout.strip().splitlines()[0].split()
         if len(line) < 2 or not line[1]:
             return None
-        return {"name": line[0], "ip": line[1], "port": 9090}
+        return {"name": line[0], "ip": line[1], "port": 9090,
+                "node": line[2] if len(line) > 2 else None}
 
     def discover_vllm_pods(self, test_id: str):
-        """All vLLM pods for a test (name only; port probed per pod)."""
+        """All vLLM pods for a test: [{name, node}]; port probed per pod."""
         r = self._run_kubectl([
             "get", "pods", "-n", self.namespace,
             "-l", f"llm-d.ai/test-id={test_id}",
-            "-o", 'jsonpath={range .items[*]}{.metadata.name}{" "}{end}',
+            "-o",
+            'jsonpath={range .items[*]}{.metadata.name}{" "}{.spec.nodeName}{"\n"}{end}',
         ])
         if r.returncode != 0:
             return []
-        return [p for p in r.stdout.strip().split() if p]
+        pods = []
+        for line in r.stdout.strip().splitlines():
+            parts = line.split()
+            if not parts:
+                continue
+            pods.append({"name": parts[0], "node": parts[1] if len(parts) > 1 else None})
+        return pods
 
     def _probe_vllm_port(self, pod: str) -> Optional[int]:
         """Find which localhost port serves pprof in a pod's vllm container.
@@ -242,7 +251,8 @@ class ProfileCollector:
                    "curl", "-s", "--max-time", str(window + 30), url]
             handle["epp_spawn"] = dict(
                 self._spawn_capture(cmd, window + 30),
-                kind="epp", pod=epp["name"], port=epp["port"], ptype="cpu")
+                kind="epp", pod=epp["name"], node=epp.get("node"),
+                port=epp["port"], ptype="cpu")
             if log_callback:
                 log_callback(f"   🔬 EPP CPU profile capture started ({window}s window, pod {epp['name']})")
         else:
@@ -254,21 +264,23 @@ class ProfileCollector:
             pods = self.discover_vllm_pods(test_id)
             probed = 0
             for pod in pods:
-                port = self._probe_vllm_port(pod)
+                pod_name = pod["name"] if isinstance(pod, dict) else pod
+                pod_node = pod.get("node") if isinstance(pod, dict) else None
+                port = self._probe_vllm_port(pod_name)
                 if not port:
                     if log_callback:
-                        log_callback(f"   ⚠️  No pprof endpoint on {pod} (vLLM image does not serve /debug/pprof — skipping)")
+                        log_callback(f"   ⚠️  No pprof endpoint on {pod_name} (vLLM image does not serve /debug/pprof — skipping)")
                     continue
                 probed += 1
                 code = (
                     "import urllib.request,sys\n"
                     f"sys.stdout.buffer.write(urllib.request.urlopen('http://localhost:{port}/debug/pprof/profile?seconds={window}', timeout={window + 30}).read())\n"
                 )
-                cmd = ["kubectl", "exec", pod, "-n", self.namespace, "-c", "vllm", "--",
+                cmd = ["kubectl", "exec", pod_name, "-n", self.namespace, "-c", "vllm", "--",
                        "python3", "-c", code]
                 handle["vllm_spawns"].append(dict(
                     self._spawn_capture(cmd, window + 60),
-                    kind="vllm", pod=pod, port=port, ptype="cpu"))
+                    kind="vllm", pod=pod_name, node=pod_node, port=port, ptype="cpu"))
             if log_callback:
                 log_callback(f"   🔬 vLLM CPU profile capture started on {probed}/{len(pods)} pod(s) ({window}s window)")
 
@@ -330,6 +342,7 @@ class ProfileCollector:
             data = self._reap_capture(spawn, label=f"vllm-cpu-{spawn['pod']}")
             if data:
                 cpu_captures.append({"kind": "vllm", "pod": spawn["pod"],
+                                     "node": spawn.get("node"),
                                      "port": spawn["port"], "ptype": "cpu", "data": data})
 
         if not cpu_captures and not handle.get("enable_vllm"):
@@ -356,6 +369,7 @@ class ProfileCollector:
                 out.write_bytes(cap["data"])
                 written.append({
                     "kind": cap["kind"], "pod": cap["pod"], "port": cap["port"],
+                    "node": cap.get("node"),
                     "ptype": cap["ptype"], "path": str(out.relative_to(artifact_dir)),
                     "size": len(cap["data"]),
                 })
@@ -375,6 +389,7 @@ class ProfileCollector:
                 try:
                     parsed = summarize_cpu_profile(cap["data"], top_n=25)
                     parsed["pod"] = cap["pod"]
+                    parsed["node"] = cap.get("node")
                     parsed["port"] = cap["port"]
                     if "blob" in entry:
                         parsed["blob"] = entry["blob"]
