@@ -31,6 +31,18 @@
 
     function build(data, ctx) {
         var charts = data.charts || {};
+        // Hide the tab entirely when LoRA was never part of this run
+        var hasSweep = data.lora_sweep && Object.keys(data.lora_sweep).length > 0;
+        // Only check LoRA-SPECIFIC signals: adapters served, churn, or pod
+        // details with actual adapter data. TTFT spread exists for any
+        // multi-pod deployment and is NOT a LoRA indicator.
+        var hasLoraMetrics = charts.vllm && charts.vllm.lora &&
+            ((charts.vllm.lora.adapter_churn || []).some(function(v) { return v > 0; }) ||
+             (charts.vllm.lora.adapters_per_pod || []).some(function(v) { return v > 0; }));
+        var hasPodDetails = (charts.vllm && charts.vllm.lora_pod_details || []).some(function(pd) {
+            return pd && pd.pods && Object.keys(pd.pods).length > 0 && (pd.total_adapters || 0) > 0;
+        });
+        if (!hasSweep && !hasLoraMetrics && !hasPodDetails) return '';
         var s = '';
         var _sfx = '';
         if (ctx.mode === 'live' && typeof _chartSuffix !== 'undefined') _sfx = _chartSuffix;
