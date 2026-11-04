@@ -16,12 +16,16 @@ document.getElementById('chart-add-btn').addEventListener('click', () => {
 document.getElementById('chart-compare-btn').addEventListener('click', function() { generateComparison(); });
 
 function loadRunList() {
+    const sel = document.getElementById('chart-run-select');
+    sel.innerHTML = '<option value="">Loading runs...</option>';
     fetch('/api/runs')
-        .then(r => r.json())
+        .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
         .then(runs => {
-            const sel = document.getElementById('chart-run-select');
             sel.innerHTML = '';
-            if (!runs.length) {
+            if (!runs || !runs.length) {
                 sel.innerHTML = '<option value="">No runs found</option>';
                 return;
             }
@@ -62,8 +66,8 @@ function loadRunList() {
             // No auto-load — let the user choose
         })
         .catch(err => {
-            document.getElementById('charts-content').innerHTML =
-                `<div class="charts-loading">Failed to load runs: ${err.message}</div>`;
+            console.warn('loadRunList failed:', err);
+            sel.innerHTML = '<option value="">Error loading runs — click Analytics again</option>';
         });
 }
 
