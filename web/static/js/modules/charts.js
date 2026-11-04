@@ -2282,8 +2282,7 @@ function _renderChartsImpl(data, runId, content) {
     const sectionMap = {
         'recommendation': secRec, 'tp-calibration': secTP, 'configurations': secCfg,
         'comparison': secCmp, 'latency-search': secStep9,
-        'calibrated-load': secCal, 'cache-sweep': secCacheSweep, 
-        'lora-serving': secLora
+        'calibrated-load': secCal, 'cache-sweep': secCacheSweep
     };
 
     // ── Modular tabs (web/static/report/tabs/) ── injected by position ──
