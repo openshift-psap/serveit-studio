@@ -58,6 +58,7 @@
             const baselineTrial = trials.find(t => t.is_baseline);
             const pctls = [{key:'p90',label:'P90',color:'#3b82f6'},{key:'p95',label:'P95',color:'#dc2626'},{key:'p99',label:'P99',color:'#7c3aed'}];
             pctls.forEach(pctl => {
+                s += `<div style="margin:16px 20px 0; font-weight:600; font-size:0.9em; color:#334155;">TTFT ${pctl.label} per Strategy — <span style="font-weight:400;color:#64748b;">lower is better; SLA target = ${eppTargetMs}ms</span></div>`;
                 s += `<div id="${eppCardId}-${pctl.key}${_sfx}" style="height:850px; margin:8px 20px; background:#fff; border-radius:8px; border:1px solid #e2e8f0;"></div>`;
                 s += `<div style="padding:4px 20px 12px; font-size:0.85em; line-height:1.7; color:#1e293b;">`;
                 trials.forEach(t => {
@@ -224,8 +225,9 @@ const deltaTag = (t.delta_vs_baseline && !t.is_baseline) ? ` <span style="color:
             });
                 // E2E per workload (guidellm) — one trace per workload shape
             const eppWlCardId = `${eppCardId}-wl-e2e${_sfx}`;
+            s += `<div style="margin:16px 20px 0; font-weight:600; font-size:0.9em; color:#334155;">E2E P90 per Workload (guidellm)</div>`;
+            s += `<div style="padding:4px 20px 4px; font-size:0.82em; line-height:1.6; color:#64748b;">Each workload shape's own request duration per strategy. W1 (3K-token outputs) sits ~15&times; above W3; differences between strategies per shape are the routing signal.</div>`;
             s += `<div id="${eppWlCardId}" style="height:600px; margin:8px 20px; background:#fff; border-radius:8px; border:1px solid #e2e8f0;"></div>`;
-            s += `<div style="padding:4px 20px 12px; font-size:0.85em; line-height:1.7; color:#1e293b;">E2E P90 per workload (guidellm) — each shape's own request duration, per strategy. W1 (3K-token outputs) sits ~15&times; above W3; differences between strategies per shape are the routing signal.</div>`;
             _renders.push(() => {
                 const wlEl = document.getElementById(eppWlCardId);
                 if (!wlEl) return;
