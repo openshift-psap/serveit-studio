@@ -3381,6 +3381,45 @@ def download_profile(run_id, config_name, profile_name):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/run/<int:run_id>/config/<config_name>/torch-trace/<path:trace_path>')
+def download_torch_trace(run_id, config_name, trace_path):
+    """Download a torch profiler trace file from the test artifact directory.
+
+    Traces are 30-90MB Chrome traces (CPU + CUDA activities) — too large for
+    the DB blob, so they are streamed from /mnt/storage/test-artifacts.
+
+    Args:
+        run_id: Optimization run ID
+        config_name: Test config name (test_id)
+        trace_path: Relative path under profiles/ (e.g. "torch/<pod>/rank0....gz")
+    """
+    import os
+    from flask import send_file
+
+    try:
+        with get_db() as conn:
+            row = conn.execute(
+                'SELECT test_id FROM test_configurations WHERE run_id = ? AND config_name = ?',
+                (run_id, config_name)
+            ).fetchone()
+        if not row or not row['test_id']:
+            return jsonify({'error': 'Configuration not found'}), 404
+
+        base = f'/mnt/storage/test-artifacts/{row["test_id"]}/profiles'
+        full = os.path.realpath(os.path.join(base, trace_path))
+        # Prevent path traversal — must stay under the artifact dir
+        if not full.startswith(os.path.realpath(base) + os.sep):
+            return jsonify({'error': 'Invalid path'}), 400
+        if not os.path.isfile(full):
+            return jsonify({'error': f'Trace file not found: {trace_path}'}), 404
+
+        return send_file(full, as_attachment=True,
+                         download_name=os.path.basename(trace_path))
+    except Exception as e:
+        print(f"ERROR downloading torch trace: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/run/<int:run_id>/config/<config_name>/manifests')
 def get_manifest_list(run_id, config_name):
     """List available manifests for a test configuration."""

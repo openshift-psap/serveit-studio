@@ -349,16 +349,19 @@ class ProfileCollector:
                 continue
             pod_ip = r.stdout.strip()
             started = False
+            started_port = None
             for port in [8000, 8200]:
                 try:
                     url = f"http://{pod_ip}:{port}/start_profile"
                     resp = self._fetch_via_workload_pod(url, 8)
                     if resp is not None:
                         started = True
+                        started_port = port
                         break
                 except Exception:
                     continue
-            results.append({"pod": pod_name, "started": started, "ip": pod_ip})
+            results.append({"pod": pod_name, "started": started, "ip": pod_ip,
+                            "port": started_port or 8000})
         if log_callback and results:
             n_started = sum(1 for r in results if r.get("started"))
             log_callback(f"   \U0001f52c Torch profiler started on {n_started}/{len(results)} pod(s)")
@@ -376,9 +379,9 @@ class ProfileCollector:
             if not self.workload_pod:
                 continue
 
-            # Call /stop_profile
+            # Call /stop_profile on the port that worked during start
             try:
-                url = f"http://{entry.get('ip')}:{8000}/stop_profile"
+                url = f"http://{entry.get('ip')}:{entry.get('port') or 8000}/stop_profile"
                 self._fetch_via_workload_pod(url, 60)
             except Exception:
                 pass
@@ -427,9 +430,15 @@ class ProfileCollector:
                     "operator_count": 0,
                 }
 
-                # Copy traces to artifact dir
+                # Copy the most valuable traces to the artifact dir:
+                # rank* (GPU worker trace) first, then async_llm (CPU frontend).
+                # Max 2 per pod — traces are 30-90MB each.
                 if test_id:
-                    for tf in trace_files[:3]:
+                    ranked = sorted(
+                        trace_files,
+                        key=lambda t: (0 if t["name"].startswith("rank") else 1, t["name"]),
+                    )[:2]
+                    for tf in ranked:
                         try:
                             copy_result = subprocess.run(
                                 ["kubectl", "exec", pod_name, "-n", self.namespace, "-c", "vllm",
@@ -442,8 +451,9 @@ class ProfileCollector:
                                 trace_out.write_bytes(copy_result.stdout)
                                 written.append({
                                     "kind": "torch", "pod": pod_name, "port": 0,
-                                    "ptype": "trace", "path": str(trace_out),
-                                    "size": len(copy_result.stdout)
+                                    "ptype": "trace",
+                                    "path": f"torch/{pod_name}/{tf['name']}",
+                                    "size": len(copy_result.stdout),
                                 })
                         except Exception as e:
                             logger.warning(f"trace copy failed {pod_name}: {e}")
@@ -525,33 +535,13 @@ class ProfileCollector:
             if log_callback:
                 log_callback("   \u26a0\ufe0f  No CPU profiles captured")
 
-        # 3. Collect torch profiler summaries
+        # 3. Collect torch profiler traces — collect_torch_profiles copies
+        #    files to artifact_dir/torch/<pod>/ internally and appends entries
+        #    to torch_written (kept separate so the capture zip below stays aligned)
+        torch_written = []
         torch_results = []
         if handle.get("torch_procs"):
-            torch_results = self.collect_torch_profiles(handle["torch_procs"], log_callback, written, test_id)
-
-        # 3b. Copy torch trace files from pods to artifact dir
-        for tr in torch_results:
-            pod_name = tr.get('pod')
-            if not pod_name:
-                continue
-            try:
-                r = subprocess.run(
-                    ['kubectl', 'exec', pod_name, '-n', self.namespace, '-c', 'vllm',
-                     '--', 'cat', '/tmp/torch_profiles/trace.json'],
-                    capture_output=True, timeout=60,
-                    env=self._kubectl_env())
-                if r.returncode == 0 and r.stdout:
-                    trace_out = artifact_dir / 'torch' / pod_name / 'trace.json'
-                    trace_out.parent.mkdir(parents=True, exist_ok=True)
-                    trace_out.write_bytes(r.stdout)
-                    written.append({
-                        'kind': 'torch', 'pod': pod_name, 'port': 0,
-                        'ptype': 'trace', 'path': str(trace_out.relative_to(artifact_dir)),
-                        'size': len(r.stdout)
-                    })
-            except Exception as e:
-                logger.warning(f'failed copying torch trace from {pod_name}: {e}')
+            torch_results = self.collect_torch_profiles(handle["torch_procs"], log_callback, torch_written, test_id)
 
         # 4. Heap + goroutine snapshots (post-load, point-in-time)
         snapshots = []
@@ -565,15 +555,15 @@ class ProfileCollector:
                                      "node": epp.get("node"), "port": epp["port"],
                                      "ptype": ptype, "data": data})
 
-        # 5. Write raw files to the artifact dir
+        # 5. Write CPU capture files to the artifact dir
         all_captures = cpu_captures + snapshots
-        written = []
+        cap_written = []
         for cap in all_captures:
             out = artifact_dir / cap["kind"] / cap["pod"] / f"{cap['ptype']}.prof"
             try:
                 out.parent.mkdir(parents=True, exist_ok=True)
                 out.write_bytes(cap["data"])
-                written.append({
+                cap_written.append({
                     "kind": cap["kind"], "pod": cap["pod"], "port": cap["port"],
                     "node": cap.get("node"),
                     "ptype": cap["ptype"], "path": str(out.relative_to(artifact_dir)),
@@ -582,10 +572,12 @@ class ProfileCollector:
             except Exception as e:
                 logger.warning(f"failed writing profile {out}: {e}")
 
+        written = torch_written + cap_written
+
         # 6. Build the report summary
         summary = {"files": [], "epp": None, "vllm": [], "torch": torch_results}
         embed_budget = MAX_EMBED_BYTES
-        for cap, meta in zip(all_captures, written):
+        for cap, meta in zip(all_captures, cap_written):
             entry = dict(meta)
             if embed_budget > 0:
                 entry["blob"] = base64.b64encode(cap["data"]).decode("ascii")
@@ -605,6 +597,11 @@ class ProfileCollector:
                         summary["vllm"].append(parsed)
                 except Exception as e:
                     logger.warning(f"failed parsing CPU profile {cap['pod']}: {e}")
+
+        # Torch trace files: metadata only in summary["files"] (traces are too
+        # large to embed — they are downloaded from the artifact dir)
+        for tw in torch_written:
+            summary["files"].append(dict(tw))
 
         if log_callback and written:
             total_kb = sum(w["size"] for w in written) // 1024
