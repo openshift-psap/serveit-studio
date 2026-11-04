@@ -39,6 +39,9 @@ async function downloadHTMLReport(runId, data) {
         '/static/report/core/helpers.js',
         '/static/report/core/context.js',
         '/static/report/tabs/pod-profiles.js',
+        '/static/report/tabs/workloads.js',
+        '/static/report/tabs/deploy-timing.js',
+        '/static/report/tabs/test-settings.js',
     ].map(async (f) => {
         try {
             const r = await fetch(f, { cache: 'reload' });
@@ -61,6 +64,18 @@ async function downloadHTMLReport(runId, data) {
     URL.revokeObjectURL(url);
 }
 
+// Build a modular tab's section with the download context ('' when the
+// tab module is not loaded or builds nothing).
+function _tabSection(tabId, data, runId) {
+    if (typeof ReportTabs === 'undefined' || !ReportTabs.get(tabId)) return '';
+    try {
+        return ReportTabs.buildTab(ReportTabs.get(tabId), data, ReportCtx.download(runId));
+    } catch (e) {
+        console.warn('tab build failed: ' + tabId, e);
+        return '';
+    }
+}
+
 function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD, hasVLLM, moduleSources) {
     let secRec = buildRecSection(runId, data, rec, summary, best, allRes);
     // Append calibrated load recommendations to the Recommendation tab
@@ -77,15 +92,15 @@ function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD,
     const secCal = buildCalSection(data);
     const secVLLM = buildVLLMSection(charts, hasVLLM);
     const secEpp = buildEppTuningSection(runId, data);
-    const secTestCfg = buildTestSettingsSection(data);
+    const secTestCfg = _tabSection('test-settings', data, runId);
     const secSweep = buildConcurrencySweepSection(data);
     const secCacheSweep = buildCacheSweepSection(data, allRes);
     const secTraffic = buildTrafficSection(data, allRes);
-    const secDeploy = buildDeployTimingSection(data, allRes);
+    const secDeploy = _tabSection('deploy-timing', data, runId);
     const secPareto = buildParetoFrontierSection(data, allRes);
     const secLora = buildLoraSection(data, charts);
     const secEst = buildEstimatorSection(data);
-    const secWorkloads = buildWorkloadsSection(allRes);
+    const secWorkloads = _tabSection('workloads', data, runId);
     // Modular tab: pod-profiles (web/static/report/tabs/) — one implementation
     // shared with the live report; built here with the download context.
     let secProfiles = '';
@@ -130,13 +145,18 @@ function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD,
     // Modular tab sources + offline bootstrap — runs AFTER the chart script
     // so `ar` and the blob maps are already defined. The registry + tab
     // modules are the same files the live page loads.
-    const modFiles = Object.keys(moduleSources || {});
+    // Emit core before tabs: tabs call ReportTabs.register at load time,
+    // so the registry (and helpers/context) must be defined first — same
+    // order as the live page's script tags.
+    const modFiles = Object.keys(moduleSources || {}).sort((a, b) => {
+        const rank = f => f.indexOf('/core/') >= 0 ? 0 : 1;
+        return rank(a) - rank(b) || a.localeCompare(b);
+    });
     if (modFiles.length) {
         out += '<script>';
         function safeSrc(t) { return t.replace(/<\/script>/g, '<\\/script>'); }
         modFiles.forEach(f => { out += '\n/* ==== ' + f + ' ==== */\n' + safeSrc(moduleSources[f]) + '\n'; });
-        out += 'try { ReportTabs.get("pod-profiles").render({ all_results: ar }, ReportCtx.download(' + runId + ')); }' +
-               'catch (e) { console.warn("pod-profiles offline render failed", e); }';
+        out += 'ReportTabs.all().forEach(function(t) { if (t.render) { try { t.render({ all_results: ar }, ReportCtx.download(' + runId + ')); } catch (e) { console.warn("offline render failed: " + t.id, e); } } });';
         out += '<\/script>';
     }
     out += '</body></html>';
@@ -1403,281 +1423,6 @@ function buildEppTuningSection(runId, data) {
     return s;
 }
 
-// ── Test Settings Tab ───────────────────────────────────────────────────────
-function buildTestSettingsSection(data) {
-    if (!data.run_config) return '';
-    const rc = data.run_config;
-    const na = 'N/A';
-    const adv = rc.advanced_vllm || {};
-    const advVal = (key, fallback) => { const s = adv[key]; return s && s.mode === 'custom' && s.value != null ? s.value : (fallback != null ? fallback : 'auto'); };
-    const advToggle = (key, fallback) => { const s = adv[key]; return s ? (s.mode === 'on' ? 'On' : s.mode === 'off' ? 'Off' : fallback) : fallback; };
-
-    const cpt = rc.chars_per_token || 4.5;
-    let islChars, oslChars, islStdevC, oslStdevC;
-    if (rc.length_unit === 'characters' && rc.isl_original_chars) {
-        islChars = rc.isl_original_chars; oslChars = rc.osl_original_chars;
-        islStdevC = rc.isl_stdev_original_chars; oslStdevC = rc.osl_stdev_original_chars;
-    } else {
-        islChars = Math.round(rc.isl * cpt); oslChars = Math.round(rc.osl * cpt);
-        islStdevC = rc.isl_stdev ? Math.round(rc.isl_stdev * cpt) : null;
-        oslStdevC = rc.osl_stdev ? Math.round(rc.osl_stdev * cpt) : null;
-    }
-    const islDisp = rc.isl.toLocaleString() + (rc.isl_stdev ? ' + &sigma;=' + rc.isl_stdev.toLocaleString() : '') + ' tokens (' + islChars.toLocaleString() + ' chars)';
-    const oslDisp = rc.osl.toLocaleString() + (rc.osl_stdev ? ' + &sigma;=' + rc.osl_stdev.toLocaleString() : '') + ' tokens (' + oslChars.toLocaleString() + ' chars)';
-    const eppLabels = { balanced: 'Balanced', cache_optimized: 'Cache Optimized', queue_balanced: 'Queue Balanced', latency_aware: 'Latency Aware', custom: 'Custom' };
-
-    const islRange = rc.isl_min || rc.isl_max ? ' [' + (rc.isl_min || '?') + '–' + (rc.isl_max || '?') + ']' : '';
-    const oslRange = rc.osl_min || rc.osl_max ? ' [' + (rc.osl_min || '?') + '–' + (rc.osl_max || '?') + ']' : '';
-
-    const settSections = [
-        { title: 'Workload', color: '#059669', rows: [
-            ['Model', rc.model_name || na],
-            ['Prompt Length (ISL)', islDisp + islRange],
-            ['Output Length (OSL)', oslDisp + oslRange],
-            rc.first_prompt_tokens ? ['First Prompt Tokens', rc.first_prompt_tokens.toLocaleString() + (rc.first_prompt_tokens_stdev ? ' &sigma;=' + rc.first_prompt_tokens_stdev.toLocaleString() : '') + (rc.first_prompt_tokens_min || rc.first_prompt_tokens_max ? ' [' + (rc.first_prompt_tokens_min || '?') + '–' + (rc.first_prompt_tokens_max || '?') + ']' : '')] : null,
-            rc.prefix_tokens ? ['Shared Prefix', rc.prefix_tokens.toLocaleString() + ' tokens &times; ' + (rc.prefix_count || 1) + ' prefix(es)'] : null,
-            ['Concurrent Users', rc.qps != null ? Math.round(rc.qps) : na],
-            ['Rate Type', rc.rate_type || 'concurrent'],
-            rc.turns > 1 ? ['Turns per Conversation', rc.turns] : null,
-            rc.turns > 1 && rc.turn_delay ? ['Inter-Turn Delay', rc.turn_delay + 's' + (rc.turn_delay_stdev ? ' &sigma;=' + rc.turn_delay_stdev + 's' : '') + (rc.turn_delay_min || rc.turn_delay_max ? ' [' + (rc.turn_delay_min || '?') + '–' + (rc.turn_delay_max || '?') + 's]' : '')] : null,
-            ['Test Duration', (rc.test_duration || 300) + 's'],
-            ['Stop Mode', rc.stop_mode || 'duration'],
-            rc.max_requests ? ['Max Requests', rc.max_requests] : null,
-            ['Workload Mode', (function() {
-                if (rc.workload_mode === 'dataset')
-                    return 'Dataset file' + (rc.dataset_source ? ' (' + rc.dataset_source + ')' : '');
-                if (rc.use_corpus)
-                    return 'Real corpus (wikitext-103) — native multi-turn generator';
-                return 'Synthetic text';
-            })()],
-            rc.dataset_source ? ['Dataset', '<span style="word-break:break-all;font-size:0.9em;">' + rc.dataset_source + '</span>'] : null,
-            rc.prefix_cache_hit_pct > 0 ? ['Prefix Cache Hit', rc.prefix_cache_hit_pct + '% (' + (rc.prefix_cache_mode || 'identical') + (rc.prefix_cache_groups > 1 ? ', ' + rc.prefix_cache_groups + ' groups' : '') + ')'] : null,
-        ]},
-        { title: 'Search Strategy', color: '#4f46e5', rows: [
-            ['Optimization Goal', (rc.objective || 'ttft').toUpperCase()],
-            ['Total GPUs', rc.total_gpus || na], ['TP Options', (rc.tp_options || []).join(', ') || na],
-            ['TP Pair Breadth', 'Top-' + (rc.tp_pair_top_n || 4)],
-            ['P/D Ratio Search', rc.pd_search_mode === 'exhaustive' ? 'Exhaustive' : 'Adaptive'],
-            ['Asymmetric TP', rc.allow_asymmetric_tp ? 'Yes' : 'No'],
-            ['Skip TP16', rc.skip_tp16 !== false ? 'Yes' : 'No'],
-            ['LoRA Serving', rc.lora_enabled ? 'Enabled' : 'Disabled'],
-            ['LoRA Adapters', rc.lora_enabled ? (rc.lora_num_adapters || 20) + ' (agent-01…agent-' + String(rc.lora_num_adapters || 20).padStart(2, '0') + ')' : '—'],
-            ['LoRA Benchmark Mode', rc.lora_enabled ? ({'round_robin': 'All adapters (round-robin per request)', 'session_pinned': 'Session-pinned (one adapter per conversation)', 'base_only': 'Base model only (no adapter traffic)'}[rc.lora_benchmark_mode] || 'All adapters (round-robin per request)') : '—'],
-            ['LoRA Sweep', rc.lora_sweep_enabled ? 'Enabled — levels [' + (rc.lora_sweep_levels || []).join(', ') + ']' : 'Disabled'],
-            ['Auto-Scale Concurrency', rc.use_achievable_qps ? 'Yes' : 'No'],
-            ['Headroom', (rc.headroom || 1.3) + 'x'],
-            ['Latency SLA', rc.latency_constraint_enabled ? rc.latency_constraint_ms + 'ms @ ' + rc.latency_constraint_percentile : 'Disabled'],
-            ['Calibrated Load', rc.calibrated_load_enabled ? 'Enabled' : 'Disabled'],
-            ['Concurrency Sweep', rc.inferencex_sweep_enabled ? 'Enabled — ' + ({'architecture_aware':'Architecture-Aware','all_recommendations':'All Recommendations','all':'All Configs'}[rc.concurrency_sweep_mode] || 'Architecture-Aware') + (rc.concurrency_sweep_count ? ' (' + rc.concurrency_sweep_count + ' levels)' : '') + (rc.concurrency_sweep_levels ? ' [' + rc.concurrency_sweep_levels.join(', ') + ']' : '') : 'Disabled'],
-            ['Cache Sweep', rc.cache_sweep_enabled ? 'Enabled' : 'Disabled'],
-        ]},
-        { title: 'vLLM Engine', color: '#0891b2', rows: [
-            ['Max Model Length', advVal('max_model_len', 'auto')],
-            ['Block Size', adv.block_size ? (adv.block_size.mode === 'default' ? 'vLLM Default' : adv.block_size.mode === 'custom' ? adv.block_size.value : 'Auto') : 'Auto'],
-            ['KV Cache Dtype', advVal('kv_cache_dtype', 'auto')],
-            ['GPU Memory Utilization', advVal('gpu_memory_utilization', 'auto')],
-            ['Prefix Caching', advToggle('enable_prefix_caching', 'Auto')],
-            ['Expert Parallel', advToggle('enable_expert_parallel', 'Off')],
-            ['Auto Tool Choice', advToggle('enable_auto_tool_choice', 'Off')],
-            adv.tool_call_parser && adv.tool_call_parser.mode === 'custom' ? ['Tool Call Parser', adv.tool_call_parser.value] : null,
-            adv.reasoning_parser && adv.reasoning_parser.mode === 'custom' ? ['Reasoning Parser', adv.reasoning_parser.value] : null,
-            ['Bidirectional KV', advToggle('enable_bidirectional_kv', 'Off')],
-            ['Skip Asymmetric MLA TP', advToggle('skip_asymmetric_mla_tp', 'Off')],
-            adv.cpu_offload_gb && adv.cpu_offload_gb.mode === 'custom' ? ['CPU KV Offload', adv.cpu_offload_gb.value + ' GB'] : null,
-            adv.prefix_cache_retention && adv.prefix_cache_retention.mode === 'custom' ? ['Prefix Cache Retention', adv.prefix_cache_retention.value] : null,
-            adv.ssm_conv_state_layout && adv.ssm_conv_state_layout.mode === 'custom' ? ['SSM Conv State Layout', adv.ssm_conv_state_layout.value] : null,
-            adv.http_timeout_keep_alive && adv.http_timeout_keep_alive.mode === 'custom' ? ['HTTP Keep-Alive Timeout', adv.http_timeout_keep_alive.value + 's'] : null,
-            adv.model_loader_extra_config && adv.model_loader_extra_config.mode === 'custom' ? ['Model Loader Config', '<span style="font-size:0.85em;">' + adv.model_loader_extra_config.value + '</span>'] : null,
-            advToggle('enable_dbo', null) !== null ? ['Dual Batch Overlap', advToggle('enable_dbo', 'Off')] : null,
-            advToggle('enable_eplb', null) !== null ? ['Expert Load Balancing', advToggle('enable_eplb', 'Off')] : null,
-            adv.speculative_method ? ['Speculative Method', adv.speculative_method] : null,
-            adv.num_speculative_tokens && adv.num_speculative_tokens.mode === 'custom' ? ['Speculative Tokens', adv.num_speculative_tokens.value] : null,
-            adv.speculative_model && adv.speculative_model.mode === 'custom' && adv.speculative_model.value ? ['Speculative Model', adv.speculative_model.value] : null,
-        ]},
-        { title: 'Infrastructure', color: '#d97706', rows: [
-            ['Inference Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.image || na) + '</span>'],
-            ['Scheduler Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.scheduler_image || na) + '</span>'],
-            ['Namespace', rc.namespace || na],
-            ['Storage Class', rc.storage_class || na],
-            rc.local_disk_path ? ['Local Disk Path', rc.local_disk_path] : null,
-            rc.per_node_storage ? ['Per-Node Storage', 'Yes'] : null,
-            ['PVC', rc.pvc_name || na],
-            ['Network Type', rc.network_type || na],
-            rc.selected_shared_device ? ['Shared Device', rc.selected_shared_device] : null,
-            rc.gateway_class ? ['Gateway Class', rc.gateway_class] : null,
-            ['NCCL IB HCA', rc.nccl_ib_hca || na],
-            rc.rdma_nics_per_node ? ['RDMA NICs/Node', rc.rdma_nics_per_node] : null,
-        ]},
-        { title: 'EPP Configuration', color: '#6d28d9', rows: (function() {
-            var rows = [
-                ['Scoring Preset', (rc.epp_custom_enabled !== false) ? (eppLabels[rc.epp_preset] || rc.epp_preset || 'Balanced') : 'llm-d upstream'],
-                ['EPP Tuning', rc.epp_benchmark ? 'Enabled' : 'Disabled'],
-            ];
-            var ec = rc.epp_config || {};
-            var plugins = ['prefix_cache', 'kv_cache', 'queue', 'slo', 'active_request', 'token_load', 'no_hit_lru', 'session_aware', 'precise_prefix_cache'];
-            var enabledPlugins = plugins.filter(function(p) { return ec[p] && ec[p].enabled; }).map(function(p) { return p.replace(/_/g, '-') + '(' + ec[p].weight + ')'; });
-            if (enabledPlugins.length) rows.push(['Scoring Plugins', enabledPlugins.join(', ')]);
-            if (ec.prefixCacheAffinityEnabled) rows.push(['Prefix Cache Affinity', 'Enabled']);
-            if (ec.peakPrefillThroughput) rows.push(['Peak Prefill Throughput', ec.peakPrefillThroughput]);
-            if (ec.lruCapacityPerServer) rows.push(['LRU Capacity/Server', ec.lruCapacityPerServer.toLocaleString()]);
-            if (ec.maxPrefixBlocksToMatch) rows.push(['Max Prefix Blocks', ec.maxPrefixBlocksToMatch]);
-            if (ec.nonCachedTokens) rows.push(['Non-Cached Tokens', ec.nonCachedTokens]);
-            if (ec.prefixCacheAutoTune != null) rows.push(['Prefix Cache Auto-Tune', ec.prefixCacheAutoTune ? 'On' : 'Off']);
-            if (ec.usePrefixBasedDecider != null) rows.push(['Prefix-Based Decider', ec.usePrefixBasedDecider ? 'On' : 'Off']);
-            return rows;
-        })()},
-    ];
-    if (data.infra_versions && Object.keys(data.infra_versions).length > 0) {
-        const iv = data.infra_versions;
-        const vLabels = { openshift:'OpenShift', k8s:'Kubernetes', gpu_operator:'GPU Operator', gpu_driver:'GPU Driver', cuda_runtime:'CUDA Runtime', network_operator:'Network Operator', mofed:'MOFED/DOCA', istio:'Istio', service_mesh:'Service Mesh', epp:'EPP Scheduler', nfd:'NFD', lws:'LWS' };
-        const vRows = [];
-        Object.keys(iv).forEach(k => { if (iv[k]) vRows.push([vLabels[k] || k, iv[k]]); });
-        settSections.push({ title: 'Component Versions', color: '#059669', rows: vRows });
-    }
-
-    let s = '<div class="chart-box"><h3>User Defined Test Settings</h3>';
-    s += '<table><tbody>';
-    settSections.forEach(section => {
-        s += `<tr><td colspan="2" style="background:#f1f5f9;font-weight:700;color:${section.color};padding:8px 16px;font-size:1em;">${section.title}</td></tr>`;
-        section.rows.forEach(r => {
-            if (!r) return;
-            s += `<tr><td style="color:#64748b;padding:4px 16px;width:35%;white-space:nowrap;">${r[0]}</td><td style="padding:4px 16px;word-break:break-all;"><strong>${r[1]}</strong></td></tr>`;
-        });
-    });
-    s += '</tbody></table></div>';
-
-    // Tuned Settings vs Upstream Defaults — per-config columns
-    const allResults = data.all_results || [];
-    const allCfgs = [];
-    for (const r of allResults) {
-        const tid = r.test_id || r.config_name || '';
-        if (tid.startsWith('step2-') || tid.startsWith('step3-') || tid.startsWith('step9-') || tid.startsWith('step11-') || tid.startsWith('step13-')) continue;
-        let tc = r.test_config;
-        if (!tc) continue;
-        if (typeof tc === 'string') try { tc = JSON.parse(tc); } catch(e) { continue; }
-        if (tc && typeof tc === 'object') {
-            const arch = (r.architecture || '').toUpperCase();
-            // Archived configmap weights (what actually deployed) — used by _eppW
-            if (r.epp_deployed) tc.epp_deployed = r.epp_deployed;
-            allCfgs.push({ label: r.config_name, arch, tc, ttft: r.ttft_p90 || 1e9 });
-        }
-    }
-    const cfgSortOrder = { 'AGGREGATED': 0, 'EP': 1, 'PD': 2 };
-    allCfgs.sort((a, b) => (cfgSortOrder[a.arch] || 3) - (cfgSortOrder[b.arch] || 3) || a.ttft - b.ttft);
-
-    if (allCfgs.length > 0) {
-        s += '<div class="chart-box"><h3>Tuned Settings vs Upstream Defaults</h3>';
-        s += '<p style="font-size:0.9em;color:#475569;"><span style="color:#059669;font-weight:600;">Green</span> = auto-tuned by ServeIt Studio. <span style="color:#94a3b8;">Gray</span> = upstream default.</p>';
-
-        const hasEp = allCfgs.some(c => c.arch === 'EP');
-        const naS = '<span style="color:#cbd5e1;">N/A</span>';
-
-        const _eppPresets = {
-            balanced: {prefix_cache_weight:3, kv_cache_weight:2, queue_weight:2, active_request_weight:2, decode_prefix_cache_weight:1, decode_active_request_weight:3},
-            cache_optimized: {prefix_cache_weight:5, kv_cache_weight:1, queue_weight:2, active_request_weight:1, decode_prefix_cache_weight:1, decode_active_request_weight:3},
-            queue_balanced: {prefix_cache_weight:1, kv_cache_weight:1, queue_weight:3, active_request_weight:3, decode_prefix_cache_weight:1, decode_active_request_weight:3},
-            latency_aware: {prefix_cache_weight:3, kv_cache_weight:2, queue_weight:2, active_request_weight:2, decode_prefix_cache_weight:1, decode_active_request_weight:3},
-        };
-        function _eppW(tc) {
-            // Use the ARCHIVED configmap weights (what actually deployed)
-            if (tc.epp_deployed && tc.epp_deployed.prefix_cache_weight !== undefined) {
-                return tc.epp_deployed;
-            }
-            if (!tc.epp_config) return null;
-            const preset = tc.epp_config.preset || rc.epp_preset || 'balanced';
-            return _eppPresets[preset] || _eppPresets.balanced;
-        }
-
-        function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
-        function pdVal(tc, pKey, dKey) {
-            const p = tc[pKey], d = tc[dKey];
-            if (p != null && d != null && p !== d) return `P=${p} D=${d}`;
-            return p != null ? String(p) : (d != null ? String(d) : null);
-        }
-        function boolVal(tc, key) { return tc[key] === true ? 'On' : tc[key] === false ? 'Off' : null; }
-
-        const sections = [
-            { title: 'Memory & Batching', params: [
-                { label: 'gpu-memory-utilization', def: '0.90', get: tc => pdVal(tc, 'prefill_gpu_memory_utilization', 'decode_gpu_memory_utilization') || getVal(tc, 'gpu_memory_utilization') },
-                { label: 'max-model-len', def: 'auto', get: tc => getVal(tc, 'max_model_len') },
-                { label: 'max-num-seqs', def: '256', get: tc => pdVal(tc, 'prefill_max_num_seqs', 'decode_max_num_seqs') || getVal(tc, 'max_num_seqs') },
-                { label: 'max-num-batched-tokens', def: 'auto', get: tc => getVal(tc, 'max_num_batched_tokens') },
-                { label: 'block-size', def: '16', get: tc => getVal(tc, 'block_size') },
-                { label: 'kv-cache-memory-bytes', def: 'auto', get: tc => getVal(tc, 'kv_cache_memory_bytes'), pd_only: true },
-            ]},
-            { title: 'Precision & Compute', params: [
-                { label: 'dtype', def: 'auto', get: tc => getVal(tc, 'dtype') },
-                { label: 'kv-cache-dtype', def: 'auto', get: tc => getVal(tc, 'kv_cache_dtype') },
-                { label: 'pipeline-parallel-size', def: '1', get: tc => getVal(tc, 'pipeline_parallel_size') },
-            ]},
-            { title: 'Feature Flags', params: [
-                { label: 'enable-prefix-caching', def: 'Off', get: tc => boolVal(tc, 'enable_prefix_caching') },
-                { label: 'enable-expert-parallel', def: 'Off', get: tc => boolVal(tc, 'enable_expert_parallel') },
-                { label: 'enable-dbo', def: 'Off', get: tc => boolVal(tc, 'enable_dbo') },
-                { label: 'enable-eplb', def: 'Off', get: tc => boolVal(tc, 'enable_eplb') },
-                { label: 'trust-remote-code', def: 'Off', get: tc => boolVal(tc, 'trust_remote_code') },
-            ]},
-            { title: 'MoE / Expert Parallel', params: [
-                { label: 'moe-dp-chunk-size', def: '256', get: tc => getVal(tc, 'moe_dp_chunk_size'), ep_only: true },
-                { label: 'all2all-backend', def: 'auto', get: tc => getVal(tc, 'all2all_backend') || (tc.decode_all2all_backend ? `HT / ${tc.decode_all2all_backend}` : null), ep_only: true },
-                { label: 'moe-backend', def: 'auto', get: tc => getVal(tc, 'moe_backend'), ep_only: true },
-                { label: 'use-deep-gemm', def: 'auto', get: tc => tc.use_deep_gemm === true ? 'On' : tc.use_deep_gemm === false ? 'Off' : null },
-                { label: 'dbo-prefill-threshold', def: '32', get: tc => getVal(tc, 'dbo_prefill_token_threshold') },
-                { label: 'dbo-decode-threshold', def: '32', get: tc => getVal(tc, 'dbo_decode_token_threshold') },
-                { label: 'num-redundant-experts', def: '32', get: tc => getVal(tc, 'num_redundant_experts'), ep_only: true },
-                { label: 'NVSHMEM_SYMMETRIC_SIZE', def: '16G', get: tc => getVal(tc, 'nvshmem_symmetric_size'), ep_only: true },
-            ]},
-            { title: 'EPP Prefill Routing Weights', params: [
-                { label: 'prefix-cache-weight', def: '3', get: tc => { const w = _eppW(tc); return w ? String(w.prefix_cache_weight) : null; } },
-                { label: 'kv-cache-weight', def: '2', get: tc => { const w = _eppW(tc); return w ? String(w.kv_cache_weight) : null; } },
-                { label: 'queue-weight', def: '2', get: tc => { const w = _eppW(tc); return w ? String(w.queue_weight) : null; } },
-                { label: 'active-request-weight', def: '2', get: tc => { const w = _eppW(tc); return w ? String(w.active_request_weight) : null; } },
-            ]},
-            { title: 'EPP Decode Routing Weights', params: [
-                { label: 'decode-prefix-cache-weight', def: '3', get: tc => { const w = _eppW(tc); return w ? String(w.decode_prefix_cache_weight) : null; } },
-                { label: 'decode-active-request-weight', def: '2', get: tc => { const w = _eppW(tc); return w ? String(w.decode_active_request_weight) : null; } },
-            ]},
-            { title: 'EPP Auto-Calculated', params: [
-                { label: 'maxPrefixBlocksToMatch', def: 'auto', get: tc => tc.epp_config ? String(tc.epp_config.max_prefix_blocks || tc.epp_config.maxPrefixBlocksToMatch || '-') : null },
-                { label: 'lruCapacityPerServer', def: 'auto', get: tc => tc.epp_config ? String(tc.epp_config.lru_capacity || tc.epp_config.lruCapacityPerServer || '-') : null },
-                { label: 'nonCachedTokens', def: '16', get: tc => tc.epp_config ? String(tc.epp_config.non_cached_tokens || tc.epp_config.nonCachedTokens || '-') : null },
-            ]},
-        ];
-
-        const acColors = { 'AGGREGATED': '#6366f1', 'PD': '#0ea5e9', 'EP': '#10b981' };
-        s += '<div style="overflow-x:auto;"><table><tr><th style="text-align:center;min-width:180px;">Parameter</th><th style="text-align:center;min-width:70px;">Default</th>';
-        allCfgs.forEach(cfg => {
-            const color = acColors[cfg.arch] || '#64748b';
-            s += `<th style="color:${color};text-align:center;min-width:90px;font-size:0.85em;white-space:nowrap;">${cfg.label}</th>`;
-        });
-        s += '</tr>';
-
-        sections.forEach(section => {
-            s += `<tr><td colspan="${2 + allCfgs.length}" style="background:#f1f5f9;font-weight:700;color:#475569;padding:8px 10px;font-size:1em;text-align:center;">${section.title}</td></tr>`;
-            section.params.forEach(param => {
-                if (param.ep_only && !hasEp) return;
-                s += `<tr><td style="color:#334155;text-align:center;"><code style="font-size:0.9em;">${param.label}</code></td>`;
-                s += `<td style="color:#94a3b8;text-align:center;">${param.def}</td>`;
-                allCfgs.forEach(cfg => {
-                    const tc = cfg.tc;
-                    if (param.ep_only && cfg.arch !== 'EP') { s += `<td style="text-align:center;">${naS}</td>`; return; }
-                    if (param.pd_only && cfg.arch === 'AGGREGATED') { s += `<td style="text-align:center;">${naS}</td>`; return; }
-                    const val = param.get(tc);
-                    const display = val || param.def;
-                    const changed = val && val !== param.def && val !== 'null';
-                    const style = changed ? 'font-weight:700;color:#059669;' : '';
-                    s += `<td style="text-align:center;${style}">${display}</td>`;
-                });
-                s += '</tr>';
-            });
-        });
-
-        s += '</table></div></div>';
-    }
-
-    return s;
-}
-
 // ── Concurrency Sweep Tab ──────────────────────────────────────────────────
 function buildConcurrencySweepSection(data) {
     if (!data.concurrency_sweep || !Object.keys(data.concurrency_sweep).length) return '';
@@ -1997,73 +1742,6 @@ function buildTrafficSection(data, allRes) {
     return s;
 }
 
-// ── Deploy Timing Tab ──────────────────────────────────────────────────────
-function buildDeployTimingSection(data, allRes) {
-    const timings = [];
-    allRes.forEach(r => {
-        // Primary source (matches live report): model_load_time_s from metrics_json
-        const mj = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
-        const loadTime = mj.model_load_time_s;
-        if (loadTime != null && loadTime > 0) {
-            timings.push({
-                config: r.config_name || r.test_id || 'Unknown',
-                arch: r.architecture || '-',
-                pods: (r.prefill_pods || 0) + (r.decode_pods || 0) || r.replicas || 0,
-                load_s: loadTime
-            });
-            return;
-        }
-        // Fallback: explicit deploy_timing struct (model load only — skip entries without it)
-        let dt = r.deploy_timing;
-        if (!dt && typeof r.test_config === 'string') { try { dt = JSON.parse(r.test_config).deploy_timing; } catch(e) {} }
-        if (!dt && r.test_config && typeof r.test_config === 'object') dt = r.test_config.deploy_timing;
-        if (dt && dt.model_load_s != null && dt.model_load_s > 0) {
-            timings.push({
-                config: r.config_name || r.test_id || 'Unknown',
-                arch: r.architecture || '-',
-                pods: (r.prefill_pods || 0) + (r.decode_pods || 0) || r.replicas || 0,
-                load_s: dt.model_load_s
-            });
-        }
-    });
-    if (!timings.length) return '';
-
-    let s = '';
-    s += '<div style="border-radius:10px;overflow:hidden;border:2px solid #f59e0b;border-left:6px solid #f59e0b;margin-bottom:20px;">';
-    s += '<div style="background:linear-gradient(135deg,#f59e0b,#fbbf24);padding:12px 20px;color:white;font-weight:700;">Deploy Timing</div>';
-    s += '<div style="padding:12px 20px;font-size:0.95em;">Time from pod deployment to model fully loaded and serving. Includes scheduling, image pull, model weight loading, and CUDA graph capture.</div>';
-
-    const avgTotal = timings.reduce((a, t) => a + t.load_s, 0) / timings.length;
-    const minTotal = Math.min(...timings.map(t => t.load_s));
-    const maxTotal = Math.max(...timings.map(t => t.load_s));
-    s += '<div class="stats">';
-    s += dlStatCard(timings.length, 'Deployments');
-    s += dlStatCard(dlFmt(avgTotal, 0) + 's', 'Avg Load Time');
-    s += dlStatCard(dlFmt(minTotal, 0) + 's', 'Fastest');
-    s += dlStatCard(dlFmt(maxTotal, 0) + 's', 'Slowest');
-    s += '</div>';
-
-    s += '<div class="chart-box"><h3>Model Load Time per Configuration</h3><div id="dl-deploy-timing" style="height:850px"></div></div>';
-
-    const ttid = 'dl-deploy-timing-tbl';
-    s += '<div class="chart-box"><h3>Deploy Timing Details</h3>';
-    s += `<table id="${ttid}">`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${ttid}',0,'str')">Configuration &#x21C5;</th>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${ttid}',1,'str')">Architecture &#x21C5;</th>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${ttid}',2,'num')">Pods &#x21C5;</th>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${ttid}',3,'num')">Model Load Time &#x21C5;</th>`;
-    [...timings].sort((a, b) => a.load_s - b.load_s).forEach(t => {
-        const mins = Math.floor(t.load_s / 60);
-        const secs = Math.round(t.load_s % 60);
-        const timeStr = mins > 0 ? mins + 'm ' + secs + 's' : secs + 's';
-        s += `<tr><td>${t.config}</td><td>${t.arch}</td><td data-val="${t.pods}">${t.pods}</td><td data-val="${t.load_s}"><strong>${timeStr}</strong></td></tr>`;
-    });
-    s += '</table></div>';
-
-    s += '</div>';
-    return s;
-}
-
 // ── Pareto Frontier Tab ────────────────────────────────────────────────────
 function buildParetoFrontierSection(data, allRes) {
     const valid = (allRes || []).filter(r => {
@@ -2084,71 +1762,6 @@ function buildParetoFrontierSection(data, allRes) {
     s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 4px;">Lower ITL (X) means faster token streaming. Higher throughput/GPU (Y) is better. Top-left is ideal.</p>';
     s += '<div id="dl-pareto-itl" style="height:850px"></div></div>';
     return s;
-}
-
-// ── Parallel Workloads Tab ──────────────────────────────────────────────────
-function buildWorkloadsSection(allRes) {
-    const wlEntries = (allRes || []).filter(r => r.workloads && r.workloads.length && !(r.test_id || r.config_name || '').startsWith('step11-epp-'));
-    if (!wlEntries.length) return '';
-    let s = '<div class="chart-box" style="border:2px solid #7c3aed;">';
-    s += '<h3>Parallel Workloads — per-shape results</h3>';
-    s += '<p style="color:#64748b;font-size:0.9em;">Multiple workload shapes ran simultaneously against one deployment. Combined percentiles are request-weighted; the per-workload rows show each shape\'s own latency distribution.</p>';
-    wlEntries.forEach(e => {
-        const na = '—';
-        s += `<div style="margin:14px 0;"><strong style="color:#3730a3;">${e.name}</strong>`;
-        s += '<table class="results-table" style="margin-top:8px;"><tr><th>Workload</th><th>ISL</th><th>OSL</th><th>Requests</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P99</th><th>E2E P90</th><th>E2E P99</th><th>Tput (req/s)</th></tr>';
-        (e.workloads || []).forEach(w => {
-            s += `<tr><td><strong>${w.name || na}</strong></td><td>${Math.round(w.isl) || na}</td><td>${Math.round(w.osl) || na}</td>` +
-                `<td>${w.request_successful != null ? w.request_successful : na}${w.request_total ? ' / ' + w.request_total : ''}</td>` +
-                `<td>${w.ttft_p50 != null ? Math.round(w.ttft_p50) + 'ms' : na}</td>` +
-                `<td>${w.ttft_p90 != null ? Math.round(w.ttft_p90) + 'ms' : na}</td>` +
-                `<td>${w.ttft_p99 != null ? Math.round(w.ttft_p99) + 'ms' : na}</td>` +
-                `<td>${w.e2e_latency_p90 != null ? w.e2e_latency_p90.toFixed(2) + 's' : na}</td>` +
-                `<td>${w.e2e_latency_p99 != null ? w.e2e_latency_p99.toFixed(2) + 's' : na}</td>` +
-                `<td>${w.throughput_mean != null ? w.throughput_mean.toFixed(2) : na}</td></tr>`;
-        });
-        s += `<tr style="background:#f5f3ff;font-weight:600;"><td>combined (weighted)</td><td>—</td><td>—</td>` +
-            `<td>${e.request_successful != null ? e.request_successful : '—'}</td>` +
-            `<td>${e.ttft_p50 != null ? Math.round(e.ttft_p50) + 'ms' : '—'}</td>` +
-            `<td>${e.ttft_p90 != null ? Math.round(e.ttft_p90) + 'ms' : '—'}</td>` +
-            `<td>${e.ttft_p99 != null ? Math.round(e.ttft_p99) + 'ms' : '—'}</td>` +
-            `<td>${e.e2e_latency_p90 != null ? e.e2e_latency_p90.toFixed(2) + 's' : '—'}</td>` +
-            `<td>${e.e2e_latency_p99 != null ? e.e2e_latency_p99.toFixed(2) + 's' : '—'}</td>` +
-            `<td>${e.throughput_mean != null ? e.throughput_mean.toFixed(2) : '—'}</td></tr>`;
-        s += '</table>';
-        const chartId = `dl-wl-ttft-${(e.test_id || e.config_name || 'x').replace(/[^a-z0-9]/gi, '')}`;
-        s += `<div id="${chartId}" style="height:${Math.max(240, (e.workloads.length + 1) * 60)}px;margin:10px 0;"></div>`;
-        s += '</div>';
-    });
-    s += '</div>';
-    return s;
-}
-
-// ── LoRA Serving Tab ────────────────────────────────────────────────────────
-function _dlLoraAffCells(pd) {
-    if (!pd || !(pd.total_adapters > 0)) {
-        return { single: '—', multi: '—', share: '—', verdict: '—', color: '#64748b' };
-    }
-    const total = pd.total_adapters;
-    const conc = pd.concentrated || 0, scat = pd.scattered || 0;
-    const concPct = Math.round(100 * conc / total), scatPct = Math.round(100 * scat / total);
-    const share = pd.top_pod_share;
-    const verdict = (share === null || share === undefined)
-        ? (concPct >= 80 ? 'adapter-aware' : (concPct >= 50 ? 'partial' : 'random'))
-        : (share >= 0.9 ? 'adapter-aware' : (share >= 0.5 ? 'partial' : 'random'));
-    const color = verdict === 'adapter-aware' ? '#059669' : (verdict === 'partial' ? '#f59e0b' : '#ef4444');
-    return {
-        single: conc + ' (' + concPct + '%)',
-        multi: scat + ' (' + scatPct + '%)',
-        share: (share === null || share === undefined) ? '—' : Math.round(100 * share) + '%',
-        verdict, color
-    };
-}
-
-function _dlCacheCell(pct) {
-    if (pct === undefined || pct === null) return '—';
-    const color = pct >= 20 ? '#059669' : (pct >= 5 ? '#f59e0b' : '#ef4444');
-    return '<span style="color:' + color + ';font-weight:600;">' + pct.toFixed(1) + '%</span>';
 }
 
 function buildLoraSection(data, charts) {
@@ -3184,23 +2797,6 @@ function buildChartScript(data, charts, allRes) {
             s += '})();';
         }
     }
-
-    // Deploy Timing chart — model load time per config, colored by architecture
-    s += '(function(){var el=document.getElementById("dl-deploy-timing");if(!el)return;';
-    s += '  var timings=[];ar.forEach(function(r){var lt=r._model_load_time_s;if(lt!=null&&lt>0){timings.push({config:r.config_name||r.test_id||"Unknown",load:lt,arch:r.architecture||"-"})}else{var dt=r.deploy_timing;if(dt&&dt.model_load_s!=null){timings.push({config:r.config_name||r.test_id||"Unknown",load:dt.model_load_s||0,arch:r.architecture||"-"})}}});';
-    s += '  if(!timings.length)return;';
-    s += '  timings.sort(function(a,b){return b.load-a.load});';
-    s += '  var archC={AGGREGATED:"#6366f1",PD:"#10b981",EP:"#f59e0b"};';
-    s += '  Plotly.newPlot(el,[{x:timings.map(function(t){return t.config}),y:timings.map(function(t){return t.load}),type:"bar",marker:{color:timings.map(function(t){return archC[t.arch]||"#94a3b8"})},text:timings.map(function(t){return Math.round(t.load)+"s"}),textposition:"outside",textfont:{size:13,color:"#334155"},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{x}</b><br>Load time: %{y}s<extra></extra>"}],{height:850,xaxis:{tickangle:-35},yaxis:{title:"Model Load Time (seconds)"},margin:{t:20,b:120,l:70,r:20},plot_bgcolor:"#f8fafc",paper_bgcolor:"#fff"},co);';
-    s += '})();';
-
-    // Parallel Workloads — TTFT by workload (grouped horizontal bars)
-    s += '(function(){ar.forEach(function(e){if(!e.workloads||!e.workloads.length)return;';
-    s += '  var cid="dl-wl-ttft-"+(e.test_id||e.config_name||"x").replace(/[^a-z0-9]/gi,"");var el=document.getElementById(cid);if(!el)return;';
-    s += '  var rows=e.workloads.concat([{name:"combined",ttft_p50:e.ttft_p50,ttft_p90:e.ttft_p90,ttft_p99:e.ttft_p99}]);';
-    s += '  var names=rows.map(function(w){return w.name});';
-    s += '  Plotly.newPlot(el,["p50","p90","p99"].map(function(k,ci){return{y:names,x:rows.map(function(w){return w["ttft_"+k]}),name:k.toUpperCase(),type:"bar",orientation:"h",marker:{color:["#3b82f6","#f59e0b","#dc2626"][ci]}};}),{barmode:"group",height:Math.max(240,(rows.length+1)*60),margin:{t:30,b:30,l:110,r:20},xaxis:{title:"TTFT (ms)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},title:{text:"TTFT by workload",font:{size:13}}},{displayModeBar:false});';
-    s += '});})();';
 
     // LoRA Serving charts
     s += 'var lsw=' + safeJson(data.lora_sweep || {}) + ';';
