@@ -96,6 +96,7 @@ class RecipeOptimizer(
         )
         # Run-level profiling opt-in applies to every test config
         self.orchestrator.enable_pprof = bool(getattr(config, 'enable_pprof', False))
+        self.orchestrator.enable_epp_profile = bool(getattr(config, 'enable_epp_profile', True))
 
         # Scan cluster
         self.cluster_resources = self.scanner.scan_cluster()

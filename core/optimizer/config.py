@@ -96,6 +96,7 @@ class RecipeOptimizerConfig:
 
     # Pod profiling: EPP pprof always collected; this additionally passes
     # --enable-pprof to vLLM pods and captures their profiles
+    enable_epp_profile: bool = True
     enable_pprof: bool = False
     cache_sweep_max_configs: Optional[int] = None  # Legacy — ignored
     cache_sweep_selection_mode: str = "architecture_aware"  # 'architecture_aware' | 'all_recommendations' | 'all'

@@ -263,8 +263,9 @@ class ProfileCollector:
             "torch_procs": None,
         }
 
-        # EPP (always)
-        epp = self.discover_epp_pod(config.architecture)
+        # EPP (toggle: enable_epp_profile, default on)
+        enable_epp = getattr(config, 'enable_epp_profile', True)
+        epp = self.discover_epp_pod(config.architecture) if enable_epp else None
         if epp and self.workload_pod:
             url = f"http://{epp['ip']}:{epp['port']}/debug/pprof/profile?seconds={window}"
             cmd = ["kubectl", "exec", self.workload_pod, "-n", self.namespace, "--",

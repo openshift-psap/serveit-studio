@@ -1480,6 +1480,8 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         # Run-level vLLM profiling opt-in applies to every test config
         if getattr(self, "enable_pprof", False):
             config.enable_pprof = True
+        if hasattr(self, "enable_epp_profile"):
+            config.enable_epp_profile = self.enable_epp_profile
 
         if log_callback:
             log_callback(f"\n{'=' * 70}")
