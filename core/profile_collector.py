@@ -133,6 +133,10 @@ print('SUMMARY_JSON:' + json.dumps(summary))
 class ProfileCollector:
     """Collects pprof profiles from EPP and vLLM pods for one test."""
 
+    # Class-level cache: {pod_name: port_or_None} — avoids re-probing
+    _pprof_port_cache = {}
+    _pprof_warned = False
+
     def __init__(self, kubectl, namespace: str, workload_pod: Optional[str] = None):
         self.kubectl = kubectl
         self.namespace = namespace
@@ -234,6 +238,9 @@ class ProfileCollector:
         return pods
 
     def _probe_vllm_port(self, pod: str) -> Optional[int]:
+        # Check cache — skip probing pods that already failed on a previous test
+        if pod in ProfileCollector._pprof_port_cache:
+            return ProfileCollector._pprof_port_cache[pod]
         for port in (8000, 8200):
             r = self._run_kubectl([
                 "exec", pod, "-n", self.namespace, "-c", "vllm", "--",
@@ -243,7 +250,9 @@ class ProfileCollector:
                 f"sys.exit(0 if urllib.request.urlopen(req,timeout=5).status==200 else 1)",
             ], timeout=20)
             if r.returncode == 0:
+                ProfileCollector._pprof_port_cache[pod] = port
                 return port
+        ProfileCollector._pprof_port_cache[pod] = None
         return None
 
     # ── collection lifecycle ────────────────────────────────────────────────
@@ -436,6 +445,29 @@ class ProfileCollector:
         torch_results = []
         if handle.get("torch_procs"):
             torch_results = self.collect_torch_profiles(handle["torch_procs"], log_callback)
+
+        # 3b. Copy torch trace files from pods to artifact dir
+        for tr in torch_results:
+            pod_name = tr.get('pod')
+            if not pod_name:
+                continue
+            try:
+                r = subprocess.run(
+                    ['kubectl', 'exec', pod_name, '-n', self.namespace, '-c', 'vllm',
+                     '--', 'cat', '/tmp/torch_profiles/trace.json'],
+                    capture_output=True, timeout=60,
+                    env=self._kubectl_env())
+                if r.returncode == 0 and r.stdout:
+                    trace_out = artifact_dir / 'torch' / pod_name / 'trace.json'
+                    trace_out.parent.mkdir(parents=True, exist_ok=True)
+                    trace_out.write_bytes(r.stdout)
+                    written.append({
+                        'kind': 'torch', 'pod': pod_name, 'port': 0,
+                        'ptype': 'trace', 'path': str(trace_out.relative_to(artifact_dir)),
+                        'size': len(r.stdout)
+                    })
+            except Exception as e:
+                logger.warning(f'failed copying torch trace from {pod_name}: {e}')
 
         # 4. Heap + goroutine snapshots (post-load, point-in-time)
         snapshots = []
