@@ -9,7 +9,7 @@
 
     function entries(data) {
         return (data.all_results || []).filter(function(r) {
-            return r.pprof && (r.pprof.epp || (r.pprof.vllm && r.pprof.vllm.length));
+            return r.pprof && (r.pprof.epp || (r.pprof.vllm && r.pprof.vllm.length) || (r.pprof.torch && r.pprof.torch.length));
         });
     }
 
@@ -143,6 +143,14 @@
         var vllmTests = profEntries.filter(function(e) { return e.pprof.vllm && e.pprof.vllm.length; });
         vllmTests.forEach(function(e) {
             s += buildVllmSection(ctx, e, e.pprof);
+        });
+
+        // ── TORCH PROFILER SECTION ──
+        var torchTests = profEntries.filter(function(e) {
+            return e.pprof.torch && e.pprof.torch.length;
+        });
+        torchTests.forEach(function(e) {
+            s += buildTorchSection(ctx, e, e.pprof.torch);
         });
 
         // ── CROSS-TEST EPP CPU% COMPARISON ──
@@ -303,6 +311,11 @@
             if (e.pprof.vllm && e.pprof.vllm.length) renderVllmCharts(ctx, e, e.pprof.vllm);
         });
 
+        // Torch profiler charts
+        profEntries.forEach(function(e) {
+            if (e.pprof.torch && e.pprof.torch.length) renderTorchCharts(ctx, e, e.pprof.torch);
+        });
+
         // Cross-test comparison
         if (eppTests.length >= 2) renderCrossTest(ctx, eppTests);
     }
@@ -436,6 +449,54 @@
                 }, { displayModeBar: false, responsive: true });
             }
         }
+    }
+
+    function buildTorchSection(ctx, e, torchPods) {
+        var base = ctx.chartId('pprof-torch-' + safeId(testKey(e)));
+        var s = '';
+        s += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #e65100;">' +
+            '<div class="chart-card-header" style="background:linear-gradient(135deg,#e65100,#ff9800);">\u{1F525} Torch Profiler \u2014 ' + (e.config_name || e.test_id || '') + '</div>';
+        s += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+            'CPU + CUDA activity captured with <code>torch.profiler</code> during the benchmark load window.</div>';
+        torchPods.forEach(function(tp, vi) {
+            var chartId = base + '-pod-' + vi;
+            s += '<div style="margin:8px 20px; padding:10px 14px; background:#fafafa; border-radius:8px; border-left:3px solid #e65100;">';
+            s += '<div style="display:flex; justify-content:space-between; align-items:center; font-size:0.88em; margin-bottom:6px; flex-wrap:wrap; gap:8px;">';
+            s += '<span style="font-family:monospace; font-weight:600; color:#334155;">' + (tp.pod || '?') + '</span>';
+            s += '<span style="color:#475569;">CPU: <strong>' + ((tp.total_cpu_ms || 0) / 1000).toFixed(1) + 's</strong>' +
+                ' \u00b7 CUDA: <strong style="color:#e65100;">' + ((tp.total_cuda_ms || 0) / 1000).toFixed(1) + 's</strong></span>';
+            s += '</div>';
+            s += '<div id="' + chartId + '" style="width:100%; height:' + Math.max(200, Math.min((tp.operators || []).length, 10) * 26 + 50) + 'px;"></div>';
+            s += '</div>';
+        });
+        s += '</div>';
+        return s;
+    }
+
+    function renderTorchCharts(ctx, e, torchPods) {
+        if (typeof Plotly === 'undefined') return;
+        var base = ctx.chartId('pprof-torch-' + safeId(testKey(e)));
+        torchPods.forEach(function(tp, vi) {
+            var el = document.getElementById(base + '-pod-' + vi);
+            if (!el || !tp.operators || !tp.operators.length) return;
+            var ops = tp.operators.slice(0, 10);
+            var labels = ops.map(function(o) { return H.truncate(o.name, 55); }).reverse();
+            var lM = H.leftMarginFor(labels, 6.6, 25);
+            Plotly.newPlot(el, [
+                { y: labels, x: ops.map(function(o) { return o.cpu_total_ms; }).reverse(),
+                  name: 'CPU (ms)', type: 'bar', orientation: 'h', marker: { color: '#e65100' },
+                  hovertemplate: '<b>%{y}</b><br>CPU: %{x:.1f} ms<extra></extra>' },
+                { y: labels, x: ops.map(function(o) { return o.cuda_total_ms; }).reverse(),
+                  name: 'CUDA (ms)', type: 'bar', orientation: 'h', marker: { color: '#1565c0' },
+                  hovertemplate: '<b>%{y}</b><br>CUDA: %{x:.1f} ms<extra></extra>' }
+            ], {
+                barmode: 'group', margin: { l: lM, r: 60, t: 5, b: 30 },
+                xaxis: { title: 'Time (ms)' }, yaxis: { automargin: true, tickfont: H.MONO_9 },
+                height: Math.max(200, ops.length * 26 + 50),
+                showlegend: true, legend: { x: 0, y: 1.12, orientation: 'h' },
+                plot_bgcolor: '#fff'
+            }, { displayModeBar: false, responsive: true });
+        });
     }
 
     function renderCrossTest(ctx, eppTests) {
