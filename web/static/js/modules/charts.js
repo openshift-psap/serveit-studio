@@ -3353,7 +3353,7 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
             profEntries.forEach(e => {
                 const pp = e.pprof;
                 secProfiles += `<div style="margin-top:16px; border:1.5px solid #e2e8f0; border-radius:8px; overflow:hidden; background:#fff;">`;
-                secProfiles += `<div style="background:#f0f9ff; padding:10px 14px; font-weight:700; color:#0c4a6e; border-bottom:1px solid #e2e8f0;">${e.name} <span style="font-weight:400;color:#64748b;font-size:0.85em;">(${e.architecture})</span></div>`;
+                secProfiles += `<div style="background:#f0f9ff; padding:10px 14px; font-weight:700; color:#0c4a6e; border-bottom:1px solid #e2e8f0;">${e.config_name || e.name || e.test_id} <span style="font-weight:400;color:#64748b;font-size:0.85em;">(${e.architecture})</span></div>`;
 
                 // ── EPP card ──
                 if (pp.epp) {
@@ -3503,7 +3503,7 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                         if (!el || typeof Plotly === 'undefined') return;
                         const sorted = eppTests.slice().sort((a, b) => (a.pprof.epp.cpu_pct || 0) - (b.pprof.epp.cpu_pct || 0));
                         Plotly.newPlot(el, [{
-                            y: sorted.map(e => e.name).reverse(),
+                            y: sorted.map(e => e.config_name || e.name || e.test_id).reverse(),
                             x: sorted.map(e => e.pprof.epp.cpu_pct).reverse(),
                             type: 'bar', orientation: 'h',
                             marker: { color: sorted.map(e => { const c = e.pprof.epp.cpu_pct; return c > 50 ? '#dc2626' : c > 20 ? '#d97706' : '#0891b2'; }).reverse() },

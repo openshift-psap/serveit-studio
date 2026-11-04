@@ -367,7 +367,7 @@ class ProfileCollector:
         embed_budget = MAX_EMBED_BYTES
         for cap, meta in zip(all_captures, written):
             entry = dict(meta)
-            if embed_budget > 0 and cap["ptype"] == "cpu":
+            if embed_budget > 0:
                 entry["blob"] = base64.b64encode(cap["data"]).decode("ascii")
                 embed_budget -= len(entry["blob"])
             summary["files"].append({k: v for k, v in entry.items() if k != "blob"})

@@ -1613,6 +1613,9 @@ class ReportAnalyzer:
                         for _entry in ([_pp_lite.get('epp')] if _pp_lite.get('epp') else []) + (_pp_lite.get('vllm') or []):
                             if _entry and 'blob' in _entry:
                                 _entry.pop('blob')
+                        for _fentry in _pp_lite.get('files') or []:
+                            if _fentry and 'blob' in _fentry:
+                                _fentry.pop('blob')
                         all_results[-1]['pprof'] = _pp_lite
                 except Exception:
                     pass

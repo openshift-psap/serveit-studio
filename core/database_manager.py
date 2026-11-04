@@ -605,6 +605,9 @@ class DatabaseManager:
                     # Parsed CPU summaries carry the raw profile as 'blob'
                     if entry and entry.get('blob'):
                         blob_map[f"{entry['pod']}-cpu.prof"] = entry.pop('blob')
+                for fentry in profiles_summary.get('files') or []:
+                    if fentry.get('blob'):
+                        blob_map[f"{fentry['pod']}-{fentry['ptype']}.prof"] = fentry.pop('blob')
                 if blob_map:
                     profiles_blob = json.dumps(blob_map)
                 metrics_json = json.loads(metrics_json)

@@ -2393,7 +2393,7 @@ function buildProfilesSection(runId, allRes) {
     profEntries.forEach(e => {
         const pp = e.pprof;
         s += `<div style="margin-top:16px;border:1.5px solid #e2e8f0;border-radius:8px;overflow:hidden;background:#fff;">`;
-        s += `<div style="background:#f0f9ff;padding:10px 14px;font-weight:700;color:#0c4a6e;border-bottom:1px solid #e2e8f0;">${e.name} <span style="font-weight:400;color:#64748b;font-size:0.85em;">(${e.architecture})</span></div>`;
+        s += `<div style="background:#f0f9ff;padding:10px 14px;font-weight:700;color:#0c4a6e;border-bottom:1px solid #e2e8f0;">${e.config_name || e.name || e.test_id} <span style="font-weight:400;color:#64748b;font-size:0.85em;">(${e.architecture})</span></div>`;
 
         // EPP card
         if (pp.epp) {
@@ -3399,7 +3399,7 @@ function buildChartScript(data, charts, allRes) {
     s += '  var cmpEl=document.getElementById("dl-pprof-epp-cmp");';
     s += '  if(cmpEl){var eppTests=profEntries.filter(function(e){return e.pprof.epp&&e.pprof.epp.cpu_pct!=null;});';
     s += '    if(eppTests.length>=2){var sorted=eppTests.slice().sort(function(a,b){return(a.pprof.epp.cpu_pct||0)-(b.pprof.epp.cpu_pct||0);});';
-    s += '      Plotly.newPlot(cmpEl,[{y:sorted.map(function(e){return e.name;}).reverse(),x:sorted.map(function(e){return e.pprof.epp.cpu_pct;}).reverse(),type:"bar",orientation:"h",marker:{color:sorted.map(function(e){var c=e.pprof.epp.cpu_pct;return c>50?"#dc2626":(c>20?"#d97706":"#0891b2");}).reverse()},text:sorted.map(function(e){return e.pprof.epp.cpu_pct+"%";}).reverse(),textposition:"outside",textfont:{size:12},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{y}</b><br>EPP CPU: %{x:.1f}%<extra></extra>"}],{margin:{l:260,r:60,t:10,b:40},xaxis:{title:"EPP CPU during load (%)"},height:Math.max(300,sorted.length*44+80)},{displayModeBar:false,responsive:true});}}';
+    s += '      Plotly.newPlot(cmpEl,[{y:sorted.map(function(e){return e.config_name||e.name||e.test_id;}).reverse(),x:sorted.map(function(e){return e.pprof.epp.cpu_pct;}).reverse(),type:"bar",orientation:"h",marker:{color:sorted.map(function(e){var c=e.pprof.epp.cpu_pct;return c>50?"#dc2626":(c>20?"#d97706":"#0891b2");}).reverse()},text:sorted.map(function(e){return e.pprof.epp.cpu_pct+"%";}).reverse(),textposition:"outside",textfont:{size:12},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{y}</b><br>EPP CPU: %{x:.1f}%<extra></extra>"}],{margin:{l:260,r:60,t:10,b:40},xaxis:{title:"EPP CPU during load (%)"},height:Math.max(300,sorted.length*44+80)},{displayModeBar:false,responsive:true});}}';
     s += '})();';
 
     s += '<\/script>';
