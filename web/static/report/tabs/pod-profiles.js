@@ -218,13 +218,11 @@
         s += '</div>';
 
         // CPU% by pod (hot-pod view)
-        s += '<div style="font-weight:600; font-size:0.85em; color:#334155; margin:10px 20px 2px;">CPU% by pod during load ' +
-            '<span style="font-weight:400;color:#64748b;">— dashed line = mean; 🔥 = running hot</span></div>';
+        s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#059669,#34d399); font-size:0.95em; margin:12px 20px 0;">CPU% by Pod During Load — dashed line = mean, 🔥 = running hot</div>';
         s += '<div id="' + cpuId + '" style="width:100%; height:' + Math.max(200, vllmPods.length * 28 + 70) + 'px; margin:0 20px;"></div>';
 
         // PER-POD FUNCTION BREAKDOWN CHARTS (one per pod)
-        s += '<div style="font-weight:600; font-size:0.85em; color:#334155; margin:16px 20px 2px;">Per-pod function breakdown ' +
-            '<span style="font-weight:400;color:#64748b;">— top CPU consumers per pod</span></div>';
+        s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#059669,#34d399); font-size:0.95em; margin:16px 20px 0;">Per-Pod Function Breakdown — top CPU consumers per pod</div>';
         vllmPods.forEach(function(vp, vi) {
             var podChartId = base + '-pod-' + vi;
             var hot = (vp.cpu_pct || 0) > hotThreshold;
@@ -239,8 +237,7 @@
         });
 
         // Heatmap: functions × pods
-        s += '<div style="font-weight:600; font-size:0.85em; color:#334155; margin:16px 20px 2px;">Top functions × pods ' +
-            '<span style="font-weight:400;color:#64748b;">— cumulative CPU% per pod; dark cells = hot function on that pod</span></div>';
+        s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#059669,#34d399); font-size:0.95em; margin:16px 20px 0;">Top Functions × Pods — cumulative CPU%, dark cells = hot function on that pod</div>';
         s += '<div id="' + heatId + '" style="width:100%; margin:0 20px;"></div>';
 
         // Merged detail table
