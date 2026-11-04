@@ -54,7 +54,7 @@ function _renderChartsImpl(data, runId, content) {
     }
 
     let html = '';
-    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '';
+    let secRec = '', secCfg = '', secCal = '', secCacheSweep = '';
 
 
     // Lookup from test_id/config_name to all_results entry (used across multiple sections)
@@ -522,82 +522,6 @@ function _renderChartsImpl(data, runId, content) {
     secRec = html; html = '';
 
     // ============================================================
-    // TP CALIBRATION CHARTS — Step 2 (Decode) & Step 3 (Prefill)
-    // ============================================================
-    if (rec) {
-            const hasDecodeTP = rec.decode_tp_all && rec.decode_tp_all.length;
-            const hasPrefillTP = rec.prefill_tp_all && rec.prefill_tp_all.length;
-            if (hasDecodeTP || hasPrefillTP) {
-                html += '<div class="chart-card" style="border-left:6px solid #0d9488;">' +
-                    '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#14b8a6); color:white;">TP Calibration</div>' +
-                    '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
-                    'Tests different <strong>Tensor Parallelism (TP)</strong> values per role to find the minimum viable TP that fits in GPU memory. ' +
-                    'Lower TP means fewer GPUs per pod, allowing more replicas and higher throughput. Each TP value is tested with a short benchmark to measure baseline latency and token throughput.' +
-                    '</div></div>';
-                html += '<div class="charts-grid-2col">';
-                html += chartCard(
-                    'Step 2: Decode TP Sweep',
-                    hasDecodeTP
-                        ? 'Each TP value was tested with a single decode pod to find the optimal tensor parallelism for decode. The <strong>tokens/s/GPU</strong> metric (bars) shows efficiency — higher is better. The <strong style="color:#ef4444">ITL P90</strong> line shows inter-token latency — lower means smoother streaming. The optimal TP maximizes throughput per GPU.'
-                        : 'Decode TP calibration chart will appear here once Step 2 completes.',
-                    'chart-tp-decode'
-                );
-                html += chartCard(
-                    'Step 3: Prefill TP Sweep',
-                    hasPrefillTP
-                        ? 'Each TP value was tested with a single prefill pod to find the optimal tensor parallelism for prefill. The <strong>tokens/s/GPU</strong> metric (bars) shows efficiency — higher is better. The <strong style="color:#ef4444">TTFT P90</strong> line shows time-to-first-token — lower means the model starts responding faster.'
-                        : 'Prefill TP calibration chart will appear here once Step 3 completes.',
-                    'chart-tp-prefill'
-                );
-                html += '</div>';
-
-            }
-        }
-
-    // Calibration parameters table (after all charts)
-    if (rec) {
-        var hasDecodeTP2 = rec.decode_tp_all && rec.decode_tp_all.length;
-        var hasPrefillTP2 = rec.prefill_tp_all && rec.prefill_tp_all.length;
-        var calRows = [];
-        if (hasDecodeTP2) {
-            rec.decode_tp_all.forEach(function(d) {
-                calRows.push({ role: 'Decode', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, tspg: d.tpsg != null ? d.tpsg : null, ttft: null, itl: d.itl_p90 != null ? d.itl_p90 : null });
-            });
-        }
-        if (hasPrefillTP2) {
-            rec.prefill_tp_all.forEach(function(d) {
-                calRows.push({ role: 'Prefill', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, tspg: d.tpsg != null ? d.tpsg : null, ttft: d.ttft_p90 != null ? d.ttft_p90 : null, itl: null });
-            });
-        }
-        if (calRows.length) {
-            var calTableId = 'cal-params-table' + _chartSuffix;
-            html += '<div id="' + calTableId + '" style="margin:16px 0;padding:16px 20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">';
-            html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">';
-            html += '<div style="font-weight:700;font-size:0.95em;color:#1e293b;">Calibration Test Parameters</div>';
-            html += '<button onclick="downloadCalParamsTablePng(\'' + _chartSuffix + '\')" style="font-size:0.78em;padding:4px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#475569;cursor:pointer;">&#11015; Download PNG</button>';
-            html += '</div>';
-            html += '<p style="color:#64748b;font-size:0.82em;margin:0 0 10px;">Each TP value is tested with isolated workloads: <strong>ISL=1</strong> for decode (measures pure token generation) and <strong>OSL=1</strong> for prefill (measures pure prompt processing). Concurrency is estimated from KV cache capacity to avoid OOM.</p>';
-            html += '<table style="width:100%;font-size:0.85em;text-align:center;border-collapse:collapse;"><tr style="background:#f1f5f9;"><th style="padding:8px 12px;border:1px solid #e2e8f0;">Role</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">TP</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">ISL</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">OSL</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">Concurrency</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">Max Requests</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">TSPG (tok/s/GPU)</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">ITL P90</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">TTFT P90</th></tr>';
-            calRows.forEach(function(r) {
-                var roleStyle = r.role === 'Decode' ? ' style="color:#6366f1;text-align:center;"' : ' style="color:#0d9488;text-align:center;"';
-                var tspgStr = r.tspg != null ? r.tspg.toLocaleString() : '-';
-                var ttftStr = r.ttft != null ? r.ttft.toLocaleString() + ' ms' : '-';
-                html += '<tr><td' + roleStyle + '><strong>' + r.role + '</strong></td>' +
-                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + r.tp + '</td>' +
-                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + (r.isl != null ? r.isl.toLocaleString() : '-') + '</td>' +
-                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + (r.osl != null ? r.osl.toLocaleString() : '-') + '</td>' +
-                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + (r.conc || '-') + '</td>' +
-                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + (r.reqs || '-') + '</td>' +
-                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600;">' + tspgStr + '</td>' +
-                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + (r.itl != null ? r.itl.toLocaleString() + ' ms' : '-') + '</td>' +
-                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + ttftStr + '</td></tr>';
-            });
-            html += '</table></div>';
-        }
-    }
-
-    // Flush TP calibration
-    secTP = html; html = '';
 
     // ============================================================
     // PERCENTILE BREAKDOWN — combined primary vs Aggregated table
@@ -697,7 +621,6 @@ function _renderChartsImpl(data, runId, content) {
     };
 
     // TP Pareto chart → TP Calibration subtab (only if TP data exists)
-    if (secTP) secTP += chartCard('TP Calibration: Latency vs GPU Count', chartDesc.pareto, 'chart-pareto');
 
     // Scatter, efficiency → Configurations subtab
     secCfg += '<div class="chart-card" style="border-left:6px solid #6366f1;">' +
@@ -1081,267 +1004,6 @@ function _renderChartsImpl(data, runId, content) {
     secCfg += html; html = '';
     if (!coreResults.length) secCfg = '';
 
-    // Architecture comparison chart + percentile bar chart → Comparison tab (above tables)
-    html += '<div class="chart-card" style="border-left:6px solid #0284c7;">' +
-        '<div class="chart-card-header" style="background:linear-gradient(135deg,#0284c7,#38bdf8); color:white;">Architecture Comparison</div>' +
-        '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
-        'Compares <strong>PD/EP disaggregated</strong> inference against the <strong>Aggregated</strong> baseline. ' +
-        'PD separates prefill and decode into specialized pods so new requests don\'t wait behind ongoing generation. ' +
-        'The percentage change charts show exactly how much each PD configuration improves (or regresses) relative to the best Aggregated result.' +
-        '</div></div>';
-    html += chartCard('Architecture Comparison',
-        'Side-by-side comparison of <strong>Aggregated</strong> (single pool of GPUs) vs <strong>PD</strong> (dedicated prefill and decode GPUs) architectures. Lower TTFT is better for responsiveness. Higher throughput means more users served.',
-        'chart-arch');
-    html += chartCard('Percentile Comparison: Winner vs Aggregated',
-        'Side-by-side bar chart comparing TTFT and Throughput at each percentile (P50, P90, P95, P99) between the recommended configuration and the Aggregated baseline.',
-        'chart-percentile-bars');
-
-    // ============================================================
-    // STEP 8: Architecture Comparison (separate card)
-    // Renders PD vs Agg, EP vs Agg, or both depending on goal
-    // ============================================================
-    if (rec && (rec.pd_vs_agg || rec.ep_vs_agg)) {
-        // --- PD vs Aggregated ---
-        if (rec.pd_vs_agg) {
-            const cmp = rec.pd_vs_agg;
-            const ttftColor = cmp.ttft_winner === 'PD' ? '#10b981' : '#f59e0b';
-            const tputColor = cmp.throughput_winner === 'PD' ? '#10b981' : '#f59e0b';
-            html += '<div class="chart-card" style="margin-top:16px; border:2px solid #6366f1; border-left:6px solid #6366f1;"><div class="chart-card-header" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">Step 8: PD vs Aggregated Comparison</div>';
-            html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">The best PD configuration was tested head-to-head against an equivalent Aggregated deployment using the same GPU count and full workload. This validates whether PD disaggregation actually helps for this model.</div>';
-            html += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
-            html += '<tr><th>Metric</th><th>PD (best)</th><th>Aggregated</th><th>Winner</th></tr>';
-            html += `<tr><td><strong>TTFT P90</strong></td><td>${cmp.pd.ttft_p90} ms</td><td>${cmp.aggregated.ttft_p90} ms</td><td style="color:${ttftColor}; font-weight:700;">${cmp.ttft_winner} (${cmp.ttft_diff_pct}% better)</td></tr>`;
-            html += `<tr><td><strong>Throughput Mean</strong></td><td>${cmp.pd.throughput_mean || cmp.pd.throughput_p90} req/s</td><td>${cmp.aggregated.throughput_mean || cmp.aggregated.throughput_p90} req/s</td><td style="color:${tputColor}; font-weight:700;">${cmp.throughput_winner} (${cmp.throughput_diff_pct}% better)</td></tr>`;
-            if (cmp.pd.ttft_p99 && cmp.aggregated.ttft_p99) {
-                const p99Color = cmp.ttft_p99_winner === 'PD' ? '#10b981' : '#f59e0b';
-                html += `<tr style="border-top:2px solid #e2e8f0;"><td><strong>TTFT P99 (tail)</strong></td><td>${cmp.pd.ttft_p99} ms</td><td>${cmp.aggregated.ttft_p99} ms</td><td style="color:${p99Color}; font-weight:700;">${cmp.ttft_p99_winner} (${cmp.ttft_p99_diff_pct}% better)</td></tr>`;
-            }
-            html += '</table></div>';
-
-            // --- % Change chart: All PD configs vs Aggregated baseline ---
-            if (rec.aggregated_baseline && coreResults.length > 1) {
-                const aggBaseline = rec.aggregated_baseline;
-                const baseTtft = aggBaseline.ttft_p90;
-                const baseTput = aggBaseline.throughput_mean || aggBaseline.throughput_p90;
-                const configs = coreResults.filter(r => r.architecture === 'PD' && r.ttft_p90 && r.throughput_p90);
-                if (configs.length && baseTtft && baseTput) {
-                    html += '<div style="padding:16px 20px 4px;"><div style="font-weight:700; font-size:0.95em; color:#1e293b; margin-bottom:4px;">All PD Configurations vs Aggregated Baseline</div>';
-                    html += '<div style="color:#1e293b; font-size:0.92em; margin-bottom:12px;">Percentage change in TTFT and Throughput relative to the Step 8 Aggregated baseline (' + aggBaseline.config_name + '). For TTFT, negative (green) is better. For Throughput, positive (green) is better.</div>';
-                    var pdTableId = 'pd-vs-agg-table-' + runId;
-                    html += '<div class="chart-card-body" style="padding:0;"><table class="results-table" id="' + pdTableId + '">';
-                    html += '<tr>';
-                    html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + pdTableId + '\',0,\'str\')">Configuration &#x21C5;</th>';
-                    html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + pdTableId + '\',1,\'num\')">TTFT P90 &#x21C5;</th>';
-                    html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + pdTableId + '\',2,\'num\')">TTFT vs Agg &#x21C5;</th>';
-                    html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + pdTableId + '\',3,\'num\')">Throughput Mean &#x21C5;</th>';
-                    html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + pdTableId + '\',4,\'num\')">Tput vs Agg &#x21C5;</th>';
-                    html += '</tr>';
-                    const sorted = [...configs].sort((a, b) => a.ttft_p90 - b.ttft_p90);
-                    for (const cfg of sorted) {
-                        const cfgTput = cfg.throughput_mean || cfg.throughput_p90;
-                        const ttftPct = ((cfg.ttft_p90 - baseTtft) / baseTtft * 100).toFixed(1);
-                        const tputPct = ((cfgTput - baseTput) / baseTput * 100).toFixed(1);
-                        const ttftBetter = parseFloat(ttftPct) < 0;
-                        const tputBetter = parseFloat(tputPct) > 0;
-                        const ttftColor = ttftBetter ? '#059669' : '#dc2626';
-                        const tputColor = tputBetter ? '#059669' : '#dc2626';
-                        const ttftArrow = ttftBetter ? '&#9660;' : '&#9650;';
-                        const tputArrow = tputBetter ? '&#9650;' : '&#9660;';
-                        const cmpEppBadge = (cfg.test_id && cfg.test_id.startsWith('step11-epp-')) ? ' <span style="background:#7c3aed;color:white;font-size:0.65em;padding:1px 5px;border-radius:3px;">EPP TUNED</span>' : '';
-                        html += `<tr><td><strong>${cfg.config_name}</strong>${cmpEppBadge}</td>`;
-                        html += `<td data-val="${cfg.ttft_p90}">${cfg.ttft_p90} ms</td>`;
-                        html += `<td data-val="${ttftPct}" style="color:${ttftColor}; font-weight:700;">${ttftArrow} ${ttftPct}%</td>`;
-                        html += `<td data-val="${cfgTput}">${cfgTput} req/s</td>`;
-                        html += `<td data-val="${tputPct}" style="color:${tputColor}; font-weight:700;">${tputArrow} ${tputPct}%</td></tr>`;
-                    }
-                    html += `<tr class="baseline-row" style="background:#f1f5f9;"><td><strong>${aggBaseline.config_name}</strong> <span style="background:#1f77b4; color:white; font-size:0.65em; padding:1px 5px; border-radius:3px;">BASELINE</span></td>`;
-                    html += `<td data-val="${baseTtft}">${baseTtft} ms</td><td data-val="0" style="color:#64748b;">-</td>`;
-                    html += `<td data-val="${baseTput}">${baseTput} req/s</td><td data-val="0" style="color:#64748b;">-</td></tr>`;
-                    html += '</table></div></div>';
-                }
-            }
-            html += '</div>';
-        }
-
-        // --- EP vs Aggregated ---
-        if (rec.ep_vs_agg) {
-            const cmp = rec.ep_vs_agg;
-            const ttftColor = cmp.ttft_winner === 'EP' ? '#10b981' : '#f59e0b';
-            const tputColor = cmp.throughput_winner === 'EP' ? '#10b981' : '#f59e0b';
-            html += '<div class="chart-card" style="margin-top:16px; border:2px solid #6366f1; border-left:6px solid #6366f1;"><div class="chart-card-header" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">Step 8: EP vs Aggregated Comparison</div>';
-            html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">The best EP (Expert Parallelism) configuration was tested head-to-head against an equivalent Aggregated deployment using the same GPU count and full workload. EP uses EPLB (expert-level prefill load balancing) to distribute work across independent pods.</div>';
-            html += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
-            html += '<tr><th>Metric</th><th>EP (best)</th><th>Aggregated</th><th>Winner</th></tr>';
-            html += `<tr><td><strong>TTFT P90</strong></td><td>${cmp.ep.ttft_p90} ms</td><td>${cmp.aggregated.ttft_p90} ms</td><td style="color:${ttftColor}; font-weight:700;">${cmp.ttft_winner} (${cmp.ttft_diff_pct}% better)</td></tr>`;
-            html += `<tr><td><strong>Throughput Mean</strong></td><td>${cmp.ep.throughput_mean || cmp.ep.throughput_p90} req/s</td><td>${cmp.aggregated.throughput_mean || cmp.aggregated.throughput_p90} req/s</td><td style="color:${tputColor}; font-weight:700;">${cmp.throughput_winner} (${cmp.throughput_diff_pct}% better)</td></tr>`;
-            html += '</table></div>';
-
-            // --- % Change chart: All EP configs vs Aggregated baseline ---
-            if (rec.aggregated_baseline && rec.ep_all_configs && rec.ep_all_configs.length > 0) {
-                const aggBaseline = rec.aggregated_baseline;
-                const baseTtft = aggBaseline.ttft_p90;
-                const baseTput = aggBaseline.throughput_mean || aggBaseline.throughput_p90;
-                if (baseTtft && baseTput) {
-                    html += '<div style="padding:16px 20px 4px;"><div style="font-weight:700; font-size:0.95em; color:#1e293b; margin-bottom:4px;">All EP Configurations vs Aggregated Baseline</div>';
-                    html += '<div style="color:#1e293b; font-size:0.92em; margin-bottom:12px;">Percentage change in TTFT and Throughput relative to the Step 8 Aggregated baseline. For TTFT, negative (green) is better. For Throughput, positive (green) is better.</div>';
-                    var epTableId = 'ep-vs-agg-table-' + runId;
-                    html += '<div class="chart-card-body" style="padding:0;"><table class="results-table" id="' + epTableId + '">';
-                    html += '<tr>';
-                    html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + epTableId + '\',0,\'str\')">Configuration &#x21C5;</th>';
-                    html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + epTableId + '\',1,\'num\')">TTFT P90 &#x21C5;</th>';
-                    html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + epTableId + '\',2,\'num\')">TTFT vs Agg &#x21C5;</th>';
-                    html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + epTableId + '\',3,\'num\')">Throughput Mean &#x21C5;</th>';
-                    html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + epTableId + '\',4,\'num\')">Tput vs Agg &#x21C5;</th>';
-                    html += '</tr>';
-                    const sorted = [...rec.ep_all_configs].sort((a, b) => (b.throughput_mean||b.throughput_p90||0) - (a.throughput_mean||a.throughput_p90||0));
-                    for (const cfg of sorted) {
-                        const cfgTput = cfg.throughput_mean || cfg.throughput_p90;
-                        if (!cfg.ttft_p90 || !cfgTput) continue;
-                        const ttftPct = ((cfg.ttft_p90 - baseTtft) / baseTtft * 100).toFixed(1);
-                        const tputPct = ((cfgTput - baseTput) / baseTput * 100).toFixed(1);
-                        const ttftBetter = parseFloat(ttftPct) < 0;
-                        const tputBetter = parseFloat(tputPct) > 0;
-                        const ttftColor = ttftBetter ? '#059669' : '#dc2626';
-                        const tputColor = tputBetter ? '#059669' : '#dc2626';
-                        const ttftArrow = ttftBetter ? '&#9660;' : '&#9650;';
-                        const tputArrow = tputBetter ? '&#9650;' : '&#9660;';
-                        const label = cfg.prefill_pods ? `EP ${cfg.prefill_pods}P+${cfg.decode_pods}D PTP=${cfg.prefill_tp} DTP=${cfg.decode_tp}` : `EP TP${cfg.tp} x ${cfg.replicas} replicas`;
-                        html += `<tr><td><strong>${label}</strong></td>`;
-                        html += `<td data-val="${cfg.ttft_p90}">${cfg.ttft_p90} ms</td>`;
-                        html += `<td data-val="${ttftPct}" style="color:${ttftColor}; font-weight:700;">${ttftArrow} ${ttftPct}%</td>`;
-                        html += `<td data-val="${cfgTput}">${cfgTput} req/s</td>`;
-                        html += `<td data-val="${tputPct}" style="color:${tputColor}; font-weight:700;">${tputArrow} ${tputPct}%</td></tr>`;
-                    }
-                    html += `<tr class="baseline-row" style="background:#f1f5f9;"><td><strong>${aggBaseline.config_name}</strong> <span style="background:#1f77b4; color:white; font-size:0.65em; padding:1px 5px; border-radius:3px;">BASELINE</span></td>`;
-                    html += `<td data-val="${baseTtft}">${baseTtft} ms</td><td data-val="0" style="color:#64748b;">-</td>`;
-                    html += `<td data-val="${baseTput}">${baseTput} req/s</td><td data-val="0" style="color:#64748b;">-</td></tr>`;
-                    html += '</table></div></div>';
-                }
-            }
-            html += '</div>';
-        }
-    }
-
-    // Flush comparison (Step 8)
-    secCmp = html; html = '';
-    var hasCmpData = coreResults.some(r => r.architecture === 'PD' || r.architecture === 'EP') && coreResults.some(r => r.architecture === 'AGGREGATED');
-    if (!hasCmpData) secCmp = '';
-
-    // ============================================================
-    // STEP 9: Latency-Bounded Throughput Search
-    // Binary search over concurrency to find max throughput under SLA
-    // ============================================================
-    if (data.latency_search && data.latency_search.trials && data.latency_search.trials.length) {
-        html += '<div class="chart-card" style="border-left:6px solid #d97706;">' +
-            '<div class="chart-card-header" style="background:linear-gradient(135deg,#d97706,#f59e0b); color:white;">Latency Search</div>' +
-            '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
-            'Uses <strong>binary search over concurrency</strong> to find the maximum throughput that stays within the TTFT SLA target. ' +
-            'Each trial increases or decreases the number of concurrent users based on whether the previous trial met the latency constraint. ' +
-            'The result is the highest sustainable load for each architecture under the configured SLA.' +
-            '</div></div>';
-        const ls = data.latency_search;
-        const byArch = ls.by_architecture || {};
-        const archKeys = Object.keys(byArch);
-
-        // Get SLA target from first trial
-        const firstTrial = ls.trials[0];
-        const targetMs = firstTrial.target_ms;
-        const targetPct = firstTrial.target_percentile || 'p90';
-        const metricKey = 'ttft_' + targetPct;
-
-        html += '<div class="chart-card" style="margin-top:16px; border:2px solid #8b5cf6; border-left:6px solid #8b5cf6;">';
-        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);">Step 10: Latency-Bounded Throughput Search</div>';
-        html += `<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">Binary search over concurrency to find the maximum throughput that keeps TTFT ${targetPct.toUpperCase()} under <strong>${targetMs} ms</strong>.</div>`;
-
-        const archConfigs = ls.arch_configs || {};
-
-        // Summary cards per architecture
-        archKeys.forEach((arch, ai) => {
-            const trials = byArch[arch];
-            // Skip architectures with no valid data
-            if (!trials.some(t => t.ttft_p90 != null)) return;
-            const passing = trials.filter(t => t.meets_sla);
-            const bestPassing = passing.length ? passing.reduce((a, b) => a.concurrency > b.concurrency ? a : b) : null;
-            const cfgLabel = archConfigs[arch] || arch.toUpperCase();
-
-            html += `<div style="padding:12px 20px; margin-top:4px;">`;
-            html += `<div style="font-weight:700; font-size:1.05em; color:#1e293b; margin-bottom:10px; border-bottom:1px solid #e2e8f0; padding-bottom:6px;">${arch.toUpperCase()}: ${cfgLabel}</div>`;
-            if (bestPassing) {
-                const latVal = bestPassing[metricKey] != null ? bestPassing[metricKey].toFixed(1) : '-';
-                const s9TputKey = 'throughput_' + targetPct;
-                const tputVal = bestPassing[s9TputKey] != null ? bestPassing[s9TputKey].toFixed(2) : (bestPassing.throughput_p90 != null ? bestPassing.throughput_p90.toFixed(2) : '-');
-                html += '<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:16px;">';
-                html += `<div style="background:#f0fdf4; border-radius:10px; padding:16px; text-align:center; border:1px solid #bbf7d0;"><div style="font-size:2em; font-weight:800; color:#059669;">${bestPassing.concurrency}</div><div style="color:#64748b; font-size:0.82em; margin-top:4px;">Optimal Concurrency</div></div>`;
-                html += `<div style="background:#f8fafc; border-radius:10px; padding:16px; text-align:center; border:1px solid #e2e8f0;"><div style="font-size:2em; font-weight:800; color:#1e293b;">${latVal} <span style="font-size:0.5em; color:#64748b;">ms</span></div><div style="color:#64748b; font-size:0.82em; margin-top:4px;">TTFT ${targetPct.toUpperCase()} at Optimal</div></div>`;
-                html += `<div style="background:#f8fafc; border-radius:10px; padding:16px; text-align:center; border:1px solid #e2e8f0;"><div style="font-size:2em; font-weight:800; color:#1e293b;">${tputVal}</div><div style="color:#64748b; font-size:0.82em; margin-top:4px;">Throughput ${targetPct.toUpperCase()} (req/s)</div></div>`;
-                html += `<div style="background:#f8fafc; border-radius:10px; padding:16px; text-align:center; border:1px solid #e2e8f0;"><div style="font-size:2em; font-weight:800; color:#1e293b;">${trials.length}</div><div style="color:#64748b; font-size:0.82em; margin-top:4px;">Tests Run</div></div>`;
-                html += '</div>';
-            } else {
-                html += `<div style="padding:10px 14px; background:#fef2f2; border-radius:8px; color:#991b1b; font-size:0.9em; border:1px solid #fecaca; margin-bottom:12px;">No concurrency level met the SLA target of ${targetMs} ms</div>`;
-            }
-
-            // Per-percentile charts (P90, P95, P99)
-            html += `<div id="step9-chart-p90-${ai}${_chartSuffix}" style="height:850px; background:#fff; border-radius:8px; border:1px solid #e2e8f0;"></div>`;
-            html += `<div id="step9-chart-p95-${ai}${_chartSuffix}" style="height:850px; background:#fff; border-radius:8px; border:1px solid #e2e8f0; margin-top:16px;"></div>`;
-            html += `<div id="step9-chart-p99-${ai}${_chartSuffix}" style="height:850px; background:#fff; border-radius:8px; border:1px solid #e2e8f0; margin-top:16px;"></div>`;
-            // Legacy div for backward compat (hidden)
-            html += `<div id="step9-chart-${ai}${_chartSuffix}" style="display:none;"></div>`;
-
-            // Cost table
-            const archTrials = byArch[arch];
-            const sortedTrials = [...archTrials].sort((a, b) => a.concurrency - b.concurrency);
-            html += '<div style="margin-top:12px; overflow-x:auto;"><table class="results-table" style="font-size:0.85em;">';
-            html += '<tr><th>Concurrency</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>Throughput P90</th><th>Meets SLA</th><th>Manifests</th></tr>';
-            sortedTrials.forEach(t => {
-                const slaStyle = t.meets_sla ? 'color:#059669; font-weight:700;' : 'color:#dc2626; font-weight:700;';
-                let mLinks = '-';
-                if (t.manifest_types && t.manifest_types.length && t.test_id) {
-                    mLinks = t.manifest_types.filter(mt => !mt.includes('service')).map(mt =>
-                        `<a href="/api/run/${runId}/config/${t.test_id}/manifest/${mt}" title="Download ${mt}.yaml" style="color:#0ea5e9; text-decoration:none; font-size:12px; padding:2px 6px; background:#f0f9ff; border-radius:4px; border:1px solid #bae6fd; margin:1px; display:inline-block;">${mt}</a>`
-                    ).join(' ');
-                }
-                html += `<tr><td style="font-weight:700;">${t.concurrency}</td>`;
-                html += `<td>${t.ttft_p50 != null ? t.ttft_p50.toFixed(1) + ' ms' : '-'}</td>`;
-                html += `<td>${t.ttft_p90 != null ? t.ttft_p90.toFixed(1) + ' ms' : '-'}</td>`;
-                html += `<td>${t.ttft_p95 != null ? t.ttft_p95.toFixed(1) + ' ms' : '-'}</td>`;
-                html += `<td>${t.ttft_p99 != null ? t.ttft_p99.toFixed(1) + ' ms' : '-'}</td>`;
-                html += `<td>${t.throughput_p90 != null ? t.throughput_p90.toFixed(2) + ' req/s' : '-'}</td>`;
-                html += `<td style="${slaStyle}">${t.meets_sla ? 'Yes' : 'No'}</td>`;
-                html += `<td>${mLinks}</td></tr>`;
-            });
-            html += '</table></div>';
-
-            html += '</div>';
-        });
-
-        // Trials table
-        html += '<div style="padding:12px 20px 4px; font-weight:700; font-size:0.95em; color:#1e293b; border-top:1px solid #e2e8f0; margin-top:8px;">All Trials</div>';
-        html += '<div class="chart-card-body" style="padding:0 20px 16px;"><table class="results-table">';
-        const s9TblTputKey = 'throughput_' + targetPct;
-        html += `<tr><th>Arch</th><th>#</th><th>Phase</th><th>Concurrency</th><th>TTFT ${targetPct.toUpperCase()}</th><th>Throughput ${targetPct.toUpperCase()}</th><th>Meets SLA</th><th>Manifests</th></tr>`;
-        ls.trials.forEach(t => {
-            const latVal = t[metricKey] != null ? t[metricKey].toFixed(1) + ' ms' : '-';
-            const s9TputRaw = t[s9TblTputKey] != null ? t[s9TblTputKey] : t.throughput_p90;
-            const tputVal = s9TputRaw != null ? s9TputRaw.toFixed(2) + ' req/s' : '-';
-            const slaStyle = t.meets_sla ? 'color:#059669; font-weight:700;' : 'color:#dc2626; font-weight:700;';
-            const slaText = t.meets_sla ? 'Yes' : 'No';
-            let mLinks = '-';
-            if (t.manifest_types && t.manifest_types.length && t.test_id) {
-                mLinks = t.manifest_types.filter(mt => !mt.includes('service')).map(mt =>
-                    `<a href="/api/run/${runId}/config/${t.test_id}/manifest/${mt}" title="Download ${mt}.yaml" style="color:#0ea5e9; text-decoration:none; font-size:12px; padding:2px 6px; background:#f0f9ff; border-radius:4px; border:1px solid #bae6fd; margin:1px; display:inline-block;">${mt}</a>`
-                ).join(' ');
-            }
-            html += `<tr><td>${t.architecture}</td><td>${t.trial_number}</td><td>${t.search_phase}</td>`;
-            html += `<td style="font-weight:700;">${t.concurrency}</td>`;
-            html += `<td>${latVal}</td><td>${tputVal}</td>`;
-            html += `<td style="${slaStyle}">${slaText}</td>`;
-            html += `<td>${mLinks}</td></tr>`;
-        });
-        html += '</table></div></div>';
-    }
-
-    // Flush Step 9
-    secStep9 = html; html = '';
 
     // ============================================================
     // STEP 10: Calibrated Load Validation (separate card)
@@ -2272,16 +1934,13 @@ function _renderChartsImpl(data, runId, content) {
     const subtabDefs = [];
 
     if (secRec) subtabDefs.push({ id: 'recommendation', label: 'Recommendation', icon: '&#9733;' });
-    if (secTP) subtabDefs.push({ id: 'tp-calibration', label: 'TP Calibration', icon: '&#9881;' });
     if (secCfg) subtabDefs.push({ id: 'configurations', label: 'Configurations', icon: '&#9776;' });
-    if (secCmp) subtabDefs.push({ id: 'comparison', label: 'Comparison', icon: '&#8596;' });
-    if (secStep9) subtabDefs.push({ id: 'latency-search', label: 'Latency Search', icon: '&#128269;' });
     if (secCal) subtabDefs.push({ id: 'calibrated-load', label: 'Concurrency Sweep', icon: '&#9878;' });
     if (secCacheSweep) subtabDefs.push({ id: 'cache-sweep', label: 'Cache Sweep', icon: '&#128451;' });
 
     const sectionMap = {
-        'recommendation': secRec, 'tp-calibration': secTP, 'configurations': secCfg,
-        'comparison': secCmp, 'latency-search': secStep9,
+        'recommendation': secRec, 'configurations': secCfg,
+        
         'calibrated-load': secCal, 'cache-sweep': secCacheSweep
     };
 
@@ -2923,81 +2582,7 @@ function _renderChartsImpl(data, runId, content) {
 
     // TP Calibration charts (Step 2 decode, Step 3 prefill)
     // Render empty chart when no data so the card isn't blank
-    if (rec && document.getElementById(cid('chart-tp-decode')) && !(rec.decode_tp_all && rec.decode_tp_all.length)) {
-        safePlot(cid('chart-tp-decode'), [], {
-            ...plotlyLayout, margin: { ...plotlyLayout.margin, r: 60 },
-            xaxis: { title: 'TP Value' },
-            yaxis: { title: 'Tokens/s/GPU — higher is better', side: 'left' },
-            yaxis2: { title: 'ITL P90 (ms) — lower is better', side: 'right', overlaying: 'y', titlefont: { color: '#ef4444' }, tickfont: { color: '#ef4444' } },
-        }, plotlyConfig);
-    }
-    if (rec && document.getElementById(cid('chart-tp-prefill')) && !(rec.prefill_tp_all && rec.prefill_tp_all.length)) {
-        safePlot(cid('chart-tp-prefill'), [], {
-            ...plotlyLayout, margin: { ...plotlyLayout.margin, r: 60 },
-            xaxis: { title: 'TP Value' },
-            yaxis: { title: 'Tokens/s/GPU — higher is better', side: 'left' },
-            yaxis2: { title: 'TTFT P90 (ms) — lower is better', side: 'right', overlaying: 'y', titlefont: { color: '#ef4444' }, tickfont: { color: '#ef4444' } },
-        }, plotlyConfig);
-    }
-    if (rec && rec.decode_tp_all && rec.decode_tp_all.length && document.getElementById(cid('chart-tp-decode'))) {
-        const dtp = rec.decode_tp_all;
-        const tpLabels = dtp.map(d => `TP=${d.tp}`);
-        const tpsgVals = dtp.map(d => d.tpsg);
-        const bestTpsg = Math.max(...tpsgVals);
-        const barColors = tpsgVals.map(v => v === bestTpsg ? '#10b981' : '#6366f1');
-        const itlVals = dtp.map(d => d.itl_p90 != null ? d.itl_p90 : 0);
-        const traces = [
-            { x: tpLabels, y: tpsgVals, name: 'Tokens/s/GPU', type: 'bar', marker: { color: barColors },
-              text: tpsgVals.map(v => fmtSI(v)), textposition: 'outside',
-              textfont: { size: 14, color: '#1e293b' }, cliponaxis: false, constraintext: 'none',
-              hovertemplate: '<b>%{x}</b><br>%{y:.1f} tokens/s/GPU<extra></extra>' },
-        ];
-        if (itlVals.some(v => v > 0)) {
-            traces.push({
-                x: tpLabels, y: itlVals, name: 'ITL P90 (ms)', type: 'scatter', mode: 'lines+markers+text', yaxis: 'y2',
-                line: { color: '#ef4444', width: 3 }, marker: { size: 10, symbol: 'circle', color: '#ef4444', line: { width: 2, color: 'white' } },
-                text: itlVals.map((v, idx) => dtp[idx].itl_p90 != null ? v.toFixed(1) : ''),
-                textposition: 'bottom center', textfont: { size: 14, color: '#ef4444' },
-                hovertemplate: '<b>%{x}</b><br>ITL P90: %{y:.2f} ms<extra></extra>',
-            });
-        }
-        safePlot(cid('chart-tp-decode'), traces, {
-            ...plotlyLayout, margin: { ...plotlyLayout.margin, r: 60 },
-            barmode: 'group', showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' },
-            yaxis: { title: 'Tokens/s/GPU — higher is better', side: 'left', tickformat: '.2s' },
-            yaxis2: { title: 'ITL P90 (ms) — lower is better', side: 'right', overlaying: 'y', titlefont: { color: '#ef4444' }, tickfont: { color: '#ef4444' } },
-        }, plotlyConfig);
-    }
 
-    if (rec && rec.prefill_tp_all && rec.prefill_tp_all.length && document.getElementById(cid('chart-tp-prefill'))) {
-        const ptp = rec.prefill_tp_all;
-        const tpLabels = ptp.map(d => `TP=${d.tp}`);
-        const tpsgVals = ptp.map(d => d.tpsg);
-        const bestTpsg = Math.max(...tpsgVals);
-        const barColors = tpsgVals.map(v => v === bestTpsg ? '#10b981' : '#6366f1');
-        const ttftVals = ptp.map(d => d.ttft_p90 != null ? d.ttft_p90 : 0);
-        const traces = [
-            { x: tpLabels, y: tpsgVals, name: 'Tokens/s/GPU', type: 'bar', marker: { color: barColors },
-              text: tpsgVals.map(v => fmtSI(v)), textposition: 'outside',
-              textfont: { size: 14, color: '#1e293b' }, cliponaxis: false, constraintext: 'none',
-              hovertemplate: '<b>%{x}</b><br>%{y:.1f} tokens/s/GPU<extra></extra>' },
-        ];
-        if (ttftVals.some(v => v > 0)) {
-            traces.push({
-                x: tpLabels, y: ttftVals, name: 'TTFT P90 (ms)', type: 'scatter', mode: 'lines+markers+text', yaxis: 'y2',
-                line: { color: '#ef4444', width: 3 }, marker: { size: 10, symbol: 'circle', color: '#ef4444', line: { width: 2, color: 'white' } },
-                text: ttftVals.map((v, idx) => ptp[idx].ttft_p90 != null ? Math.round(v).toLocaleString() : ''),
-                textposition: 'bottom center', textfont: { size: 14, color: '#ef4444' },
-                hovertemplate: '<b>%{x}</b><br>TTFT P90: %{y:.1f} ms<extra></extra>',
-            });
-        }
-        safePlot(cid('chart-tp-prefill'), traces, {
-            ...plotlyLayout, margin: { ...plotlyLayout.margin, r: 60 },
-            barmode: 'group', showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' },
-            yaxis: { title: 'Tokens/s/GPU — higher is better', side: 'left', tickformat: '.2s' },
-            yaxis2: { title: 'TTFT P90 (ms) — lower is better', side: 'right', overlaying: 'y', titlefont: { color: '#ef4444' }, tickfont: { color: '#ef4444' } },
-        }, plotlyConfig);
-    }
 
     // PD configurations TTFT charts (one per percentile)
     [{key:'p90',field:'ttft_p90',itlField:'itl_p90',color:'#3b82f6',chartId:'chart-pd-ttft-p90'},
