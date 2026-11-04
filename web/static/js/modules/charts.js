@@ -3337,281 +3337,6 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
     // Flush vLLM metrics
     secVLLM = html; html = '';
 
-    // === Build Pod Profiles section (EPP + vLLM pprof) ===
-    let secProfiles = '';
-    try {
-        const profEntries = (data.all_results || []).filter(r => r.pprof && (r.pprof.epp || (r.pprof.vllm && r.pprof.vllm.length)));
-        if (profEntries.length) {
-            secProfiles += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #0891b2;">' +
-                '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee);">🔬 Pod Profiles — pprof captures during benchmark load</div>' +
-                '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
-                'CPU profiles captured from the serving pods <strong>during the benchmark load window</strong> (Go pprof, 10ms sample resolution), plus heap and goroutine snapshots after the run. ' +
-                'EPP profiles are always collected; vLLM pod profiles require the profiling toggle. ' +
-                'Click a function name in the tables or download the raw <code>.prof</code> files for deep analysis with <code>go tool pprof</code>.' +
-                '</div></div>';
-
-            profEntries.forEach(e => {
-                const pp = e.pprof;
-                secProfiles += `<div style="margin-top:16px; border:1.5px solid #e2e8f0; border-radius:8px; overflow:hidden; background:#fff;">`;
-                secProfiles += `<div style="background:#f0f9ff; padding:10px 14px; font-weight:700; color:#0c4a6e; border-bottom:1px solid #e2e8f0;">${e.config_name || e.name || e.test_id} <span style="font-weight:400;color:#64748b;font-size:0.85em;">(${e.architecture})</span></div>`;
-
-                // ── EPP card ──
-                if (pp.epp) {
-                    const ep = pp.epp;
-                    const chartId = 'pprof-epp-' + (e.test_id || e.config_name || 'x').replace(/[^a-z0-9]/gi, '') + _chartSuffix;
-                    const tblId = 'pprof-epp-tbl-' + (e.test_id || e.config_name || 'x').replace(/[^a-z0-9]/gi, '') + _chartSuffix;
-                    secProfiles += `<div style="margin:14px; border-left:4px solid #7c3aed; padding-left:12px;">`;
-                    secProfiles += `<div style="font-weight:700; color:#7c3aed; font-size:0.95em;">EPP — ${ep.pod || 'endpoint-picker'}${ep.node ? ` <span style="font-weight:400;color:#94a3b8;font-size:0.85em;">· node ${(ep.node || '').split('-').pop()}</span>` : ''}</div>`;
-                    secProfiles += `<div style="display:flex; gap:16px; flex-wrap:wrap; margin:8px 0; font-size:0.88em; color:#475569;">`;
-                    if (ep.cpu_pct != null) secProfiles += `<span>CPU during load: <strong style="color:${ep.cpu_pct > 50 ? '#dc2626' : ep.cpu_pct > 20 ? '#d97706' : '#059669'};">${ep.cpu_pct}%</strong></span>`;
-                    if (ep.cpu_time_ms != null) secProfiles += `<span>Total CPU: <strong>${(ep.cpu_time_ms / 1000).toFixed(1)}s</strong></span>`;
-                    if (ep.duration_s) secProfiles += `<span>Window: <strong>${ep.duration_s}s</strong></span>`;
-                    if (ep.sample_count) secProfiles += `<span>Samples: <strong>${ep.sample_count.toLocaleString()}</strong></span>`;
-                    secProfiles += `</div>`;
-                    secProfiles += `<div id="${chartId}" style="width:100%; height:420px; margin:6px 0;"></div>`;
-                    // top functions table
-                    if (ep.functions && ep.functions.length) {
-                        secProfiles += `<table class="results-table" id="${tblId}" style="font-size:0.85em;">` +
-                            `<tr><th style="cursor:pointer;" onclick="sortReportTable('${tblId}',0,'str')">Function &#x21C5;</th>` +
-                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',1,'num')">Flat ms &#x21C5;</th>` +
-                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',2,'num')">Flat % &#x21C5;</th>` +
-                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',3,'num')">Cum ms &#x21C5;</th>` +
-                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',4,'num')">Cum % &#x21C5;</th></tr>`;
-                        ep.functions.slice(0, 15).forEach(f => {
-                            secProfiles += `<tr><td style="font-family:monospace;font-size:0.85em;word-break:break-all;">${f.name}</td>` +
-                                `<td data-val="${f.flat_ms}">${f.flat_ms.toFixed(1)}</td>` +
-                                `<td data-val="${f.flat_pct}">${f.flat_pct.toFixed(2)}%</td>` +
-                                `<td data-val="${f.cum_ms}">${f.cum_ms.toFixed(1)}</td>` +
-                                `<td data-val="${f.cum_pct}" style="font-weight:600;">${f.cum_pct.toFixed(2)}%</td></tr>`;
-                        });
-                        secProfiles += `</table>`;
-                    }
-                    // raw file download buttons
-                    const eFiles = (pp.files || []).filter(f => f.kind === 'epp');
-                    if (eFiles.length) {
-                        secProfiles += `<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">`;
-                        eFiles.forEach(f => {
-                            const key = f.pod + '-' + f.ptype + '.prof';
-                            secProfiles += `<a href="/api/run/${runId}/config/${e.test_id || e.config_name}/profile/${encodeURIComponent(key)}" title="Download ${key} (${(f.size / 1024).toFixed(0)} KB)" style="color:#0e7490; text-decoration:none; font-size:11px; padding:3px 8px; background:#ecfeff; border-radius:4px; border:1px solid #a5f3fc; display:inline-block; cursor:pointer;">${f.ptype}.prof &#8595; (${(f.size / 1024).toFixed(0)}KB)</a>`;
-                        });
-                        secProfiles += `</div>`;
-                    }
-                    secProfiles += `</div>`;
-                    // render chart
-                    (function(ep, chartId) {
-                        chartQueue.push(function() {
-                            const el = document.getElementById(chartId);
-                            if (!el || typeof Plotly === 'undefined') return;
-                            const fns = (ep.functions || []).slice(0, 12);
-                            Plotly.newPlot(el, [{
-                                y: fns.map(f => f.name.length > 55 ? f.name.slice(0, 52) + '…' : f.name).reverse(),
-                                x: fns.map(f => f.cum_ms).reverse(),
-                                type: 'bar', orientation: 'h',
-                                marker: { color: fns.map(f => f.cum_pct > 20 ? '#7c3aed' : f.cum_pct > 10 ? '#a78bfa' : '#c4b5fd').reverse() },
-                                text: fns.map(f => f.cum_ms.toFixed(0) + 'ms (' + f.cum_pct.toFixed(1) + '%)').reverse(),
-                                textposition: 'outside', textfont: { size: 11, color: '#334155' },
-                                cliponaxis: false, constraintext: 'none',
-                                hovertemplate: '<b>%{y}</b><br>cum: %{x:.1f} ms<extra></extra>'
-                            }], {
-                                margin: { l: 320, r: 90, t: 10, b: 40 },
-                                xaxis: { title: 'Cumulative CPU (ms)' },
-                                yaxis: { automargin: true, tickfont: { size: 10, family: 'monospace' } },
-                                height: Math.max(280, fns.length * 30 + 60),
-                                plot_bgcolor: '#fafafa'
-                            }, { displayModeBar: false, responsive: true });
-                        });
-                    })(ep, chartId);
-                }
-
-                // ── vLLM pods: consolidated view — hot-pod detection at a glance ──
-                const vllmPods = (pp.vllm || []);
-                if (vllmPods.length) {
-                    const vbase = (e.test_id || e.config_name || 'x').replace(/[^a-z0-9]/gi, '');
-                    const cpuChartId = 'pprof-vllm-cpu-' + vbase + _chartSuffix;
-                    const heatId = 'pprof-vllm-heat-' + vbase + _chartSuffix;
-                    const tblId = 'pprof-vllm-tbl-' + vbase + _chartSuffix;
-                    const nodePalette = ['#0891b2', '#7c3aed', '#059669', '#d97706', '#2563eb', '#be185d', '#65a30d', '#475569'];
-                    const nodes = [...new Set(vllmPods.map(p => p.node || '?'))].sort();
-                    const nodeColor = {};
-                    nodes.forEach((n, i) => nodeColor[n] = nodePalette[i % nodePalette.length]);
-                    const shortNode = n => (n || '?').split('-').pop();
-                    const podLabel = p => {
-                        const short = (p.pod || '?').replace(/^[a-z0-9-]*?-([a-z0-9]+-[a-z0-9]+)$/, '$1');
-                        return short + ' · ' + shortNode(p.node);
-                    };
-                    const sortedPods = vllmPods.slice().sort((a, b) => (a.node || '').localeCompare(b.node || '') || (a.pod || '').localeCompare(b.pod || ''));
-                    const meanCpu = vllmPods.reduce((s, p) => s + (p.cpu_pct || 0), 0) / vllmPods.length;
-                    const hotThreshold = Math.max(meanCpu * 1.3, meanCpu + 2);
-                    const hotPods = vllmPods.filter(p => (p.cpu_pct || 0) > hotThreshold);
-                    const cpuVals = vllmPods.map(p => p.cpu_pct || 0);
-                    const maxCpu = Math.max(...cpuVals), minCpu = Math.min(...cpuVals);
-
-                    secProfiles += `<div style="margin:14px; border-left:4px solid #10b981; padding-left:12px;">`;
-                    secProfiles += `<div style="font-weight:700; color:#047857; font-size:0.95em;">Inference Pods — ${vllmPods.length} pod(s) on ${nodes.length} node(s)${hotPods.length ? ` <span style="color:#dc2626;">🔥 ${hotPods.length} hot pod(s) > ${hotThreshold.toFixed(1)}% (1.3× mean)</span>` : ' <span style="color:#059669;">✓ balanced</span>'}</div>`;
-                    secProfiles += `<div style="display:flex; gap:16px; flex-wrap:wrap; margin:8px 0; font-size:0.88em; color:#475569;">`;
-                    secProfiles += `<span>Mean CPU: <strong>${meanCpu.toFixed(1)}%</strong></span>`;
-                    secProfiles += `<span>Min: <strong>${minCpu.toFixed(1)}%</strong></span>`;
-                    secProfiles += `<span>Max: <strong style="color:${maxCpu > hotThreshold ? '#dc2626' : '#059669'};">${maxCpu.toFixed(1)}%</strong></span>`;
-                    secProfiles += `<span>Spread: <strong>${(maxCpu - minCpu).toFixed(1)}pp</strong></span>`;
-                    if (vllmPods[0] && vllmPods[0].duration_s) secProfiles += `<span>Window: <strong>${vllmPods[0].duration_s}s</strong></span>`;
-                    secProfiles += `</div>`;
-                    // node legend
-                    secProfiles += `<div style="display:flex; gap:10px; flex-wrap:wrap; margin:4px 0 8px; font-size:0.8em;">`;
-                    nodes.forEach(n => {
-                        secProfiles += `<span style="display:inline-flex;align-items:center;gap:4px;color:#475569;"><span style="width:10px;height:10px;border-radius:2px;background:${nodeColor[n]};display:inline-block;"></span>${n}</span>`;
-                    });
-                    secProfiles += `</div>`;
-
-                    // CPU% by pod — the hot-pod view
-                    secProfiles += `<div style="font-weight:600; font-size:0.85em; color:#334155; margin:10px 0 2px;">CPU% by pod during load <span style="font-weight:400;color:#64748b;">— dashed line = mean; 🔥 = running hot (1.3× mean)</span></div>`;
-                    secProfiles += `<div id="${cpuChartId}" style="width:100%; height:${Math.max(200, sortedPods.length * 28 + 70)}px;"></div>`;
-
-                    // functions × pods heatmap — where the heat comes from
-                    secProfiles += `<div style="font-weight:600; font-size:0.85em; color:#334155; margin:16px 0 2px;">Top functions × pods <span style="font-weight:400;color:#64748b;">— cumulative CPU% per pod; dark cells = hot function on that pod</span></div>`;
-                    secProfiles += `<div id="${heatId}" style="width:100%;"></div>`;
-
-                    // merged detail table (collapsible)
-                    const totalRows = vllmPods.reduce((s, p) => s + Math.min((p.functions || []).length, 10), 0);
-                    if (totalRows) {
-                        secProfiles += `<details style="margin-top:10px;"><summary style="cursor:pointer;font-weight:600;font-size:0.85em;color:#047857;">Per-function detail (${totalRows} rows — top 10 per pod)</summary>`;
-                        secProfiles += `<table class="results-table" id="${tblId}" style="font-size:0.82em;">` +
-                            `<tr><th style="cursor:pointer;" onclick="sortReportTable('${tblId}',0,'str')">Pod &#x21C5;</th>` +
-                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',1,'str')">Node &#x21C5;</th>` +
-                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',2,'str')">Function &#x21C5;</th>` +
-                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',3,'num')">Flat ms &#x21C5;</th>` +
-                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',4,'num')">Flat % &#x21C5;</th>` +
-                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',5,'num')">Cum ms &#x21C5;</th>` +
-                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',6,'num')">Cum % &#x21C5;</th></tr>`;
-                        sortedPods.forEach(p => {
-                            const podShort = podLabel(p);
-                            (p.functions || []).slice(0, 10).forEach(f => {
-                                secProfiles += `<tr><td style="font-family:monospace;">${podShort}</td>` +
-                                    `<td>${shortNode(p.node)}</td>` +
-                                    `<td style="font-family:monospace;font-size:0.85em;word-break:break-all;">${f.name}</td>` +
-                                    `<td data-val="${f.flat_ms}">${f.flat_ms.toFixed(1)}</td>` +
-                                    `<td data-val="${f.flat_pct}">${f.flat_pct.toFixed(2)}%</td>` +
-                                    `<td data-val="${f.cum_ms}">${f.cum_ms.toFixed(1)}</td>` +
-                                    `<td data-val="${f.cum_pct}" style="font-weight:600;">${f.cum_pct.toFixed(2)}%</td></tr>`;
-                            });
-                        });
-                        secProfiles += `</table></details>`;
-                    }
-
-                    // merged downloads
-                    const vFiles = (pp.files || []).filter(f => f.kind === 'vllm');
-                    if (vFiles.length) {
-                        secProfiles += `<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">`;
-                        vFiles.forEach(f => {
-                            const key = f.pod + '-' + f.ptype + '.prof';
-                            secProfiles += `<a href="/api/run/${runId}/config/${e.test_id || e.config_name}/profile/${encodeURIComponent(key)}" title="Download ${key} (${(f.size / 1024).toFixed(0)} KB)" style="color:#0e7490; text-decoration:none; font-size:11px; padding:3px 8px; background:#ecfeff; border-radius:4px; border:1px solid #a5f3fc; display:inline-block; cursor:pointer;">${f.ptype}.prof · ${shortNode(f.node)} &#8595;</a>`;
-                        });
-                        secProfiles += `</div>`;
-                    }
-                    secProfiles += `</div>`;
-
-                    // Renders: CPU% by pod + heatmap
-                    (function(sortedPods, cpuChartId, nodeColor, meanCpu, hotThreshold, podLabel) {
-                        chartQueue.push(function() {
-                            const el = document.getElementById(cpuChartId);
-                            if (!el || typeof Plotly === 'undefined') return;
-                            const byCpu = sortedPods.slice().sort((a, b) => (b.cpu_pct || 0) - (a.cpu_pct || 0));
-                            const hot = p => (p.cpu_pct || 0) > hotThreshold;
-                            Plotly.newPlot(el, [{
-                                y: byCpu.map(p => (hot(p) ? '🔥 ' : '') + podLabel(p)).reverse(),
-                                x: byCpu.map(p => p.cpu_pct || 0).reverse(),
-                                type: 'bar', orientation: 'h',
-                                marker: {
-                                    color: byCpu.map(p => nodeColor[p.node || '?']).reverse(),
-                                    line: { color: byCpu.map(p => hot(p) ? '#dc2626' : 'transparent').reverse(), width: byCpu.map(p => hot(p) ? 2 : 0).reverse() }
-                                },
-                                text: byCpu.map(p => (p.cpu_pct || 0).toFixed(1) + '%').reverse(),
-                                textposition: 'outside', textfont: { size: 11 },
-                                cliponaxis: false, constraintext: 'none',
-                                hovertemplate: '<b>%{y}</b><br>CPU during load: %{x:.1f}%<extra></extra>'
-                            }], {
-                                margin: { l: 30, r: 60, t: 10, b: 40 },
-                                xaxis: { title: 'CPU during load (%)' },
-                                yaxis: { automargin: true, tickfont: { size: 10 } },
-                                height: Math.max(200, byCpu.length * 28 + 70),
-                                shapes: [{ type: 'line', x0: meanCpu, x1: meanCpu, y0: 0, y1: 1, yref: 'paper', line: { color: '#64748b', width: 1.5, dash: 'dash' } }],
-                                annotations: [{ x: meanCpu, y: 1, yref: 'paper', xanchor: 'left', yanchor: 'bottom', text: 'mean ' + meanCpu.toFixed(1) + '%', showarrow: false, font: { size: 10, color: '#64748b' } }],
-                                plot_bgcolor: '#fafafa'
-                            }, { displayModeBar: false, responsive: true });
-                        });
-                    })(sortedPods, cpuChartId, nodeColor, meanCpu, hotThreshold, podLabel);
-
-                    (function(sortedPods, heatId, nodeColor, podLabel) {
-                        chartQueue.push(function() {
-                            const el = document.getElementById(heatId);
-                            if (!el || typeof Plotly === 'undefined') return;
-                            // union of top functions across pods, ranked by max cum_pct
-                            const fnMax = {};
-                            sortedPods.forEach(p => (p.functions || []).forEach(f => { fnMax[f.name] = Math.max(fnMax[f.name] || 0, f.cum_pct); }));
-                            const topFns = Object.keys(fnMax).sort((a, b) => fnMax[b] - fnMax[a]).slice(0, 20);
-                            if (!topFns.length) return;
-                            const fnLookup = {};
-                            sortedPods.forEach((p, j) => { fnLookup[j] = {}; (p.functions || []).forEach(f => fnLookup[j][f.name] = f); });
-                            const z = topFns.map(fn => sortedPods.map((p, j) => { const f = fnLookup[j][fn]; return f ? f.cum_pct : null; }));
-                            const heatHover = topFns.map((fn, i) => sortedPods.map((p, j) => {
-                                const f = fnLookup[j][fn];
-                                return f ? `${fn.slice(0, 50)}<br>${p.pod} (${(p.node || '?').split('-').pop()})<br>cum: ${f.cum_ms.toFixed(0)}ms (${f.cum_pct.toFixed(1)}%)` : '';
-                            }));
-                            Plotly.newPlot(el, [{
-                                z: z, x: sortedPods.map(podLabel), y: topFns.map(f => f.length > 58 ? f.slice(0, 55) + '…' : f),
-                                type: 'heatmap',
-                                colorscale: [[0, '#f0fdf4'], [0.15, '#bbf7d0'], [0.35, '#fde047'], [0.6, '#fb923c'], [0.85, '#ef4444'], [1, '#991b1b']],
-                                reversescale: false, zmin: 0,
-                                hoverongaps: false,
-                                customdata: heatHover,
-                                hovertemplate: '%{customdata}<extra></extra>',
-                                colorbar: { title: { text: 'cum %', side: 'right' }, thickness: 12 }
-                            }], {
-                                margin: { l: 10, r: 10, t: 10, b: 70 },
-                                xaxis: { tickangle: -35, automargin: true, tickfont: { size: 10 } },
-                                yaxis: { automargin: true, tickfont: { size: 9, family: 'monospace' } },
-                                height: Math.max(320, topFns.length * 24 + 120),
-                                plot_bgcolor: '#fff'
-                            }, { displayModeBar: false, responsive: true });
-                        });
-                    })(sortedPods, heatId, nodeColor, podLabel);
-                }
-
-                secProfiles += `</div>`;
-            });
-
-            // Cross-test EPP CPU% comparison
-            const eppTests = profEntries.filter(e => e.pprof.epp && e.pprof.epp.cpu_pct != null);
-            if (eppTests.length >= 2) {
-                const xId = 'pprof-epp-cmp' + _chartSuffix;
-                secProfiles += `<div class="chart-card" style="margin-top:16px; border-left:6px solid #0891b2;">` +
-                    `<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee);">EPP CPU% Across Tests</div>` +
-                    `<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.93em;">EPP router CPU utilization during the load window per test — spot routing-stack regressions at a glance.</div>` +
-                    `<div id="${xId}" style="width:100%; height:${Math.max(300, eppTests.length * 44 + 80)}px;"></div></div>`;
-                (function(eppTests, xId) {
-                    chartQueue.push(function() {
-                        const el = document.getElementById(xId);
-                        if (!el || typeof Plotly === 'undefined') return;
-                        const sorted = eppTests.slice().sort((a, b) => (a.pprof.epp.cpu_pct || 0) - (b.pprof.epp.cpu_pct || 0));
-                        Plotly.newPlot(el, [{
-                            y: sorted.map(e => e.config_name || e.name || e.test_id).reverse(),
-                            x: sorted.map(e => e.pprof.epp.cpu_pct).reverse(),
-                            type: 'bar', orientation: 'h',
-                            marker: { color: sorted.map(e => { const c = e.pprof.epp.cpu_pct; return c > 50 ? '#dc2626' : c > 20 ? '#d97706' : '#0891b2'; }).reverse() },
-                            text: sorted.map(e => e.pprof.epp.cpu_pct + '%').reverse(),
-                            textposition: 'outside', textfont: { size: 12 },
-                            cliponaxis: false, constraintext: 'none',
-                            hovertemplate: '<b>%{y}</b><br>EPP CPU: %{x:.1f}%<extra></extra>'
-                        }], {
-                            margin: { l: 260, r: 60, t: 10, b: 40 },
-                            xaxis: { title: 'EPP CPU during load (%)' },
-                            yaxis: { automargin: true },
-                            height: Math.max(300, sorted.length * 44 + 80)
-                        }, { displayModeBar: false, responsive: true });
-                    });
-                })(eppTests, xId);
-            }
-        }
-    } catch (err) { console.warn('pod profiles section failed:', err); }
 
     // === Build Estimator section ===
     const wl = data.recommendation ? data.recommendation.workload : {};
@@ -4150,7 +3875,6 @@ const deltaTag = (t.delta_vs_baseline && !t.is_baseline) ? ` <span style="color:
     if (secPareto) subtabDefs.push({ id: 'pareto-frontier', label: 'Pareto Frontier', icon: '&#128200;' });
     if (secTraffic) subtabDefs.push({ id: 'traffic', label: 'Traffic', icon: '&#128678;' });
     if (secTestCfg) subtabDefs.push({ id: 'test-settings', label: 'Test Settings', icon: '&#9881;' });
-    if (secProfiles) subtabDefs.push({ id: 'pod-profiles', label: 'Pod Profiles', icon: '&#128300;' });
     subtabDefs.push({ id: 'estimator', label: 'Estimator', icon: '&#128200;' });
     if (secWorkloads) subtabDefs.push({ id: 'parallel-workloads', label: 'Workloads', icon: '&#128203;' });
 
@@ -4159,9 +3883,26 @@ const deltaTag = (t.delta_vs_baseline && !t.is_baseline) ? ` <span style="color:
         'test-settings': secTestCfg, 'comparison': secCmp, 'latency-search': secStep9,
         'calibrated-load': secCal, 'cache-sweep': secCacheSweep, 'deploy-timing': secDeployTiming, 'vllm-metrics': secVLLM, 'epp-tuning': secEppTuning,
         'lora-serving': secLora,
-        'pareto-frontier': secPareto, 'traffic': secTraffic, 'estimator': secEst, 'parallel-workloads': secWorkloads,
-        'pod-profiles': secProfiles
+        'pareto-frontier': secPareto, 'traffic': secTraffic, 'estimator': secEst, 'parallel-workloads': secWorkloads
     };
+
+    // ── Modular tabs (web/static/report/tabs/) ── injected by position ──
+    if (typeof ReportTabs !== 'undefined') {
+        const _liveCtx = (typeof ReportCtx !== 'undefined') ? ReportCtx.live(runId) : null;
+        if (_liveCtx) {
+            ReportTabs.all().forEach(function(tab) {
+                const tabHtml = ReportTabs.buildTab(tab, data, _liveCtx, chartQueue);
+                if (!tabHtml) return;
+                const def = { id: tab.id, label: tab.label, icon: tab.icon };
+                const pos = tab.position || 'end';
+                let at = -1;
+                if (pos.indexOf('before:') === 0) at = subtabDefs.findIndex(d => d.id === pos.slice(7));
+                else if (pos.indexOf('after:') === 0) { at = subtabDefs.findIndex(d => d.id === pos.slice(6)); if (at >= 0) at++; }
+                if (at >= 0) subtabDefs.splice(at, 0, def); else subtabDefs.push(def);
+                sectionMap[tab.id] = tabHtml;
+            });
+        }
+    }
 
     if (subtabDefs.length > 1) {
         html += '<div class="report-subtabs-container">';

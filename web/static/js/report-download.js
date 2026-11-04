@@ -30,7 +30,23 @@ async function downloadHTMLReport(runId, data) {
         } catch(e) { /* offline — manifests won't be available */ }
     }
 
-    const html = buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD, hasVLLM);
+    // Fetch modular tab sources (web/static/report/) for offline embedding —
+    // the same files the live page loads, so there is exactly one
+    // implementation of each tab.
+    const moduleSources = {};
+    await Promise.all([
+        '/static/report/core/registry.js',
+        '/static/report/core/helpers.js',
+        '/static/report/core/context.js',
+        '/static/report/tabs/pod-profiles.js',
+    ].map(async (f) => {
+        try {
+            const r = await fetch(f, { cache: 'reload' });
+            if (r.ok) moduleSources[f] = await r.text();
+        } catch (e) { /* module missing — tab renders empty offline */ }
+    }));
+
+    const html = buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD, hasVLLM, moduleSources);
 
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
@@ -45,7 +61,7 @@ async function downloadHTMLReport(runId, data) {
     URL.revokeObjectURL(url);
 }
 
-function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD, hasVLLM) {
+function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD, hasVLLM, moduleSources) {
     let secRec = buildRecSection(runId, data, rec, summary, best, allRes);
     // Append calibrated load recommendations to the Recommendation tab
     const calRecCards = buildCalRecCards(data);
@@ -70,7 +86,12 @@ function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD,
     const secLora = buildLoraSection(data, charts);
     const secEst = buildEstimatorSection(data);
     const secWorkloads = buildWorkloadsSection(allRes);
-    const secProfiles = buildProfilesSection(runId, allRes);
+    // Modular tab: pod-profiles (web/static/report/tabs/) — one implementation
+    // shared with the live report; built here with the download context.
+    let secProfiles = '';
+    if (typeof ReportTabs !== 'undefined' && ReportTabs.get('pod-profiles')) {
+        secProfiles = ReportTabs.buildTab(ReportTabs.get('pod-profiles'), data, ReportCtx.download(runId));
+    }
 
     const dlTabs = [];
     if (secRec) dlTabs.push({ id: 'rec', label: '&#9733; Recommendation', html: secRec });
@@ -106,6 +127,18 @@ function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD,
     });
 
     out += buildChartScript(data, charts, allRes);
+    // Modular tab sources + offline bootstrap — runs AFTER the chart script
+    // so `ar` and the blob maps are already defined. The registry + tab
+    // modules are the same files the live page loads.
+    const modFiles = Object.keys(moduleSources || {});
+    if (modFiles.length) {
+        out += '<script>';
+        function safeSrc(t) { return t.replace(/<\/script>/g, '<\\/script>'); }
+        modFiles.forEach(f => { out += '\n/* ==== ' + f + ' ==== */\n' + safeSrc(moduleSources[f]) + '\n'; });
+        out += 'try { ReportTabs.get("pod-profiles").render({ all_results: ar }, ReportCtx.download(' + runId + ')); }' +
+               'catch (e) { console.warn("pod-profiles offline render failed", e); }';
+        out += '<\/script>';
+    }
     out += '</body></html>';
     return out;
 }
@@ -2381,145 +2414,6 @@ function buildEstimatorSection(data) {
     return s;
 }
 
-// ── Pod Profiles Tab ────────────────────────────────────────────────────────
-function buildProfilesSection(runId, allRes) {
-    const profEntries = (allRes || []).filter(r => r.pprof && (r.pprof.epp || (r.pprof.vllm && r.pprof.vllm.length)));
-    if (!profEntries.length) return '';
-    let s = '';
-
-    s += '<div class="chart-box" style="border-left:6px solid #0891b2;"><h3>Pod Profiles — pprof captures during benchmark load</h3>';
-    s += '<p style="color:#64748b;font-size:0.9em;line-height:1.6;">CPU profiles captured from the serving pods <strong>during the benchmark load window</strong> (Go pprof, 10ms sample resolution), plus heap and goroutine snapshots after the run. EPP profiles are always collected; vLLM pod profiles require the profiling toggle. Download the raw <code>.prof</code> files for deep analysis with <code>go tool pprof</code>.</p></div>';
-
-    profEntries.forEach(e => {
-        const pp = e.pprof;
-        s += `<div style="margin-top:16px;border:1.5px solid #e2e8f0;border-radius:8px;overflow:hidden;background:#fff;">`;
-        s += `<div style="background:#f0f9ff;padding:10px 14px;font-weight:700;color:#0c4a6e;border-bottom:1px solid #e2e8f0;">${e.config_name || e.name || e.test_id} <span style="font-weight:400;color:#64748b;font-size:0.85em;">(${e.architecture})</span></div>`;
-
-         // EPP card
-         if (pp.epp) {
-             const ep = pp.epp;
-             const base = 'dl-pprof-epp-' + (e.test_id || e.config_name || 'x').replace(/[^a-z0-9]/gi, '');
-             s += _dlProfileCard(runId, e, ep, 'epp', '#7c3aed', base);
-         }
-         // vLLM pods: consolidated view — hot-pod detection at a glance
-         const vllmPods = (pp.vllm || []);
-         if (vllmPods.length) {
-             const vbase = (e.test_id || e.config_name || 'x').replace(/[^a-z0-9]/gi, '');
-             const cpuId = 'dl-pprof-vllm-cpu-' + vbase;
-             const heatId = 'dl-pprof-vllm-heat-' + vbase;
-             const tblId = 'dl-pprof-vllm-tbl-' + vbase;
-             const nodes = [...new Set(vllmPods.map(p => p.node || '?'))].sort();
-             const meanCpu = vllmPods.reduce((s2, p) => s2 + (p.cpu_pct || 0), 0) / vllmPods.length;
-             const hotThreshold = Math.max(meanCpu * 1.3, meanCpu + 2);
-             const hotPods = vllmPods.filter(p => (p.cpu_pct || 0) > hotThreshold);
-             const cpuVals = vllmPods.map(p => p.cpu_pct || 0);
-             const maxCpu = Math.max(...cpuVals), minCpu = Math.min(...cpuVals);
-             const shortNode = n => (n || '?').split('-').pop();
-
-             s += `<div style="margin:14px;border-left:4px solid #10b981;padding-left:12px;">`;
-             s += `<div style="font-weight:700;color:#047857;font-size:0.95em;">Inference Pods — ${vllmPods.length} pod(s) on ${nodes.length} node(s)${hotPods.length ? ` <span style="color:#dc2626;">&#128293; ${hotPods.length} hot pod(s) > ${hotThreshold.toFixed(1)}% (1.3&times; mean)</span>` : ' <span style="color:#059669;">&#10003; balanced</span>'}</div>`;
-             s += `<div style="display:flex;gap:16px;flex-wrap:wrap;margin:8px 0;font-size:0.88em;color:#475569;">`;
-             s += `<span>Mean CPU: <strong>${meanCpu.toFixed(1)}%</strong></span>`;
-             s += `<span>Min: <strong>${minCpu.toFixed(1)}%</strong></span>`;
-             s += `<span>Max: <strong style="color:${maxCpu > hotThreshold ? '#dc2626' : '#059669'};">${maxCpu.toFixed(1)}%</strong></span>`;
-             s += `<span>Spread: <strong>${(maxCpu - minCpu).toFixed(1)}pp</strong></span>`;
-             s += `</div>`;
-             s += `<div style="font-weight:600;font-size:0.85em;color:#334155;margin:10px 0 2px;">CPU% by pod during load <span style="font-weight:400;color:#64748b;">— dashed line = mean; &#128293; = running hot (1.3&times; mean)</span></div>`;
-             s += `<div id="${cpuId}" style="width:100%;height:${Math.max(200, vllmPods.length * 28 + 70)}px;"></div>`;
-             s += `<div style="font-weight:600;font-size:0.85em;color:#334155;margin:16px 0 2px;">Top functions &times; pods <span style="font-weight:400;color:#64748b;">— cumulative CPU% per pod; dark cells = hot function on that pod</span></div>`;
-             s += `<div id="${heatId}" style="width:100%;"></div>`;
-             // merged collapsible table
-             const totalRows = vllmPods.reduce((s2, p) => s2 + Math.min((p.functions || []).length, 10), 0);
-             if (totalRows) {
-                 s += `<details style="margin-top:10px;"><summary style="cursor:pointer;font-weight:600;font-size:0.85em;color:#047857;">Per-function detail (${totalRows} rows — top 10 per pod)</summary>`;
-                 s += `<table id="${tblId}" style="font-size:0.82em;">` +
-                     `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',0,'str')">Pod &#x21C5;</th>` +
-                     `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',1,'str')">Node &#x21C5;</th>` +
-                     `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',2,'str')">Function &#x21C5;</th>` +
-                     `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',3,'num')">Flat ms &#x21C5;</th>` +
-                     `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',4,'num')">Flat % &#x21C5;</th>` +
-                     `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',5,'num')">Cum ms &#x21C5;</th>` +
-                     `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',6,'num')">Cum % &#x21C5;</th>`;
-                 vllmPods.forEach(p => {
-                     (p.functions || []).slice(0, 10).forEach(f => {
-                         s += `<tr><td style="font-family:monospace;">${p.pod}</td>` +
-                             `<td>${shortNode(p.node)}</td>` +
-                             `<td style="font-family:monospace;font-size:0.85em;word-break:break-all;">${f.name}</td>` +
-                             `<td data-val="${f.flat_ms}">${f.flat_ms.toFixed(1)}</td>` +
-                             `<td data-val="${f.flat_pct}">${f.flat_pct.toFixed(2)}%</td>` +
-                             `<td data-val="${f.cum_ms}">${f.cum_ms.toFixed(1)}</td>` +
-                             `<td data-val="${f.cum_pct}" style="font-weight:600;">${f.cum_pct.toFixed(2)}%</td></tr>`;
-                     });
-                 });
-                 s += `</table></details>`;
-             }
-             // merged downloads
-             const vFiles = (pp.files || []).filter(f => f.kind === 'vllm');
-             if (vFiles.length) {
-                 s += `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">`;
-                 vFiles.forEach(f => {
-                     const key = f.pod + '-' + f.ptype + '.prof';
-                     s += `<a href="#" onclick="dlProfile('${e.test_id || e.config_name}','${key}');return false;" title="Download ${key} (${(f.size / 1024).toFixed(0)} KB)" style="color:#0e7490;text-decoration:none;font-size:11px;padding:3px 8px;background:#ecfeff;border-radius:4px;border:1px solid #a5f3fc;display:inline-block;cursor:pointer;">${f.ptype}.prof · ${shortNode(f.node)} &#8595;</a>`;
-                 });
-                 s += `</div>`;
-             }
-             s += `</div>`;
-         }
-         s += `</div>`;
-     });
-
-    // Cross-test EPP CPU% comparison
-    const eppTests = profEntries.filter(e => e.pprof.epp && e.pprof.epp.cpu_pct != null);
-    if (eppTests.length >= 2) {
-        s += '<div class="chart-box" style="border-left:6px solid #0891b2;"><h3>EPP CPU% Across Tests</h3>';
-        s += '<p style="color:#64748b;font-size:0.9em;">EPP router CPU utilization during the load window per test — spot routing-stack regressions at a glance.</p>';
-        s += `<div id="dl-pprof-epp-cmp" style="height:${Math.max(300, eppTests.length * 44 + 80)}px"></div></div>`;
-    }
-    return s;
-}
-
-function _dlProfileCard(runId, e, p, kind, color, base) {
-    const label = kind === 'epp' ? `EPP — ${p.pod || 'endpoint-picker'}` : `vLLM — ${p.pod} <span style="font-weight:400;color:#94a3b8;font-size:0.85em;">:${p.port || 8000}</span>`;
-    let s = `<div style="margin:14px;border-left:4px solid ${color};padding-left:12px;">`;
-    s += `<div style="font-weight:700;color:${kind === 'epp' ? '#7c3aed' : '#047857'};font-size:0.95em;">${label}</div>`;
-    s += `<div style="display:flex;gap:16px;flex-wrap:wrap;margin:8px 0;font-size:0.88em;color:#475569;">`;
-    if (p.cpu_pct != null) s += `<span>CPU during load: <strong style="color:${p.cpu_pct > 50 ? '#dc2626' : p.cpu_pct > 20 ? '#d97706' : '#059669'};">${p.cpu_pct}%</strong></span>`;
-    if (p.cpu_time_ms != null) s += `<span>Total CPU: <strong>${(p.cpu_time_ms / 1000).toFixed(1)}s</strong></span>`;
-    if (p.duration_s) s += `<span>Window: <strong>${p.duration_s}s</strong></span>`;
-    if (p.sample_count) s += `<span>Samples: <strong>${p.sample_count.toLocaleString()}</strong></span>`;
-    s += `</div>`;
-    s += `<div id="${base}" style="width:100%;height:420px;margin:6px 0;"></div>`;
-    if (p.functions && p.functions.length) {
-        const tblId = base + '-tbl';
-        s += `<table id="${tblId}" style="font-size:0.85em;">` +
-            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',0,'str')">Function &#x21C5;</th>` +
-            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',1,'num')">Flat ms &#x21C5;</th>` +
-            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',2,'num')">Flat % &#x21C5;</th>` +
-            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',3,'num')">Cum ms &#x21C5;</th>` +
-            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',4,'num')">Cum % &#x21C5;</th>`;
-        p.functions.slice(0, 15).forEach(f => {
-            s += `<tr><td style="font-family:monospace;font-size:0.85em;word-break:break-all;">${f.name}</td>` +
-                `<td data-val="${f.flat_ms}">${f.flat_ms.toFixed(1)}</td>` +
-                `<td data-val="${f.flat_pct}">${f.flat_pct.toFixed(2)}%</td>` +
-                `<td data-val="${f.cum_ms}">${f.cum_ms.toFixed(1)}</td>` +
-                `<td data-val="${f.cum_pct}" style="font-weight:600;">${f.cum_pct.toFixed(2)}%</td></tr>`;
-        });
-        s += `</table>`;
-    }
-    // Raw file download buttons (served from embedded base64 blobs)
-    const files = (e.pprof.files || []).filter(f => f.kind === kind && (!p.pod || f.pod === p.pod));
-    if (files.length) {
-        s += `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">`;
-        files.forEach(f => {
-            const key = f.pod + '-' + f.ptype + '.prof';
-            s += `<a href="#" onclick="dlProfile('${e.test_id || e.config_name}','${key}');return false;" title="Download ${key} (${(f.size / 1024).toFixed(0)} KB)" style="color:#0e7490;text-decoration:none;font-size:11px;padding:3px 8px;background:#ecfeff;border-radius:4px;border:1px solid #a5f3fc;display:inline-block;cursor:pointer;">${f.ptype}.prof &#8595; (${(f.size / 1024).toFixed(0)}KB)</a>`;
-        });
-        s += `</div>`;
-    }
-    s += `</div>`;
-    return s;
-}
-
 // ── Chart Rendering Script ──────────────────────────────────────────────────
 function buildChartScript(data, charts, allRes) {
     let s = '<script>';
@@ -3445,32 +3339,6 @@ function buildChartScript(data, charts, allRes) {
     s += '    if(itlPdF.length){itlTraces.push({x:itlPdF.map(function(p){return p.x}),y:itlPdF.map(function(p){return p.y}),text:itlPdF.map(function(p){return p.label+"<br>"+p.x.toFixed(2)+"ms / "+p.y.toFixed(0)+" tok/s/GPU"}),name:"Disaggregation — Frontier",mode:itlPdF.length>1?"lines+markers+text":"markers+text",line:{color:"#2563eb",width:3},marker:{color:"#2563eb",size:8},textposition:"top left",textfont:{size:13,color:"#2563eb"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
     s += '    Plotly.newPlot(itlEl,itlTraces,{...lo,height:850,xaxis:{title:"ITL P90 (ms)",gridcolor:"#d1d5db"},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white"},co);';
     s += '  }';
-    s += '})();';
-
-    // Pod Profiles — top-function bar charts per pod + cross-test EPP CPU%
-    s += '(function(){var profEntries=ar.filter(function(r){return r.pprof&&(r.pprof.epp||(r.pprof.vllm&&r.pprof.vllm.length));});if(!profEntries.length)return;';
-    s += '  function renderBar(el,p,main,light){if(!el)return;var fns=(p.functions||[]).slice(0,12);if(!fns.length)return;';
-    s += '    Plotly.newPlot(el,[{y:fns.map(function(f){return f.name.length>55?f.name.slice(0,52)+"…":f.name;}).reverse(),x:fns.map(function(f){return f.cum_ms;}).reverse(),type:"bar",orientation:"h",marker:{color:fns.map(function(f){return f.cum_pct>20?main:(f.cum_pct>10?light:light);}).reverse()},text:fns.map(function(f){return f.cum_ms.toFixed(0)+"ms ("+f.cum_pct.toFixed(1)+"%)";}).reverse(),textposition:"outside",textfont:{size:11,color:"#334155"},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{y}</b><br>cum: %{x:.1f} ms<extra></extra>"}],{margin:{l:320,r:90,t:10,b:40},xaxis:{title:"Cumulative CPU (ms)"},yaxis:{automargin:true,tickfont:{size:10,family:"monospace"}},height:Math.max(280,fns.length*30+60),plot_bgcolor:"#fafafa"},{displayModeBar:false,responsive:true});}';
-    s += '  profEntries.forEach(function(e){var pp=e.pprof;var tid=(e.test_id||e.config_name||"x").replace(/[^a-z0-9]/gi,"");';
-    s += '    if(pp.epp){renderBar(document.getElementById("dl-pprof-epp-"+tid),pp.epp,"#7c3aed","#c4b5fd");}';
-    s += '    if(pp.vllm&&pp.vllm.length){var vpods=pp.vllm;var vnodes=[...new Set(vpods.map(function(p){return p.node||"?";}))].sort();var meanC=vpods.reduce(function(s2,p){return s2+(p.cpu_pct||0);},0)/vpods.length;var hotT=Math.max(meanC*1.3,meanC+2);var shortNode=function(n){return (n||"?").split("-").pop();};var podLbl=function(p){return p.pod+" · "+shortNode(p.node);};';
-    // CPU% by pod — hot-pod view with mean line
-    s += '      var cpuEl=document.getElementById("dl-pprof-vllm-cpu-"+tid);';
-    s += '      if(cpuEl){var byCpu=vpods.slice().sort(function(a,b){return (b.cpu_pct||0)-(a.cpu_pct||0);});var hot=function(p){return (p.cpu_pct||0)>hotT;};';
-    s += '        var nodePal=["#0891b2","#7c3aed","#059669","#d97706","#2563eb","#be185d","#65a30d","#475569"];var nodeCol={};vnodes.forEach(function(n,i){nodeCol[n]=nodePal[i%nodePal.length];});';
-    s += '        Plotly.newPlot(cpuEl,[{y:byCpu.map(function(p){return (hot(p)?"🔥 ":"")+podLbl(p);}).reverse(),x:byCpu.map(function(p){return p.cpu_pct||0;}).reverse(),type:"bar",orientation:"h",marker:{color:byCpu.map(function(p){return nodeCol[p.node||"?"];}).reverse(),line:{color:byCpu.map(function(p){return hot(p)?"#dc2626":"transparent";}).reverse(),width:byCpu.map(function(p){return hot(p)?2:0;}).reverse()}},text:byCpu.map(function(p){return (p.cpu_pct||0).toFixed(1)+"%";}).reverse(),textposition:"outside",textfont:{size:11},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{y}</b><br>CPU during load: %{x:.1f}%<extra></extra>"}],{margin:{l:30,r:60,t:10,b:40},xaxis:{title:"CPU during load (%)"},yaxis:{automargin:true,tickfont:{size:10}},height:Math.max(200,byCpu.length*28+70),shapes:[{type:"line",x0:meanC,x1:meanC,y0:0,y1:1,yref:"paper",line:{color:"#64748b",width:1.5,dash:"dash"}}],annotations:[{x:meanC,y:1,yref:"paper",xanchor:"left",yanchor:"bottom",text:"mean "+meanC.toFixed(1)+"%",showarrow:false,font:{size:10,color:"#64748b"}}],plot_bgcolor:"#fafafa"},{displayModeBar:false,responsive:true});}';
-    // functions × pods heatmap
-    s += '      var heatEl=document.getElementById("dl-pprof-vllm-heat-"+tid);';
-    s += '      if(heatEl){var fnMax={};vpods.forEach(function(p){(p.functions||[]).forEach(function(f){fnMax[f.name]=Math.max(fnMax[f.name]||0,f.cum_pct);});});var topFns=Object.keys(fnMax).sort(function(a,b){return fnMax[b]-fnMax[a];}).slice(0,20);';
-    s += '        if(topFns.length){var fnL={};vpods.forEach(function(p,j){fnL[j]={};(p.functions||[]).forEach(function(f){fnL[j][f.name]=f;});});';
-    s += '        var z=topFns.map(function(fn){return vpods.map(function(p,j){var f=fnL[j][fn];return f?f.cum_pct:null;});});';
-    s += '        var hv=topFns.map(function(fn){return vpods.map(function(p,j){var f=fnL[j][fn];return f?fn.slice(0,50)+"<br>"+p.pod+" ("+shortNode(p.node)+")<br>cum: "+f.cum_ms.toFixed(0)+"ms ("+f.cum_pct.toFixed(1)+"%)":"";});});';
-    s += '        Plotly.newPlot(heatEl,[{z:z,x:vpods.map(podLbl),y:topFns.map(function(f){return f.length>58?f.slice(0,55)+"…":f;}),type:"heatmap",colorscale:[[0,"#f0fdf4"],[0.15,"#bbf7d0"],[0.35,"#fde047"],[0.6,"#fb923c"],[0.85,"#ef4444"],[1,"#991b1b"]],zmin:0,hoverongaps:false,customdata:hv,hovertemplate:"%{customdata}<extra></extra>",colorbar:{title:{text:"cum %",side:"right"},thickness:12}}],{margin:{l:10,r:10,t:10,b:70},xaxis:{tickangle:-35,automargin:true,tickfont:{size:10}},yaxis:{automargin:true,tickfont:{size:9,family:"monospace"}},height:Math.max(320,topFns.length*24+120),plot_bgcolor:"#fff"},{displayModeBar:false,responsive:true});}}}';
-    s += '  });';
-    s += '  var cmpEl=document.getElementById("dl-pprof-epp-cmp");';
-    s += '  if(cmpEl){var eppTests=profEntries.filter(function(e){return e.pprof.epp&&e.pprof.epp.cpu_pct!=null;});';
-    s += '    if(eppTests.length>=2){var sorted=eppTests.slice().sort(function(a,b){return(a.pprof.epp.cpu_pct||0)-(b.pprof.epp.cpu_pct||0);});';
-    s += '      Plotly.newPlot(cmpEl,[{y:sorted.map(function(e){return e.config_name||e.name||e.test_id;}).reverse(),x:sorted.map(function(e){return e.pprof.epp.cpu_pct;}).reverse(),type:"bar",orientation:"h",marker:{color:sorted.map(function(e){var c=e.pprof.epp.cpu_pct;return c>50?"#dc2626":(c>20?"#d97706":"#0891b2");}).reverse()},text:sorted.map(function(e){return e.pprof.epp.cpu_pct+"%";}).reverse(),textposition:"outside",textfont:{size:12},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{y}</b><br>EPP CPU: %{x:.1f}%<extra></extra>"}],{margin:{l:260,r:60,t:10,b:40},xaxis:{title:"EPP CPU during load (%)"},yaxis:{automargin:true},height:Math.max(300,sorted.length*44+80)},{displayModeBar:false,responsive:true});}}';
     s += '})();';
 
     s += '<\/script>';
