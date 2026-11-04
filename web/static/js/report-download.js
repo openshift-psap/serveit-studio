@@ -42,6 +42,7 @@ async function downloadHTMLReport(runId, data) {
         '/static/report/tabs/workloads.js',
         '/static/report/tabs/deploy-timing.js',
         '/static/report/tabs/test-settings.js',
+        '/static/report/tabs/pareto.js',
     ].map(async (f) => {
         try {
             const r = await fetch(f, { cache: 'reload' });
@@ -97,7 +98,7 @@ function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD,
     const secCacheSweep = buildCacheSweepSection(data, allRes);
     const secTraffic = buildTrafficSection(data, allRes);
     const secDeploy = _tabSection('deploy-timing', data, runId);
-    const secPareto = buildParetoFrontierSection(data, allRes);
+    const secPareto = _tabSection('pareto-frontier', data, runId);
     const secLora = buildLoraSection(data, charts);
     const secEst = buildEstimatorSection(data);
     const secWorkloads = _tabSection('workloads', data, runId);
@@ -1742,28 +1743,6 @@ function buildTrafficSection(data, allRes) {
     return s;
 }
 
-// ── Pareto Frontier Tab ────────────────────────────────────────────────────
-function buildParetoFrontierSection(data, allRes) {
-    const valid = (allRes || []).filter(r => {
-        const tid = r.test_id || r.config_name || '';
-        return tid.indexOf('step2-') !== 0 && tid.indexOf('step3-') !== 0 &&
-               tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0 && tid.indexOf('step13-') !== 0 &&
-               r.ttft_p90 > 0 && (r.throughput_mean > 0 || r.throughput_p90 > 0);
-    });
-    if (valid.length < 2) return '';
-    let s = '';
-    s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs TTFT</h3>';
-    s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 4px;">Higher throughput per GPU (Y) and lower TTFT (X) is better. Frontier lines show the best achievable trade-offs.</p>';
-    s += '<div id="dl-pareto-ttft" style="height:850px"></div></div>';
-    s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs Interactivity</h3>';
-    s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 4px;">Higher interactivity (tok/s/user, X) and higher throughput/GPU (Y) is better.</p>';
-    s += '<div id="dl-pareto-interactivity" style="height:850px"></div></div>';
-    s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs ITL</h3>';
-    s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 4px;">Lower ITL (X) means faster token streaming. Higher throughput/GPU (Y) is better. Top-left is ideal.</p>';
-    s += '<div id="dl-pareto-itl" style="height:850px"></div></div>';
-    return s;
-}
-
 function buildLoraSection(data, charts) {
     let s = '';
     const vllmCharts = charts && charts.vllm ? charts.vllm : {};
@@ -2872,70 +2851,6 @@ function buildChartScript(data, charts, allRes) {
     s += '}';
 
 
-    // Pareto Frontier charts
-    s += '(function(){';
-    s += '  var runOsl=' + JSON.stringify((data.recommendation && data.recommendation.workload) ? data.recommendation.workload.osl : 100) + ';';
-    s += '  function getVT(r){var pA=r._prompt_tps_avg||0;var gA=r._gen_tps_avg||0;return(pA+gA>0)?(pA+gA):0;}';
-    s += '  var paretoResults=ar.filter(function(r){if(r.quality==="discard")return false;var tid=r.test_id||r.config_name||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&r.ttft_p90>0&&(r.throughput_mean>0||r.throughput_p90>0)});';
-    s += '  if(paretoResults.length<2)return;';
-
-    // Throughput vs TTFT
-    s += '  var ttftEl=document.getElementById("dl-pareto-ttft");';
-    s += '  if(ttftEl){';
-    s += '    var pts=paretoResults.map(function(r){var tput=r.throughput_mean||r.throughput_p90||0;var totalTps=getVT(r)||r.output_tps_mean||(tput*runOsl);var tpsGpu=totalTps/(r.gpus||1);return{x:r.ttft_p90,y:tpsGpu,label:r.config_name,arch:r.architecture}}).filter(function(p){return p.x>0&&p.y>0});';
-    s += '    var pdPts=pts.filter(function(p){return p.arch==="PD"||p.arch==="EP"});';
-    s += '    var aggPts=pts.filter(function(p){return p.arch==="AGGREGATED"});';
-    s += '    function ttftFrontier(points){if(!points.length)return[];var s=points.slice().sort(function(a,b){return a.x-b.x});var f=[];var maxY=-Infinity;for(var i=0;i<s.length;i++){if(s[i].y>maxY){f.push(s[i]);maxY=s[i].y}}f.sort(function(a,b){return a.x-b.x});return f}';
-    s += '    var aggF=ttftFrontier(aggPts);var pdF=ttftFrontier(pdPts);';
-    // Auto-zoom: P95 of X
-    s += '    var allX=pts.map(function(p){return p.x}).sort(function(a,b){return a-b});';
-    s += '    var p95Idx=Math.min(Math.floor(allX.length*0.95),allX.length-1);';
-    s += '    var xMax=allX[p95Idx]*1.2;';
-    s += '    var fMaxX=0;aggF.concat(pdF).forEach(function(p){if(p.x>fMaxX)fMaxX=p.x});';
-    s += '    if(fMaxX>xMax)xMax=fMaxX*1.1;';
-    s += '    var traces=[];';
-    s += '    if(aggPts.length){var va=aggPts.filter(function(p){return p.x<=xMax});traces.push({x:va.map(function(p){return p.x}),y:va.map(function(p){return p.y}),text:va.map(function(p){return p.label+"<br>TTFT: "+p.x.toFixed(0)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:"Aggregated",mode:"markers",marker:{color:"#fca5a5",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    if(pdPts.length){var vp=pdPts.filter(function(p){return p.x<=xMax});traces.push({x:vp.map(function(p){return p.x}),y:vp.map(function(p){return p.y}),text:vp.map(function(p){return p.label+"<br>TTFT: "+p.x.toFixed(0)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:"Disaggregation",mode:"markers",marker:{color:"#93c5fd",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    if(aggF.length){traces.push({x:aggF.map(function(p){return p.x}),y:aggF.map(function(p){return p.y}),text:aggF.map(function(p){return p.label}),name:"Aggregated Frontier",mode:aggF.length>1?"lines+markers+text":"markers+text",line:{color:"#dc2626",width:3},marker:{color:"#dc2626",size:8},textposition:"top right",textfont:{size:13,color:"#dc2626"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    if(pdF.length){traces.push({x:pdF.map(function(p){return p.x}),y:pdF.map(function(p){return p.y}),text:pdF.map(function(p){return p.label}),name:"Disaggregation Frontier",mode:pdF.length>1?"lines+markers+text":"markers+text",line:{color:"#2563eb",width:3},marker:{color:"#2563eb",size:8},textposition:"top left",textfont:{size:13,color:"#2563eb"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    Plotly.newPlot(ttftEl,traces,{...lo,height:850,xaxis:{title:"TTFT P90 (ms)",gridcolor:"#d1d5db",range:[0,xMax]},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white"},co);';
-    s += '  }';
-
-    // Throughput vs Interactivity
-    s += '  var intEl=document.getElementById("dl-pareto-interactivity");';
-    s += '  if(intEl){';
-    s += '    var iPts=paretoResults.map(function(r){var tput=r.throughput_mean||r.throughput_p90||0;var conc=r.concurrency||100;var totalTps=getVT(r)||r.output_tps_mean||(tput*runOsl);var inter=totalTps/conc;var tpsGpu=totalTps/(r.gpus||1);return{x:inter,y:tpsGpu,label:r.config_name,arch:r.architecture,conc:conc}}).filter(function(p){return p.x>0&&p.y>0});';
-    s += '    var iPd=iPts.filter(function(p){return p.arch==="PD"||p.arch==="EP"});';
-    s += '    var iAgg=iPts.filter(function(p){return p.arch==="AGGREGATED"});';
-    s += '    function intFrontier(points){if(!points.length)return[];var s=points.slice().sort(function(a,b){return b.x-a.x});var f=[];var maxY=-Infinity;for(var i=0;i<s.length;i++){if(s[i].y>maxY){f.push(s[i]);maxY=s[i].y}}f.sort(function(a,b){return a.x-b.x});return f}';
-    s += '    var iAggF=intFrontier(iAgg);var iPdF=intFrontier(iPd);';
-    s += '    var iTraces=[];';
-    s += '    if(iAgg.length){iTraces.push({x:iAgg.map(function(p){return p.x}),y:iAgg.map(function(p){return p.y}),text:iAgg.map(function(p){return p.label+"<br>"+p.x.toFixed(1)+" tok/s/user<br>"+p.y.toFixed(0)+" tok/s/GPU<br>c="+p.conc}),name:"Aggregated",mode:"markers",marker:{color:"#fca5a5",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    if(iPd.length){iTraces.push({x:iPd.map(function(p){return p.x}),y:iPd.map(function(p){return p.y}),text:iPd.map(function(p){return p.label+"<br>"+p.x.toFixed(1)+" tok/s/user<br>"+p.y.toFixed(0)+" tok/s/GPU<br>c="+p.conc}),name:"Disaggregation",mode:"markers",marker:{color:"#93c5fd",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    if(iAggF.length>1){iTraces.push({x:iAggF.map(function(p){return p.x}),y:iAggF.map(function(p){return p.y}),name:"Aggregated Frontier",mode:"lines",line:{color:"#dc2626",width:3,dash:"dot"},hoverinfo:"skip"});}';
-    s += '    if(iPdF.length>1){iTraces.push({x:iPdF.map(function(p){return p.x}),y:iPdF.map(function(p){return p.y}),name:"Disaggregation Frontier",mode:"lines",line:{color:"#2563eb",width:3,dash:"dot"},hoverinfo:"skip"});}';
-    s += '    var iAnns=[];var iPos=[[80,-15],[-80,-15],[70,-45],[-70,-45],[90,-30],[-90,-30],[60,-60],[-60,-60]];';
-    s += '    function iAddAnn(pts,color){pts.forEach(function(p,i){var pos=iPos[i%iPos.length];iAnns.push({x:p.x,y:p.y,text:p.label+"<br>c="+p.conc,showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:color,ax:pos[0],ay:pos[1],font:{size:13,color:color},bgcolor:"rgba(255,255,255,0)",borderpad:2})})};';
-    s += '    iAddAnn(iAggF,"#dc2626");iAddAnn(iPdF,"#2563eb");';
-    s += '    Plotly.newPlot(intEl,iTraces,{...lo,height:850,xaxis:{title:"Interactivity (tok/s/user)",gridcolor:"#d1d5db",rangemode:"tozero"},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white",annotations:iAnns},co);';
-    s += '  }';
-
-    // ITL vs Throughput Pareto (same IIFE — shares paretoResults, runOsl, getVT)
-    s += '  var itlEl=document.getElementById("dl-pareto-itl");';
-    s += '  if(itlEl){';
-    s += '    var itlPts=paretoResults.filter(function(r){return r.itl_p90>0}).map(function(r){var tput=r.throughput_mean||r.throughput_p90||0;var conc=r.concurrency||100;var totalTps=getVT(r)||r.output_tps_mean||(tput*runOsl);var tpsGpu=totalTps/(r.gpus||1);return{x:r.itl_p90,y:tpsGpu,label:_tL(r.config_name,r.architecture),arch:r.architecture,conc:conc}}).filter(function(p){return p.x>0&&p.y>0});';
-    s += '    var itlPd=itlPts.filter(function(p){return p.arch==="PD"||p.arch==="EP"});';
-    s += '    var itlAgg=itlPts.filter(function(p){return p.arch==="AGGREGATED"});';
-    s += '    function itlFrontier(points){if(!points.length)return[];var s=points.slice().sort(function(a,b){return a.x-b.x});var f=[];var maxY=-Infinity;for(var i=0;i<s.length;i++){if(s[i].y>maxY){f.push(s[i]);maxY=s[i].y}}return f}';
-    s += '    var itlAggF=itlFrontier(itlAgg);var itlPdF=itlFrontier(itlPd);';
-    s += '    var itlTraces=[];';
-    s += '    if(itlAgg.length){itlTraces.push({x:itlAgg.map(function(p){return p.x}),y:itlAgg.map(function(p){return p.y}),text:itlAgg.map(function(p){return p.label+"<br>ITL P90: "+p.x.toFixed(2)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:"Aggregated",mode:"markers",marker:{color:"#fca5a5",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    if(itlPd.length){itlTraces.push({x:itlPd.map(function(p){return p.x}),y:itlPd.map(function(p){return p.y}),text:itlPd.map(function(p){return p.label+"<br>ITL P90: "+p.x.toFixed(2)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:"Disaggregation",mode:"markers",marker:{color:"#93c5fd",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    if(itlAggF.length){itlTraces.push({x:itlAggF.map(function(p){return p.x}),y:itlAggF.map(function(p){return p.y}),text:itlAggF.map(function(p){return p.label+"<br>"+p.x.toFixed(2)+"ms / "+p.y.toFixed(0)+" tok/s/GPU"}),name:"Aggregated — Frontier",mode:itlAggF.length>1?"lines+markers+text":"markers+text",line:{color:"#dc2626",width:3},marker:{color:"#dc2626",size:8},textposition:"top right",textfont:{size:13,color:"#dc2626"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    if(itlPdF.length){itlTraces.push({x:itlPdF.map(function(p){return p.x}),y:itlPdF.map(function(p){return p.y}),text:itlPdF.map(function(p){return p.label+"<br>"+p.x.toFixed(2)+"ms / "+p.y.toFixed(0)+" tok/s/GPU"}),name:"Disaggregation — Frontier",mode:itlPdF.length>1?"lines+markers+text":"markers+text",line:{color:"#2563eb",width:3},marker:{color:"#2563eb",size:8},textposition:"top left",textfont:{size:13,color:"#2563eb"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    Plotly.newPlot(itlEl,itlTraces,{...lo,height:850,xaxis:{title:"ITL P90 (ms)",gridcolor:"#d1d5db"},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white"},co);';
-    s += '  }';
-    s += '})();';
 
     s += '<\/script>';
     // Separate script so it runs even if chart rendering throws an error
