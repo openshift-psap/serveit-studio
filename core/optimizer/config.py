@@ -247,6 +247,14 @@ class RecipeOptimizerConfig:
     single_test_prefill_pods: Optional[int] = None
     single_test_decode_pods: Optional[int] = None
 
+    # Long run / soak mode (only used when objective='long_run').
+    # Deployment spec reuses the single_test_* fields above; these control
+    # the cycle loop: N benchmarks against ONE deployment (no restarts),
+    # workload params jittered +/- long_run_jitter_pct per cycle, random
+    # 1-5min settle pause between cycles. For leak/degradation detection.
+    long_run_cycles: int = 10
+    long_run_jitter_pct: int = 20
+
     def to_dict(self) -> dict:
         """Serialize config to dict for DB persistence (excludes secrets)."""
         from dataclasses import fields as dc_fields

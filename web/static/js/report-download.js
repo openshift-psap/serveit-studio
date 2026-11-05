@@ -56,6 +56,7 @@ async function downloadHTMLReport(runId, data) {
         '/static/report/tabs/configurations.js',
         '/static/report/tabs/recommendation.js',
         '/static/report/tabs/inference-profiles.js',
+        '/static/report/tabs/long-run.js',
     ].map(async (f) => {
         try {
             const r = await fetch(f, { cache: 'reload' });

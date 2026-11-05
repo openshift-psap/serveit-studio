@@ -15,6 +15,7 @@ testing, so that Step 8 comparisons require no additional tests.
 """
 
 import logging
+import random
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -1131,3 +1132,227 @@ class DPEPOnlyStrategy(OptimizationStrategy):
         self._run_speculative_if_enabled()
         self._run_cache_sweep_if_enabled()
         self._run_lora_sweep_if_enabled()
+
+
+class LongRunStrategy(OptimizationStrategy):
+    """Long Run (Soak): ONE deployment, N benchmark cycles with jittered
+    workload params — for memory-leak / CPU-drift / degradation detection.
+
+    The deployment is created once (cycle 1) and reused by every subsequent
+    cycle via the runner's ♻️ reuse path: all cycles share deploy_key while
+    each keeps its own test_id (own DB row, artifacts, profiles). Between
+    cycles a random 1-5 min settle pause lets caches quiesce. Failed cycles
+    are recorded and the run continues.
+    """
+
+    def _jitter_int(self, value, pct, lo=None, hi=None, minimum=1):
+        if value is None:
+            return None
+        v = value * (1.0 + random.uniform(-pct / 100.0, pct / 100.0))
+        if lo is not None:
+            v = max(v, lo)
+        if hi is not None:
+            v = min(v, hi)
+        return max(minimum, int(round(v)))
+
+    def _jitter_float(self, value, pct, minimum=0.0):
+        if value is None:
+            return None
+        v = value * (1.0 + random.uniform(-pct / 100.0, pct / 100.0))
+        return max(minimum, round(v, 2))
+
+    def _jitter_config(self, cfg, pct):
+        """Jitter workload params in place. Clamps respect user min/max."""
+        cfg.isl = self._jitter_int(cfg.isl, pct, lo=getattr(cfg, 'isl_min', None),
+                                   hi=getattr(cfg, 'isl_max', None), minimum=128)
+        cfg.osl = self._jitter_int(cfg.osl, pct, lo=getattr(cfg, 'osl_min', None),
+                                   hi=getattr(cfg, 'osl_max', None), minimum=1)
+        cfg.num_users = self._jitter_int(cfg.num_users, pct, minimum=1)
+        if getattr(cfg, 'prefix_cache_hit_pct', None) is not None:
+            cfg.prefix_cache_hit_pct = self._jitter_int(cfg.prefix_cache_hit_pct, pct,
+                                                        lo=0, hi=100, minimum=0)
+        if getattr(cfg, 'turn_delay', None) is not None:
+            cfg.turn_delay = self._jitter_float(cfg.turn_delay, pct)
+        # Parallel workload shapes: jitter each independently; prefix stays
+        # sensible (<= 80% of its jittered isl)
+        for w in (getattr(cfg, 'parallel_workloads', None) or []):
+            if w.get('isl') is not None:
+                w['isl'] = self._jitter_int(w['isl'], pct, lo=w.get('isl_min'),
+                                            hi=w.get('isl_max'), minimum=128)
+            if w.get('osl') is not None:
+                w['osl'] = self._jitter_int(w['osl'], pct, lo=w.get('osl_min'),
+                                            hi=w.get('osl_max'), minimum=1)
+            if w.get('concurrency') is not None:
+                w['concurrency'] = self._jitter_int(w['concurrency'], pct, minimum=1)
+            if w.get('prefix_tokens') is not None and w.get('isl'):
+                w['prefix_tokens'] = min(w['prefix_tokens'], int(w['isl'] * 0.8))
+
+    def _resource_snapshot(self, deploy_key):
+        """Sample pod RSS/CPU right after a cycle (leak trend signal)."""
+        import subprocess
+        try:
+            r = subprocess.run(
+                ["kubectl", "get", "pods", "-n", self.opt.orchestrator.namespace,
+                 "-l", f"llm-d.ai/test-id={deploy_key}",
+                 "-o", "jsonpath={range .items[*]}{.metadata.name}{'\\n'}{end}"],
+                capture_output=True, text=True, timeout=20)
+            pods = [p for p in r.stdout.strip().split("\n") if p]
+            if not pods:
+                return None
+            snap = {}
+            for pod in pods:
+                t = subprocess.run(
+                    ["kubectl", "top", "pod", pod, "-n", self.opt.orchestrator.namespace,
+                     "--no-headers"],
+                    capture_output=True, text=True, timeout=20)
+                if t.returncode == 0 and t.stdout.strip():
+                    parts = t.stdout.split()
+                    if len(parts) >= 3:
+                        try:
+                            snap[pod] = {
+                                "cpu_m": int(parts[1].rstrip("m")) if parts[1].endswith("m") else int(float(parts[1])),
+                                "rss_mb": int(parts[2].rstrip("Mi")) if parts[2].endswith("Mi") else int(float(parts[2])),
+                            }
+                        except ValueError:
+                            pass
+            return snap or None
+        except Exception:
+            return None
+
+    def execute(self):
+        import copy
+        import random as _random
+        import time as _time
+
+        cfg = self.opt.config
+        cycles = max(1, int(getattr(cfg, 'long_run_cycles', 10) or 10))
+        pct = max(0, min(100, int(getattr(cfg, 'long_run_jitter_pct', 20) or 20)))
+
+        self.opt.log("LONG RUN (SOAK): one deployment, cycled workload", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self.opt.log(f"Cycles: {cycles} | Jitter: ±{pct}% | Settle pause: 1-5 min random", 'info')
+
+        arch = cfg.single_test_architecture or 'aggregated'
+        has_rdma = bool(self.opt.cluster_resources and self.opt.cluster_resources.has_rdma)
+        if not has_rdma and arch in ('pd', 'ep'):
+            self.opt.log(f"⛔ No RDMA — architecture '{arch}' not valid; forcing aggregated", 'warning')
+            arch = 'aggregated'
+            cfg.single_test_architecture = 'aggregated'
+
+        if arch == 'aggregated':
+            tp = cfg.single_test_tp or 1
+            replicas = cfg.single_test_replicas or 1
+            pp = cfg.single_test_pipeline_parallelism or 1
+            num_gpus = tp * pp * replicas
+            base = self.opt._create_aggregated_config(
+                tp=tp, num_gpus=num_gpus, isl=cfg.isl, osl=cfg.osl,
+                test_id=f"longrun-agg-tp{tp}-pp{pp}-{replicas}r",
+                use_concurrency=True, pipeline_parallel_size=pp,
+            )
+        elif arch == 'pd':
+            from core.optimizer.config import FeasibleSplit
+            prefill_tp = cfg.single_test_prefill_tp or cfg.single_test_tp or 4
+            decode_tp = cfg.single_test_decode_tp or cfg.single_test_tp or 8
+            prefill_pods = cfg.single_test_prefill_pods or 1
+            decode_pods = cfg.single_test_decode_pods or 1
+            split = FeasibleSplit(
+                prefill_pods=prefill_pods, decode_pods=decode_pods,
+                prefill_tp=prefill_tp, decode_tp=decode_tp,
+                prefill_gpus=prefill_tp * prefill_pods,
+                decode_gpus=decode_tp * decode_pods,
+                total_gpus=(prefill_tp * prefill_pods) + (decode_tp * decode_pods),
+                prefill_pct=prefill_pods / (prefill_pods + decode_pods),
+            )
+            base = self.opt._create_pd_config(split)
+            base.test_id = f"longrun-pd-{prefill_pods}p{decode_pods}d-ptp{prefill_tp}-dtp{decode_tp}"
+        else:
+            tp = cfg.single_test_tp or 1
+            replicas = cfg.single_test_replicas or 1
+            num_gpus = tp * replicas
+            base = self.opt._create_ep_config(
+                tp=tp, num_gpus=num_gpus, isl=cfg.isl, osl=cfg.osl,
+                test_id=f"longrun-ep-tp{tp}-{replicas}r",
+            )
+
+        # All cycles share one deployment identity
+        base.deploy_key = base.test_id
+        self.opt.log(f"Deployment: {base.deploy_key} (created once, reused for all cycles)", 'info')
+
+        completed = 0
+        for cycle in range(1, cycles + 1):
+            if self.opt._should_stop():
+                self.opt.log("🛑 Long run stopped by user", 'warning')
+                break
+
+            cycle_id = f"{base.test_id}-c{cycle:03d}"
+            if cycle_id in self.opt.completed_tests:
+                self.opt.log(f"  ⏩ Cycle {cycle}/{cycles}: already completed — resuming", 'info')
+                continue
+
+            self.opt.log("", 'info')
+            self.opt.log(f"🔄 CYCLE {cycle}/{cycles} — {cycle_id}", 'decision')
+
+            cycle_cfg = copy.deepcopy(base)
+            cycle_cfg.test_id = cycle_id
+            cycle_cfg.deploy_key = base.deploy_key
+            self._jitter_config(cycle_cfg, pct)
+            self.opt.log(
+                f"   Workload: ISL={cycle_cfg.isl} OSL={cycle_cfg.osl} users={cycle_cfg.num_users} "
+                f"hit%={getattr(cycle_cfg, 'prefix_cache_hit_pct', None)} "
+                f"turn_delay={getattr(cycle_cfg, 'turn_delay', None)}", 'info')
+
+            try:
+                result = self.opt.orchestrator.run_test(
+                    cycle_cfg,
+                    cleanup=False,
+                    log_callback=lambda msg: self.opt.log(msg, 'info'),
+                    stop_check=self.opt._should_stop,
+                )
+            except Exception as e:
+                self.opt.log(f"  ⚠️ Cycle {cycle} raised: {e} — recording failure and continuing", 'warning')
+                # Minimal duck-typed result for the DB save path
+                class _R:
+                    pass
+                result = _R()
+                result.guidellm_success = False
+                result.deployment_success = False
+                result.deployment_ready = False
+                result.error_message = f"cycle exception: {e}"
+                result.test_id = cycle_id
+
+            # Leak signal: pod RSS/CPU right after this cycle
+            try:
+                result.resource_snapshot = self._resource_snapshot(base.deploy_key)
+                if result.resource_snapshot:
+                    rss = sum(v["rss_mb"] for v in result.resource_snapshot.values())
+                    self.opt.log(f"   📊 Pod resources: {len(result.resource_snapshot)} pods, "
+                                 f"{rss} MiB total RSS", 'info')
+            except Exception:
+                pass
+
+            try:
+                self.opt._save_test_to_database(cycle_cfg, result)
+            except Exception as e:
+                self.opt.log(f"  ⚠️ DB save failed for cycle {cycle}: {e}", 'warning')
+            self.opt.all_test_results.append((cycle_cfg, result))
+            completed += 1
+
+            if result and getattr(result, 'guidellm_success', False):
+                ttft = result.ttft_p90 or result.ttft_p50 or 0
+                tps = result.throughput_mean or result.throughput_p90 or 0
+                self.opt.log(f"  ✅ Cycle {cycle}: TTFT p90 {ttft:.1f}ms, {tps:.2f} req/s", 'success')
+            else:
+                self.opt.log(f"  ❌ Cycle {cycle} failed — recorded, continuing", 'warning')
+
+            # Random 1-5 min settle pause between cycles (not after the last)
+            if cycle < cycles and not self.opt._should_stop():
+                pause = _random.randint(60, 300)
+                self.opt.log(f"  ⏸️ Settle pause: {pause // 60}m {pause % 60}s before cycle {cycle + 1}", 'info')
+                for _ in range(pause):
+                    if self.opt._should_stop():
+                        break
+                    _time.sleep(1)
+
+        self.opt.log("", 'info')
+        self.opt.log(f"LONG RUN COMPLETE: {completed}/{cycles} cycles executed", 'decision')
+        self.opt.log("   Deployment left for end-of-run cleanup (pods were never restarted between cycles)", 'info')

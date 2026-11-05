@@ -279,8 +279,8 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         """Clean up a test deployment (LWS + services). Used by sweeps to clean up after all levels."""
         if log_callback:
             log_callback(f"🧹 Cleaning up deployment: {config.test_id}")
-        self.deployment_manager.delete_deployment(config.test_id, config.architecture, log_callback=log_callback)
-        self.deployment_manager.wait_for_pods_terminated(config.test_id, timeout=300, log_callback=log_callback)
+        self.deployment_manager.delete_deployment(config.deploy_selector_id, config.architecture, log_callback=log_callback)
+        self.deployment_manager.wait_for_pods_terminated(config.deploy_selector_id, timeout=300, log_callback=log_callback)
 
     def _get_service_endpoint(
         self, test_id: str, architecture: str, log_callback: Optional[Callable[[str], None]] = None
@@ -689,7 +689,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             # Step 1: Count Ready pods matching the test-id label
             try:
                 result = self.deployment_manager.kubectl.run(
-                    ["get", "pods", "-n", self.namespace, "-l", f"llm-d.ai/test-id={config.test_id}", "-o", "json"],
+                    ["get", "pods", "-n", self.namespace, "-l", f"llm-d.ai/test-id={config.deploy_selector_id}", "-o", "json"],
                     check=False,
                 )
 
@@ -1616,7 +1616,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             # Step 1a: Check if existing deployment is already serving
             # Reuse running pods to avoid 30+ min model reload on large models
             if not skip_deploy:
-                existing = self.deployment_manager.get_deployment_status(config.test_id, config.architecture)
+                existing = self.deployment_manager.get_deployment_status(config.deploy_selector_id, config.architecture)
                 if existing.deployed:
                     # Check if ALL pods are serving
                     r = subprocess.run(
@@ -1627,7 +1627,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                             "-n",
                             self.namespace,
                             "-l",
-                            f"llm-d.ai/test-id={config.test_id}",
+                            f"llm-d.ai/test-id={config.deploy_selector_id}",
                             "-o",
                             'jsonpath={range .items[*]}{.metadata.name}{" "}{end}',
                         ],
@@ -1660,7 +1660,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         if log_callback:
                             log_callback(f"🧹 Cleaning up leftover deployment (not all pods serving): {config.test_id}")
                         self.deployment_manager.delete_deployment(
-                            config.test_id, config.architecture, log_callback=log_callback
+                            config.deploy_selector_id, config.architecture, log_callback=log_callback
                         )
                         self.deployment_manager.wait_for_pods_terminated(
                             config.test_id, timeout=300, log_callback=log_callback
@@ -1704,7 +1704,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     log_callback("\n⏳ Step 3b: Waiting for vLLM model loading...")
 
                 model_load_time = self._wait_for_model_loaded(
-                    config.test_id,
+                    config.deploy_selector_id,
                     timeout=self.deployment_timeout,
                     log_callback=log_callback,
                     stop_check=stop_check,
@@ -1721,7 +1721,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 # Total time from deploy start to model loaded (includes pod scheduling + model load)
                 result.model_load_time_s = int(time.time() - deploy_start_time)
 
-                pod_timings = self._collect_pod_timings(config.test_id, log_callback=log_callback)
+                pod_timings = self._collect_pod_timings(config.deploy_selector_id, log_callback=log_callback)
                 if pod_timings:
                     result.pod_timings = pod_timings
 
@@ -1998,7 +1998,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
                     if log_callback:
                         log_callback("\n🔍 Scanning pod logs for critical errors...")
-                    scan_result = scan_pod_logs(self.namespace, config.test_id)
+                    scan_result = scan_pod_logs(self.namespace, config.deploy_selector_id)
                     if scan_result.nixl_error_count > 0:
                         result.nixl_errors = scan_result.nixl_error_count
                     if scan_result.has_errors:
@@ -2032,7 +2032,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     pass
 
                 # Clear GPU cache on all serving pods after each test
-                self._clear_gpu_cache(config.test_id, log_callback=log_callback)
+                self._clear_gpu_cache(config.deploy_selector_id, log_callback=log_callback)
 
         except Exception as e:
             import traceback
@@ -2070,9 +2070,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     log_callback("\n🧹 Step 7: Cleaning up deployment...")
 
                 self.deployment_manager.delete_deployment(
-                    config.test_id, config.architecture, log_callback=log_callback
+                    config.deploy_selector_id, config.architecture, log_callback=log_callback
                 )
-                self.deployment_manager.wait_for_pods_terminated(config.test_id, timeout=300, log_callback=log_callback)
+                self.deployment_manager.wait_for_pods_terminated(config.deploy_selector_id, timeout=300, log_callback=log_callback)
 
                 result.cleanup_time = datetime.now().isoformat()
             elif cleanup and not result.guidellm_success:
@@ -2090,7 +2090,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         log_callback("\n⚠️  Test failed — cleaning up deployment...")
 
                     self.deployment_manager.delete_deployment(
-                        config.test_id, config.architecture, log_callback=log_callback
+                        config.deploy_selector_id, config.architecture, log_callback=log_callback
                     )
                     self.deployment_manager.wait_for_pods_terminated(
                         config.test_id, timeout=300, log_callback=log_callback

@@ -569,6 +569,36 @@
 
                         <!-- Single Test: Deployment Configuration (shown only when goal=single_test) -->
                         <div id="single-test-config" style="display:none; margin-bottom:20px;">
+                        <!-- Long Run Settings (only when goal=long_run) -->
+                        <div id="long-run-settings" style="border:2px solid #7c3aed;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:14px 20px;">
+                                <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">🔁 Long Run Settings</div>
+                                <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">One deployment, N benchmark cycles with randomized workload — pods never restart between cycles.</div>
+                            </div>
+                            <div style="padding:16px 20px;">
+                                <div style="display:flex;gap:20px;flex-wrap:wrap;">
+                                    <div style="flex:1;min-width:180px;">
+                                        <label style="display:block;font-weight:600;font-size:0.88em;color:#374151;margin-bottom:6px;">Number of Cycles</label>
+                                        <input type="number" id="long-run-cycles" min="2" max="200" value="10"
+                                               style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.95em;"
+                                               oninput="config.long_run_cycles = parseInt(this.value) || 10; saveConfig();">
+                                        <div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Each cycle = one full benchmark against the same pods</div>
+                                    </div>
+                                    <div style="flex:1;min-width:180px;">
+                                        <label style="display:block;font-weight:600;font-size:0.88em;color:#374151;margin-bottom:6px;">Workload Jitter (±%)</label>
+                                        <input type="number" id="long-run-jitter" min="0" max="100" value="20"
+                                               style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.95em;"
+                                               oninput="config.long_run_jitter_pct = parseInt(this.value) || 20; saveConfig();">
+                                        <div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Randomized per cycle: ISL, OSL, users, cache-hit %, turn delay</div>
+                                    </div>
+                                </div>
+                                <div style="font-size:0.8em;color:#6b7280;line-height:1.5;margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;">
+                                    Between cycles: random 1-5 min settle pause. Failed cycles are recorded and the run continues.
+                                    Per-cycle pod RSS/CPU snapshots and EPP heap profiles are collected for leak-trend analysis (see the Long Run tab in the report).
+                                </div>
+                            </div>
+                        </div>
+
                             <div style="border:2px solid #8b5cf6;border-radius:12px;overflow:hidden;">
                                 <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:16px 20px;">
                                     <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">🧪 Deployment Configuration</div>

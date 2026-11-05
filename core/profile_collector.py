@@ -314,6 +314,7 @@ class ProfileCollector:
 
     def start_cpu_captures(self, config, log_callback: Optional[Callable[[str], None]] = None) -> Dict:
         test_id = config.test_id
+        selector = config.deploy_selector_id
         window = min(MAX_CPU_WINDOW_S, max(30, getattr(config, "test_duration", 300) or 300))
         enable_vllm = bool(getattr(config, "enable_pprof", False))
         self._resolve_workload_pod()
@@ -346,7 +347,7 @@ class ProfileCollector:
 
         # vLLM pods (opt-in)
         if enable_vllm:
-            pods = self.discover_vllm_pods(test_id)
+            pods = self.discover_vllm_pods(selector)
             probed = 0
             for pod in pods:
                 pod_name = pod["name"] if isinstance(pod, dict) else pod
@@ -383,7 +384,7 @@ class ProfileCollector:
         responds slowly, so fire-and-forget with short timeout.
         """
         self._resolve_workload_pod()
-        pods = self.discover_vllm_pods(test_id)
+        pods = self.discover_vllm_pods(selector)
         results = []
         for pod in pods:
             pod_name = pod["name"] if isinstance(pod, dict) else pod

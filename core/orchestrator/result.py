@@ -150,4 +150,8 @@ class TestResult:
     # base64 in each CPU entry for report downloads.
     profiles: Optional[dict] = None
 
+    # Long-run leak signal: pod RSS/CPU sampled right after the benchmark
+    # (kubectl top pods, label-selected via deploy_key)
+    resource_snapshot: Optional[dict] = None
+
 

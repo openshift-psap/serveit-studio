@@ -388,6 +388,9 @@ class TemplateManager:
         Templates receive a flat dict with no fallback logic needed.
         """
         vars_dict = asdict(config)
+        # Labels and LWS names key on the deployment identity so long-run
+        # cycles (distinct test_ids) share one deployment
+        vars_dict['test_id'] = config.deploy_selector_id
         # Pre-computed profiler config JSON (avoids Jinja2 brace escaping issues)
         if getattr(config, 'enable_pprof', False):
             # max_iterations bounds the worker trace size — without it the

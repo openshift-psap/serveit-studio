@@ -1188,6 +1188,17 @@ function restoreTestPlan() {
 // Load config and restore console on page load
 restoreConsole();
 
+// Long Run: populate settings inputs from saved config
+function longRunInitInputs() {
+    var c = document.getElementById('long-run-cycles');
+    var j = document.getElementById('long-run-jitter');
+    if (c && config.long_run_cycles) c.value = config.long_run_cycles;
+    if (j && config.long_run_jitter_pct) j.value = config.long_run_jitter_pct;
+    var lr = document.getElementById('long-run-settings');
+    if (lr) lr.style.display = config.goal === 'long_run' ? 'block' : 'none';
+}
+document.addEventListener('DOMContentLoaded', longRunInitInputs);
+
 // Goal selection
 document.querySelectorAll('[data-goal]').forEach(card => {
     card.addEventListener('click', function() {
@@ -1248,10 +1259,15 @@ var _singleTestVisLock = false;
 function updateSingleTestVisibility() {
     if (_singleTestVisLock) return;
     _singleTestVisLock = true;
-    var isSingle = config.goal === 'single_test';
+    // long_run reuses the single-test deployment spec section
+    var isSingle = config.goal === 'single_test' || config.goal === 'long_run';
     var el = document.getElementById('single-test-config');
     if (el) {
         el.style.display = isSingle ? 'block' : 'none';
+    }
+    var lr = document.getElementById('long-run-settings');
+    if (lr) {
+        lr.style.display = config.goal === 'long_run' ? 'block' : 'none';
     }
     ['sweep-tp-section', 'sweep-pd-section', 'sweep-latency-section'].forEach(function(id) {
         var s = document.getElementById(id);
