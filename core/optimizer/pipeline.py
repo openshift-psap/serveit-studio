@@ -2525,8 +2525,8 @@ spec:
                     f"   Multi-turn workload ({self.config.turns} turns) — using guidellm synthetic generation", "info"
                 )
 
-            # Single test: skip TP calibration, go straight to strategy
-            if self.config.objective == "single_test":
+            # Single test / long run: skip TP calibration, go straight to strategy
+            if self.config.objective in ("single_test", "long_run"):
                 strategy = self._get_strategy()
                 strategy.execute()
                 return self._build_results()
