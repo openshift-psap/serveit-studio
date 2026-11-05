@@ -119,24 +119,10 @@ class GuidellmMixin:
         """Deploy the workload deployment if not already running."""
         kubectl = self.deployment_manager.kubectl
 
-        # Check if a workload pod is already running
-        r = kubectl.run(
-            [
-                "get",
-                "pods",
-                "-l",
-                "app=serveit-workload",
-                "-n",
-                self.namespace,
-                "-o",
-                "jsonpath={.items[0].status.phase}",
-            ],
-            check=False,
-        )
-        if r.returncode == 0 and r.stdout.strip() == "Running":
-            self._resolve_guidellm_pod_name()
-            return True
-
+        # Always apply the workload deployment manifest — kubectl apply is
+        # idempotent, and applying ensures template changes (e.g. the zombie
+        # -reaping PID 1 fix) roll the pod instead of being silently skipped
+        # because an old pod happens to be Running.
         if log_callback:
             log_callback("📦 Deploying guidellm benchmark pod...")
 
