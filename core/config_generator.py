@@ -40,11 +40,6 @@ class TestConfig:
     """Configuration for a single test run."""
 
     test_id: str
-    # Deployment identity: when set, all label-based pod selection and the
-    # deployment-reuse check key on this instead of test_id. Used by the
-    # long-run goal to run N cycles (distinct test_ids / DB rows / artifacts)
-    # against ONE deployment. None everywhere else.
-    deploy_key: Optional[str] = None
     architecture: str  # 'aggregated', 'pd', 'ep'
     model_name: str
     namespace: str
@@ -254,6 +249,12 @@ class TestConfig:
     # whose vLLM image does not serve /debug/pprof).
     enable_epp_profile: bool = True
     enable_pprof: bool = False
+
+    # Deployment identity: when set, all label-based pod selection and the
+    # deployment-reuse check key on this instead of test_id. Used by the
+    # long-run goal to run N cycles (distinct test_ids / DB rows / artifacts)
+    # against ONE deployment. None everywhere else.
+    deploy_key: Optional[str] = None
 
     @property
     def deploy_selector_id(self) -> str:
