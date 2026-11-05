@@ -903,6 +903,7 @@ data:
             "ep_only",
             "dpep_only",
             "single_test",
+            "long_run",
         ):
             goal_descriptions = {
                 "ttft": {
@@ -967,6 +968,12 @@ data:
                     "label": "Single Test (user-defined configuration)",
                     "steps": [
                         "Deploy and benchmark a single user-specified configuration",
+                    ],
+                },
+                "long_run": {
+                    "label": "Long Run / Soak Test",
+                    "steps": [
+                        "Deploy once, then cycle the jittered workload N times (no restarts)",
                     ],
                 },
             }
