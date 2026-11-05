@@ -172,6 +172,19 @@ def _parse_ls_lh(output: str) -> list:
     return files
 
 
+def _torch_parser_b64() -> str:
+    """Base64 of core/torch_trace_summary.py for pushing into vLLM pods.
+
+    The parser streams the Chrome trace (16MB peak RSS for a 1.3GB
+    decompressed trace) and emits a compact SUMMARY_JSON — raw traces
+    are never copied off the pod.
+    """
+    import base64 as _b64
+    here = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(here, "torch_trace_summary.py")) as f:
+        return _b64.b64encode(f.read().encode()).decode()
+
+
 class ProfileCollector:
     """Collects pprof profiles from EPP and vLLM pods for one test."""
 
@@ -440,37 +453,49 @@ class ProfileCollector:
                     "operator_count": 0,
                 }
 
-                # Copy the most valuable traces to the artifact dir:
-                # rank* (GPU worker trace) first, then async_llm (CPU frontend).
-                # Max 2 per pod — traces are 30-90MB each.
-                if test_id:
-                    ranked = sorted(
-                        trace_files,
-                        key=lambda t: (0 if t["name"].startswith("rank") else 1, t["name"]),
-                    )[:2]
-                    for tf in ranked:
-                        try:
-                            copy_result = subprocess.run(
-                                ["kubectl", "exec", pod_name, "-n", self.namespace, "-c", "vllm",
-                                 "--", "cat", tf["path"]],
-                                capture_output=True, timeout=300,
-                                env=self._kubectl_env())
-                            if copy_result.returncode == 0 and copy_result.stdout:
-                                trace_out = Path(f"/mnt/storage/test-artifacts/{test_id}/profiles/torch/{pod_name}/{tf['name']}")
-                                trace_out.parent.mkdir(parents=True, exist_ok=True)
-                                trace_out.write_bytes(copy_result.stdout)
-                                written.append({
-                                    "kind": "torch", "pod": pod_name, "port": 0,
-                                    "ptype": "trace",
-                                    "path": f"torch/{pod_name}/{tf['name']}",
-                                    "size": len(copy_result.stdout),
-                                })
-                        except Exception as e:
-                            logger.warning(f"trace copy failed {pod_name}: {e}")
+                # Parse the trace IN-POD into a compact summary (~6KB) —
+                # raw traces are 30-80MB each and are never copied off the
+                # pod (kubectl binary copies proved unreliable anyway).
+                summary.update({"parsed": False})
+                try:
+                    b64 = _torch_parser_b64()
+                    parse_result = subprocess.run(
+                        ["kubectl", "exec", pod_name, "-n", self.namespace, "-c", "vllm",
+                         "--", "bash", "-c",
+                         "echo " + b64 + " | base64 -d > /tmp/tts.py && "
+                         "python3 /tmp/tts.py /tmp/torch_traces/"],
+                        capture_output=True, text=True, timeout=300,
+                        env=self._kubectl_env())
+                    if parse_result.returncode == 0:
+                        for line in parse_result.stdout.split("\n"):
+                            if line.startswith("SUMMARY_JSON:"):
+                                parsed = json.loads(line[len("SUMMARY_JSON:"):])
+                                summary.update(parsed)
+                                summary["parsed"] = True
+                                break
+                    if not summary.get("parsed"):
+                        logger.warning(f"trace parse no-summary {pod_name}: "
+                                       f"{parse_result.stderr[-200:] if parse_result.stderr else 'rc=' + str(parse_result.returncode)}")
+                except Exception as e:
+                    logger.warning(f"trace parse failed {pod_name}: {e}")
+
+                # Free the pod's ephemeral trace storage
+                try:
+                    subprocess.run(
+                        ["kubectl", "exec", pod_name, "-n", self.namespace, "-c", "vllm",
+                         "--", "bash", "-c", "rm -f /tmp/torch_traces/*.gz"],
+                        capture_output=True, timeout=30,
+                        env=self._kubectl_env())
+                except Exception:
+                    pass
 
                 torch_results.append(summary)
                 if log_callback:
-                    log_callback(f"   \U0001f52c {pod_name}: {len(trace_files)} trace file(s)")
+                    if summary.get("parsed"):
+                        log_callback(f"   \U0001f52c {pod_name}: {summary.get('kernel_count', 0)} kernels, "
+                                     f"{summary.get('total_cuda_ms', 0)}ms CUDA, {summary.get('total_cpu_ms', 0)}ms CPU")
+                    else:
+                        log_callback(f"   \U0001f52c {pod_name}: {len(trace_files)} trace file(s) (parse failed)")
 
             except Exception as e:
                 logger.warning(f"torch profile collection failed for {pod_name}: {e}")
@@ -573,10 +598,9 @@ class ProfileCollector:
         # 3. Collect torch profiler traces — collect_torch_profiles copies
         #    files to artifact_dir/torch/<pod>/ internally and appends entries
         #    to torch_written (kept separate so the capture zip below stays aligned)
-        torch_written = []
         torch_results = []
         if handle.get("torch_procs"):
-            torch_results = self.collect_torch_profiles(handle["torch_procs"], log_callback, torch_written, test_id)
+            torch_results = self.collect_torch_profiles(handle["torch_procs"], log_callback, None, test_id)
 
         # 4. Heap + goroutine snapshots (post-load, point-in-time)
         snapshots = []
@@ -607,7 +631,7 @@ class ProfileCollector:
             except Exception as e:
                 logger.warning(f"failed writing profile {out}: {e}")
 
-        written = torch_written + cap_written
+        written = cap_written
 
         # 6. Build the report summary
         summary = {"files": [], "epp": None, "vllm": [], "torch": torch_results}
@@ -633,10 +657,7 @@ class ProfileCollector:
                 except Exception as e:
                     logger.warning(f"failed parsing CPU profile {cap['pod']}: {e}")
 
-        # Torch trace files: metadata only in summary["files"] (traces are too
-        # large to embed — they are downloaded from the artifact dir)
-        for tw in torch_written:
-            summary["files"].append(dict(tw))
+        # Torch traces are parsed in-pod — no artifact files, nothing to list
 
         if log_callback and written:
             total_kb = sum(w["size"] for w in written) // 1024

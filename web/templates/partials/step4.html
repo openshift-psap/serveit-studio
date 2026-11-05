@@ -554,7 +554,7 @@
                                 <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;cursor:pointer;margin-bottom:10px;" onclick="var on=!document.getElementById('pprof-vllm-enabled').checked;document.getElementById('pprof-vllm-enabled').checked=on;config.enable_pprof=on;var sw=document.getElementById('pprof-vllm-switch');sw.style.background=on?'#0891b2':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
                                     <div>
                                         <div style="font-weight:600;font-size:0.9em;color:#155e75;">Inference Pod Profiling (torch.profiler)</div>
-                                        <div style="font-size:0.8em;color:#0e7490;margin-top:2px;">vLLM&#39;s built-in torch profiler runs in each pod during the benchmark window, capturing Python/CPU operators and CUDA GPU kernels (cutlass GEMMs, attention, triton kernels). Traces are bounded (500 engine steps) and viewable in Perfetto or chrome://tracing.</div>
+                                        <div style="font-size:0.8em;color:#0e7490;margin-top:2px;">vLLM&#39;s built-in torch profiler runs in each pod during the benchmark window, capturing Python/CPU operators and CUDA GPU kernels (cutlass GEMMs, attention, triton kernels). Traces are parsed in-pod into compact summaries — top kernels and CPU ops are visualized directly in the report.</div>
                                     </div>
                                     <input type="checkbox" id="pprof-vllm-enabled" style="display:none;">
                                     <div id="pprof-vllm-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
@@ -562,7 +562,7 @@
                                     </div>
                                 </div>
                                 <div style="font-size:0.8em;color:#0e7490;line-height:1.6;padding:4px 6px;">
-                                    Both profilers run <strong>during the benchmark load window</strong> on <strong>every test</strong> — single tests, TP calibration, EPP tuning, concurrency sweeps, cache sweeps. EPP results appear in the <strong>EPP Profiles</strong> tab with per-pod function breakdowns; inference traces appear in the <strong>Inference Profiles</strong> tab with per-pod trace downloads (open in <a href="https://ui.perfetto.dev" target="_blank" style="color:#0e7490;">ui.perfetto.dev</a> for the full timeline and flame graph).
+                                    Both profilers run <strong>during the benchmark load window</strong> on <strong>every test</strong> — single tests, TP calibration, EPP tuning, concurrency sweeps, cache sweeps. EPP results appear in the <strong>EPP Profiles</strong> tab with per-pod function breakdowns; inference summaries appear in the <strong>Inference Profiles</strong> tab with GPU/CPU time per pod and top kernel/operator charts.
                                 </div>
                             </div>
                         </div>
