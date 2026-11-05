@@ -122,6 +122,12 @@ class TestResult:
         """Human-readable label for charts (e.g. '3P×TP8 + 1D×TP8')."""
         prefix = 'Single · ' if self.config_name.startswith('single-') else ''
         suffix = ''
+        # Long-run cycles: label with the cycle number so each row is
+        # distinguishable (the deployment label alone is identical)
+        import re as _re
+        _m = _re.search(r'-c(\d+)$', self.config_name)
+        if _m:
+            suffix = ' · cycle ' + str(int(_m.group(1)))
         if self.config_name.startswith('step11-epp-'):
             suffix = ' · ' + self.config_name.rsplit('-', 1)[-1]
         if self.architecture in ('pd', 'ep'):

@@ -6,13 +6,18 @@
 
     var CYCLE_RE = /-c(\d+)$/;
 
+    function rawName(r) {
+        // test_id carries the raw config name; config_name is the display label
+        return r.test_id || r.config_name || '';
+    }
+
     function cycles(data) {
         var out = [];
         (data.all_results || []).forEach(function(r) {
-            var m = (r.config_name || r.test_id || '').match(CYCLE_RE);
+            var m = rawName(r).match(CYCLE_RE);
             if (m) {
                 r._cycle = parseInt(m[1], 10);
-                r._base = (r.config_name || r.test_id).replace(CYCLE_RE, '');
+                r._base = rawName(r).replace(CYCLE_RE, '');
                 out.push(r);
             }
         });
@@ -119,7 +124,7 @@
             var rss = rssTotal(r), cpu = cpuTotal(r);
             var ok = r.status === 'completed' || m.success;
             s += '<tr>' +
-                '<td style="font-weight:600;">#' + r._cycle + '</td>' +
+                '<td style="font-weight:600;">' + (r.config_name || ('#' + r._cycle)) + '</td>' +
                 '<td>' + (c.isl != null ? c.isl : '—') + '</td>' +
                 '<td>' + (c.osl != null ? c.osl : '—') + '</td>' +
                 '<td>' + (c.num_users != null ? c.num_users : '—') + '</td>' +
