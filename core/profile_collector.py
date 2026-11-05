@@ -151,6 +151,9 @@ def _parse_ls_lh(output: str) -> list:
         if len(parts) < 9 or parts[-1] == "total" or parts[0].startswith("d"):
             continue
         fname = parts[-1]
+        # Skip the profiler's own text output — not a Chrome trace
+        if fname.startswith("profiler_out"):
+            continue
         size_str = parts[4]
         size = 0
         try:

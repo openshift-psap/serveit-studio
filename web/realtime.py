@@ -3397,15 +3397,8 @@ def download_torch_trace(run_id, config_name, trace_path):
     from flask import send_file
 
     try:
-        with get_db() as conn:
-            row = conn.execute(
-                'SELECT test_id FROM test_configurations WHERE run_id = ? AND config_name = ?',
-                (run_id, config_name)
-            ).fetchone()
-        if not row or not row['test_id']:
-            return jsonify({'error': 'Configuration not found'}), 404
-
-        base = f'/mnt/storage/test-artifacts/{row["test_id"]}/profiles'
+        # config_name IS the test_id in the artifact dir layout
+        base = f'/mnt/storage/test-artifacts/{config_name}/profiles'
         full = os.path.realpath(os.path.join(base, trace_path))
         # Prevent path traversal — must stay under the artifact dir
         if not full.startswith(os.path.realpath(base) + os.sep):
