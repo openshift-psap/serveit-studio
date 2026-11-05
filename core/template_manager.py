@@ -402,6 +402,12 @@ class TemplateManager:
                 'torch_profiler_activities': ['CPU', 'CUDA'],
                 'max_iterations': 500,
                 'delay_iterations': 200,
+                # The frontend (async_llm) profiler shares this config: with
+                # delay_iterations > 0 it never starts (no steps on the
+                # frontend), and with 0 its stop-flush of a full benchmark
+                # window takes minutes (verified: 75s of load -> 5+ min
+                # flush). rank0 already carries CPU+CUDA for the engine.
+                'ignore_frontend': True,
             })
         else:
             vars_dict['profiler_config_json'] = ''
