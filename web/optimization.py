@@ -1060,6 +1060,8 @@ data:
                 hf_token=hf_token,
                 tp_options=tp_options,  # Dynamic based on cluster hardware
                 objective=optimization_goal,  # 'ttft' selects TP by lowest latency
+                long_run_cycles=int(_get("long_run_cycles", 10) or 10),
+                long_run_jitter_pct=int(_get("long_run_jitter_pct", 20) or 20),
                 use_achievable_qps=use_achievable_qps,
                 calibrated_load_enabled=calibrated_load_enabled,
                 inferencex_sweep_enabled=inferencex_sweep_enabled,
