@@ -536,7 +536,7 @@
                             <div style="background:linear-gradient(135deg,#ecfeff,#cffafe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('pprof-body');var a=document.getElementById('pprof-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='&#9662;';}else{b.style.display='none';a.textContent='&#9656;';}">
                                 <div>
                                     <div style="font-weight:700;color:#155e75;font-size:1.05em;">🔬 Pod Profiling</div>
-                                    <div style="color:#0e7490;font-size:0.92em;margin-top:4px;">Collect CPU profiles from EPP and inference pods during any benchmark test</div>
+                                    <div style="color:#0e7490;font-size:0.92em;margin-top:4px;">Collect CPU profiles from EPP and torch.profiler traces (CPU + CUDA) from inference pods</div>
                                 </div>
                                 <div id="pprof-arrow" style="font-size:1.4em;color:#155e75;font-weight:700;">&#9656;</div>
                             </div>
@@ -553,8 +553,8 @@
                                 </div>
                                 <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;cursor:pointer;margin-bottom:10px;" onclick="var on=!document.getElementById('pprof-vllm-enabled').checked;document.getElementById('pprof-vllm-enabled').checked=on;config.enable_pprof=on;var sw=document.getElementById('pprof-vllm-switch');sw.style.background=on?'#0891b2':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
                                     <div>
-                                        <div style="font-weight:600;font-size:0.9em;color:#155e75;">Inference Pod Profiling (py-spy)</div>
-                                        <div style="font-size:0.8em;color:#0e7490;margin-top:2px;">Sampling profiler attaches to the running vLLM process in each pod and captures Python-level function activity during the benchmark. Shows which operators consume CPU. Runs on every test.</div>
+                                        <div style="font-weight:600;font-size:0.9em;color:#155e75;">Inference Pod Profiling (torch.profiler)</div>
+                                        <div style="font-size:0.8em;color:#0e7490;margin-top:2px;">vLLM&#39;s built-in torch profiler runs in each pod during the benchmark window, capturing Python/CPU operators and CUDA GPU kernels (cutlass GEMMs, attention, triton kernels). Traces are bounded (500 engine steps) and viewable in Perfetto or chrome://tracing.</div>
                                     </div>
                                     <input type="checkbox" id="pprof-vllm-enabled" style="display:none;">
                                     <div id="pprof-vllm-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
@@ -562,7 +562,7 @@
                                     </div>
                                 </div>
                                 <div style="font-size:0.8em;color:#0e7490;line-height:1.6;padding:4px 6px;">
-                                    Both profilers run <strong>during the benchmark load window</strong> on <strong>every test</strong> — single tests, TP calibration, EPP tuning, concurrency sweeps, cache sweeps. Results appear in the <strong>EPP Profiles</strong> tab with per-pod function breakdowns and raw trace downloads.
+                                    Both profilers run <strong>during the benchmark load window</strong> on <strong>every test</strong> — single tests, TP calibration, EPP tuning, concurrency sweeps, cache sweeps. EPP results appear in the <strong>EPP Profiles</strong> tab with per-pod function breakdowns; inference traces appear in the <strong>Inference Profiles</strong> tab with per-pod trace downloads (open in <a href="https://ui.perfetto.dev" target="_blank" style="color:#0e7490;">ui.perfetto.dev</a> for the full timeline and flame graph).
                                 </div>
                             </div>
                         </div>
