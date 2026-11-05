@@ -371,20 +371,20 @@ class ProfileCollector:
                 log_callback(f"   \U0001f52c vLLM CPU profile capture started on {probed}/{len(pods)} pod(s) ({window}s window)")
 
             # Torch profiling (same window, separate background process)
-            handle["torch_procs"] = self.start_torch_profiles(test_id, window, log_callback)
+            handle["torch_procs"] = self.start_torch_profiles(selector, window, log_callback)
 
         return handle
 
     # ── torch profiler ──────────────────────────────────────────────────────
 
-    def start_torch_profiles(self, test_id, window_s, log_callback=None):
+    def start_torch_profiles(self, selector_id, window_s, log_callback=None):
         """Start torch profiler on all vLLM pods via /start_profile API.
 
         Uses curl from the workload pod (like Go pprof) — the endpoint
         responds slowly, so fire-and-forget with short timeout.
         """
         self._resolve_workload_pod()
-        pods = self.discover_vllm_pods(selector)
+        pods = self.discover_vllm_pods(selector_id)
         results = []
         for pod in pods:
             pod_name = pod["name"] if isinstance(pod, dict) else pod
