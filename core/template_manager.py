@@ -390,10 +390,18 @@ class TemplateManager:
         vars_dict = asdict(config)
         # Pre-computed profiler config JSON (avoids Jinja2 brace escaping issues)
         if getattr(config, 'enable_pprof', False):
+            # max_iterations bounds the worker trace size — without it the
+            # profiler accumulates the whole benchmark window in memory and
+            # the stop_profile flush OOM-kills the container (verified on
+            # vLLM v0.31.0: 330s window under load -> exit 137 cascade).
+            # delay_iterations skips the load ramp-up. 500 steps ≈ 30-60s
+            # under load ≈ 60MB compressed trace (342K CUDA kernel events).
             vars_dict['profiler_config_json'] = json.dumps({
                 'profiler': 'torch',
                 'torch_profiler_dir': '/tmp/torch_traces',
-                'torch_profiler_activities': ['CPU', 'CUDA']
+                'torch_profiler_activities': ['CPU', 'CUDA'],
+                'max_iterations': 500,
+                'delay_iterations': 200,
             })
         else:
             vars_dict['profiler_config_json'] = ''

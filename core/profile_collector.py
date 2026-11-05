@@ -406,10 +406,12 @@ class ProfileCollector:
                 continue
 
             # Call /stop_profile on the port that worked during start.
-            # The flush of a 120s window can produce 100MB+ of trace data,
-            # so allow a long curl timeout.
+            # With max_iterations set, the worker auto-stops mid-benchmark
+            # (traces already flushed); this call stops the frontend
+            # (async_llm) profiler and is a no-op for an inactive worker.
             stop_url = f"http://{entry.get('ip')}:{entry.get('port') or 8000}/stop_profile"
-            self._post_via_workload_pod(stop_url, 120)
+            if not self._post_via_workload_pod(stop_url, 120):
+                logger.warning(f"stop_profile non-2xx for {pod_name}")
 
             # List trace files — retry while empty (flush is asynchronous
             # and can lag the stop_profile 200 response by tens of seconds)
