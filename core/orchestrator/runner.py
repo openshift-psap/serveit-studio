@@ -1686,7 +1686,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     log_callback("\n⏳ Step 3: Waiting for deployment to be ready...")
 
                 ready = self.deployment_manager.wait_for_ready(
-                    config.test_id,
+                    config.deploy_selector_id,
                     config.architecture,
                     timeout=self.deployment_timeout,
                     log_callback=log_callback,
