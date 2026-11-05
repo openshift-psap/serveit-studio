@@ -18,16 +18,26 @@
     function fmtK(n) { return n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n); }
     function shortName(name, max) {
         var s = String(name || '?');
-        s = s.replace(/void /g, '').replace(/kernel_cutlass_kernel_vllm/g, 'cutlass.');
-        s = s.replace(/cutlass::device_kernel</g, '');
-        s = s.replace(/vllm::cutlass_3x_gemm_sm90_fp8<[^>]*>/g, 'cutlass_gemm_fp8');
-        s = s.replace(/cutlass::float_e4m3_t/g, 'fp8').replace(/cutlass::bfloat16_t/g, 'bf16');
-        s = s.replace(/cute::tuple<[^>]*>/g, '');
-        s = s.replace(/cutlass::gemm::[A-Za-z]+/g, '');
-        s = s.replace(/cutlass::epilogue::[A-Za-z]+/g, '');
-        s = s.replace(/<\s*,?\s*>/g, '').replace(/<>+/g, '');
+        // Well-known monster signatures -> stable short identities
+        if (/cutlass_3x_gemm_sm90_fp8/.test(s)) {
+            var m = s.match(/C<(\d+)>,\s*cute::C<(\d+)>/);
+            var tile = m ? ' [' + m[1] + 'x' + m[2] + ']' : '';
+            return H.truncate('cutlass_gemm_fp8' + tile + ' GemmKernel', max || 55);
+        }
+        var fm = s.match(/flash_attncuteflash_fwd_(sm90|combine)/);
+        if (fm) return 'cutlass.flash_attn_fwd_' + fm[1];
+        if (/triton_red_fused_/.test(s)) {
+            return H.truncate('triton.' + s.replace(/^triton_red_fused_/, '').split('_').slice(0, 6).join('_'), max || 55);
+        }
+        // Generic cleanup for everything else
+        s = s.replace(/void /g, '');
+        s = s.replace(/at::native::\(anonymous namespace\)::/g, 'at::native::');
+        s = s.replace(/flashinfer::sampling::/g, 'sampling.');
+        s = s.replace(/\([^)]*\)/g, '');
+        var prev = null;
+        while (prev !== s) { prev = s; s = s.replace(/<[^<>]*>/g, ''); }
         s = s.replace(/\s+/g, ' ').replace(/^[\s:,]+|[\s:,]+$/g, '');
-        return H.truncate(s, max || 42);
+        return H.truncate(s, max || 55);
     }
 
     function build(data, ctx) {
@@ -121,7 +131,7 @@
                 '<td>' + fmtMs(p.total_cpu_ms || 0) + '</td>' +
                 '<td data-val="' + (p.kernel_count || 0) + '">' + fmtK(p.kernel_count || 0) + '</td>' +
                 '<td data-val="' + (p.total_events || 0) + '">' + fmtK(p.total_events || 0) + '</td>' +
-                '<td style="font-family:monospace; font-size:0.8em;">' + shortName(tk.name, 38) +
+                '<td style="font-family:monospace; font-size:0.78em; max-width:330px; word-break:break-all;" title="' + String(tk.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') + '">' + shortName(tk.name, 70) +
                 ' <span style="color:#64748b;">(' + (tk.pct || 0) + '%)</span></td></tr>';
         });
         s += '</table>';
