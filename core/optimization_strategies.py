@@ -1344,6 +1344,32 @@ class LongRunStrategy(OptimizationStrategy):
             else:
                 self.opt.log(f"  ❌ Cycle {cycle} failed — recorded, continuing", 'warning')
 
+            # Hygiene: kill leftover guidellm worker processes on the
+            # workload pod — they hold GiBs of RSS across cycles and
+            # eventually exhaust the pod (fork failures starve the next
+            # cycle's benchmark). Zombies are reaped by the pod's PID 1.
+            try:
+                import subprocess as _sp
+                import os as _os
+                _wp = getattr(self.opt.orchestrator, "_guidellm_pod_name", None)
+                if not _wp:
+                    _r = _sp.run(
+                        ["kubectl", "get", "pods", "-n", self.opt.orchestrator.namespace,
+                         "-l", "app=serveit-workload",
+                         "-o", "jsonpath={.items[0].metadata.name}"],
+                        capture_output=True, text=True, timeout=15,
+                        env=dict(_os.environ))
+                    _wp = _r.stdout.strip() if _r.returncode == 0 else ""
+                if _wp:
+                    _sp.run(
+                        ["kubectl", "exec", _wp, "-n", self.opt.orchestrator.namespace,
+                         "--", "bash", "-c",
+                         "pkill -f guidellm 2>/dev/null; pkill -f pt_data_worker 2>/dev/null; true"],
+                        capture_output=True, timeout=30,
+                        env=dict(_os.environ))
+            except Exception:
+                pass
+
             # Random 1-5 min settle pause between cycles (not after the last)
             if cycle < cycles and not self.opt._should_stop():
                 pause = _random.randint(60, 300)

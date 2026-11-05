@@ -31,7 +31,13 @@ spec:
         - |
           mkdir -p /mnt/storage/tmp /mnt/storage/prefix-cache-datasets /mnt/storage/.cache 2>/dev/null
           chmod -R a+rwX /mnt/storage/tmp /mnt/storage/prefix-cache-datasets /mnt/storage/.cache 2>/dev/null || true
-          exec sleep infinity
+          # PID 1 must reap orphans: every kubectl exec (profiler curls,
+          # parsers, guidellm launches) leaves a zombie child. `sleep
+          # infinity` never waits -> thousands of zombies accumulate over a
+          # long-run soak, exhausting memory/PIDs until fork fails and
+          # guidellm collapses ("conversations loaded late"). The wait loop
+          # reaps reparented orphans continuously.
+          exec bash -c 'while true; do wait; sleep 1; done'
         env:
         - name: TMPDIR
           value: "/mnt/storage/tmp"
