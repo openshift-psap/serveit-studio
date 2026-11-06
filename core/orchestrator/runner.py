@@ -1981,6 +1981,14 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     result.metrics_file = metrics_file
                     result.metrics_collected = metrics_file is not None
 
+                    # Per-pod CPU/memory time series for the Resources tab
+                    if metrics_file:
+                        try:
+                            from core.metrics_collector import extract_resource_series
+                            result.resource_series = extract_resource_series(metrics_file)
+                        except Exception as e:
+                            logger.warning(f"resource series extraction failed: {e}")
+
                 if stop_check and stop_check():
                     result.error_message = "Stopped by user"
                     return result

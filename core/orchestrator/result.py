@@ -154,4 +154,8 @@ class TestResult:
     # (kubectl top pods, label-selected via deploy_key)
     resource_snapshot: Optional[dict] = None
 
+    # Per-pod CPU/memory time series during the benchmark (downsampled
+    # from Prometheus container metrics) — rendered in the Resources tab
+    resource_series: Optional[dict] = None
+
 

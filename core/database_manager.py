@@ -548,6 +548,8 @@ class DatabaseManager:
             'tpot_p99': getattr(test_result, 'tpot_p99', None),
             # Long-run leak signal (pod RSS/CPU after the benchmark)
             'resource_snapshot': getattr(test_result, 'resource_snapshot', None),
+            # Per-pod CPU/memory time series (Resources tab)
+            'resource_series': getattr(test_result, 'resource_series', None),
             # E2E request latency (seconds)
             'e2e_latency_mean': getattr(test_result, 'e2e_latency_mean', None),
             'e2e_latency_p50': getattr(test_result, 'e2e_latency_p50', None),
