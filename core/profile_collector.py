@@ -190,6 +190,7 @@ class ProfileCollector:
 
     # Class-level cache: {pod_name: port_or_None} — avoids re-probing
     _pprof_port_cache = {}
+    _pprof_warned_pods = set()
     _pprof_warned = False
 
     def __init__(self, kubectl, namespace: str, workload_pod: Optional[str] = None):
@@ -354,8 +355,14 @@ class ProfileCollector:
                 pod_node = pod.get("node") if isinstance(pod, dict) else None
                 port = self._probe_vllm_port(pod_name)
                 if not port:
-                    if log_callback:
-                        log_callback(f"   \u26a0\ufe0f  No pprof endpoint on {pod_name} (vLLM image does not serve /debug/pprof — skipping)")
+                    # Standard vLLM images never serve Go pprof — a permanent
+                    # condition, so warn once per pod ever instead of per test
+                    if log_callback and pod_name not in ProfileCollector._pprof_warned_pods:
+                        ProfileCollector._pprof_warned_pods.add(pod_name)
+                        log_callback(
+                            f"   \u2139\ufe0f  {pod_name}: no /debug/pprof in the vLLM image (expected) — "
+                            f"torch profiler covers CPU+CUDA profiling"
+                        )
                     continue
                 probed += 1
                 code = (
