@@ -1,230 +1,224 @@
-// tabs/inference-profiles.js — Inference Pod Profiles (torch.profiler)
-// vLLM's built-in torch profiler captures CPU operators and CUDA kernels
-// during the benchmark window. Traces are parsed in-pod into compact
-// summaries (top kernels, CPU ops, totals) and visualized here — the raw
-// 30-80MB traces are never stored.
+// tabs/inference-profiles.js — Inference Profiles (long-run cycles only)
+//
+// Cross-cycle comparison of the per-cycle torch.profiler summaries
+// (CPU ops + CUDA kernels, aggregated across pods): per-cycle GPU/CPU
+// totals and top-kernel/operator tables with per-cycle columns, so
+// drift between iterations of the SAME workload is visible.
+// Only appears for long-run runs (cycle configs, -cNNN test ids).
 (function() {
     var H = window.ReportHelpers;
 
-    function entries(data) {
-        return (data.all_results || []).filter(function(r) {
-            return r.pprof && r.pprof.torch && r.pprof.torch.length;
-        });
+    var CYCLE_RE = /-c(\d+)$/;
+
+    function mj(r) {
+        if (r._mj === undefined) {
+            var raw = r.metrics_json;
+            if (typeof raw === 'string') {
+                try { r._mj = JSON.parse(raw || '{}') || {}; }
+                catch (e) { r._mj = {}; }
+            } else {
+                r._mj = raw || {};
+            }
+        }
+        return r._mj;
     }
 
-    function testKey(e) { return e.test_id || e.config_name || 'x'; }
+    function torchOf(r) {
+        var t = (mj(r).pprof || {}).torch;
+        return (t || []).filter(function(p) { return p.parsed; });
+    }
+
+    function groups(data) {
+        var byBase = {};
+        (data.all_results || []).forEach(function(r) {
+            var m = (r.test_id || '').match(CYCLE_RE);
+            if (!m) return;
+            var pods = torchOf(r);
+            if (!pods.length) return;
+            r._cycle = parseInt(m[1], 10);
+            var base = (r.test_id || '').replace(CYCLE_RE, '');
+            (byBase[base] = byBase[base] || []).push(r);
+        });
+        Object.keys(byBase).forEach(function(b) {
+            byBase[b].sort(function(a, c) { return a._cycle - c._cycle; });
+        });
+        return byBase;
+    }
+
     function safeId(s) { return String(s).replace(/[^a-z0-9]/gi, ''); }
-    function fmtMs(ms) { return ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : Math.round(ms) + 'ms'; }
-    function fmtK(n) { return n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n); }
+
+    // Shorten C++ template noise for table labels
     function shortName(name, max) {
         var s = String(name || '?');
-        // Well-known monster signatures -> stable short identities
+        s = s.replace(/void /g, '').replace(/kernel_cutlass_kernel_vllm/g, 'cutlass.');
         if (/cutlass_3x_gemm_sm90_fp8/.test(s)) {
             var m = s.match(/C<(\d+)>,\s*cute::C<(\d+)>/);
-            var tile = m ? ' [' + m[1] + 'x' + m[2] + ']' : '';
-            return H.truncate('cutlass_gemm_fp8' + tile + ' GemmKernel', max || 55);
+            s = 'cutlass_gemm_fp8' + (m ? ' [' + m[1] + 'x' + m[2] + ']' : '') + ' GemmKernel';
+        } else {
+            var fm = s.match(/flash_attncuteflash_fwd_(sm90|combine)/);
+            if (fm) s = 'cutlass.flash_attn_fwd_' + fm[1];
         }
-        var fm = s.match(/flash_attncuteflash_fwd_(sm90|combine)/);
-        if (fm) return 'cutlass.flash_attn_fwd_' + fm[1];
         if (/triton_red_fused_/.test(s)) {
-            return H.truncate('triton.' + s.replace(/^triton_red_fused_/, '').split('_').slice(0, 6).join('_'), max || 55);
+            s = 'triton.' + s.replace(/^.*triton_red_fused_/, '').split('_').slice(0, 6).join('_');
         }
-        // Generic cleanup for everything else
-        s = s.replace(/void /g, '');
-        s = s.replace(/at::native::\(anonymous namespace\)::/g, 'at::native::');
-        s = s.replace(/flashinfer::sampling::/g, 'sampling.');
-        s = s.replace(/\([^)]*\)/g, '');
+        s = s.replace(/at::native::\(anonymous namespace\)::/g, 'at::native::')
+             .replace(/flashinfer::sampling::/g, 'sampling.')
+             .replace(/\([^)]*\)/g, '');
         var prev = null;
         while (prev !== s) { prev = s; s = s.replace(/<[^<>]*>/g, ''); }
         s = s.replace(/\s+/g, ' ').replace(/^[\s:,]+|[\s:,]+$/g, '');
-        return H.truncate(s, max || 55);
+        return H.truncate(s, max || 48);
+    }
+
+    // Aggregate a per-cycle metric across pods: {name -> {ms, n}}
+    function aggKernels(pods, field) {
+        var out = {};
+        pods.forEach(function(p) {
+            (p[field] || []).forEach(function(k) {
+                var st = out[k.name];
+                if (!st) out[k.name] = { name: k.name, ms: 0, n: 0 };
+                out[k.name].ms += k.total_ms || 0;
+                out[k.name].n += k.count || 0;
+            });
+        });
+        return out;
     }
 
     function build(data, ctx) {
-        var profEntries = entries(data);
-        if (!profEntries.length) return '';
+        var gs = groups(data);
+        var bases = Object.keys(gs);
+        if (!bases.length) return '';
 
         var s = '';
         s += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #e65100;">' +
-            '<div class="chart-card-header" style="background:linear-gradient(135deg,#e65100,#ff9800);">&#128295; Inference Pod Profiles — torch.profiler (CPU + CUDA)</div>' +
+            '<div class="chart-card-header" style="background:linear-gradient(135deg,#e65100,#ff9800);">&#128295; Inference Profiles — Cross-Cycle Comparison</div>' +
             '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
-            'vLLM\'s built-in <a href="https://docs.pytorch.org/tutorials/recipes/recipe_profiler.html" target="_blank" style="color:#0e7490;">torch profiler</a> ' +
-            'ran on each inference pod during the benchmark window (bounded to 500 engine steps after ramp-up), capturing ' +
-            '<b>Python/CPU operators</b> and <b>CUDA GPU kernels</b>. Traces are parsed in-pod into compact summaries — ' +
-            'the charts below show where GPU and CPU time was spent per pod.</div></div>';
+            'torch.profiler summaries (CPU operators + CUDA kernels, summed across pods), one per long-run ' +
+            'cycle of the identical workload. Per-cycle columns expose kernel-level drift between iterations — ' +
+            'a kernel whose time grows cycle over cycle while the load is fixed is a regression signal.</div></div>';
 
-        profEntries.forEach(function(e) {
-            s += buildTest(ctx, e);
+        bases.forEach(function(base) {
+            s += buildGroup(ctx, base, gs[base]);
         });
         return s;
     }
 
-    function buildTest(ctx, e) {
-        var key = testKey(e);
-        var base = ctx.chartId('inf-' + safeId(key));
-        var pods = (e.pprof.torch || []).filter(function(p) { return p.parsed; });
+    function buildGroup(ctx, base, rows) {
+        var id = ctx.chartId('inf-' + safeId(base));
         var s = '';
         s += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #f57c00;">' +
             '<div class="chart-card-header" style="background:linear-gradient(135deg,#e65100,#ef6c00);">' +
-            (e.config_name || e.test_id || '') + '</div>';
+            base + ' — ' + rows.length + ' cycles</div>';
 
-        if (!pods.length) {
-            s += '<div style="margin:10px 20px; color:#64748b; font-size:0.88em;">No parsed profiles for this test.</div></div>';
-            return s;
-        }
-
-        var totCuda = 0, totCpu = 0, totKernels = 0, totEvents = 0;
-        pods.forEach(function(p) {
-            totCuda += p.total_cuda_ms || 0;
-            totCpu += p.total_cpu_ms || 0;
-            totKernels += p.kernel_count || 0;
-            totEvents += p.total_events || 0;
+        // Totals badges (summed across cycles for context)
+        var totGpu = 0, totCpu = 0, totK = 0;
+        rows.forEach(function(r) {
+            torchOf(r).forEach(function(p) {
+                totGpu += p.total_cuda_ms || 0;
+                totCpu += p.total_cpu_ms || 0;
+                totK += p.kernel_count || 0;
+            });
         });
-
-        s += '<div style="display:flex; gap:14px; flex-wrap:wrap; margin:12px 20px 4px; font-size:0.85em;">' +
-            '<span style="background:#1565c0; color:#fff; padding:4px 12px; border-radius:12px;">&#127752; GPU time: ' + fmtMs(totCuda) + '</span>' +
-            '<span style="background:#6a1b9a; color:#fff; padding:4px 12px; border-radius:12px;">&#128187; CPU time: ' + fmtMs(totCpu) + '</span>' +
-            '<span style="background:#37474f; color:#fff; padding:4px 12px; border-radius:12px;">&#9889; ' + fmtK(totKernels) + ' kernels</span>' +
-            '<span style="background:#546e7a; color:#fff; padding:4px 12px; border-radius:12px;">&#128300; ' + fmtK(totEvents) + ' events</span>' +
-            '<span style="background:#455a64; color:#fff; padding:4px 12px; border-radius:12px;">' + pods.length + ' pods</span>' +
+        s += '<div style="display:flex; gap:12px; flex-wrap:wrap; margin:12px 20px 4px; font-size:0.85em;">' +
+            '<span style="background:#1565c0; color:#fff; padding:4px 12px; border-radius:12px;">&#127752; GPU time (all cycles): ' + (totGpu / 1000).toFixed(1) + 's</span>' +
+            '<span style="background:#6a1b9a; color:#fff; padding:4px 12px; border-radius:12px;">&#128187; CPU time: ' + (totCpu / 1000).toFixed(1) + 's</span>' +
+            '<span style="background:#37474f; color:#fff; padding:4px 12px; border-radius:12px;">&#9889; ' + (totK / 1000).toFixed(0) + 'K kernels</span>' +
             '</div>';
 
-        s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#e65100,#ff9800); font-size:0.9em; margin:14px 20px 0;">GPU vs CPU Time per Pod</div>';
-        s += '<div id="' + base + '-pods" style="margin:0 20px; width:calc(100% - 40px);"></div>';
+        // Per-cycle totals chart
+        s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#e65100,#ff9800); font-size:0.9em; margin:14px 20px 0;">GPU vs CPU Time per Cycle (sum across pods)</div>';
+        s += '<div id="' + id + '-pods" style="margin:0 20px; width:calc(100% - 40px);"></div>';
 
-        var kern = {};
-        pods.forEach(function(p) {
-            (p.top_kernels || []).forEach(function(k) {
-                if (!kern[k.name]) kern[k.name] = { name: k.name, ms: 0, n: 0 };
-                kern[k.name].ms += k.total_ms || 0;
-                kern[k.name].n += k.count || 0;
-            });
-        });
-        var topK = Object.values(kern).sort(function(a, b) { return b.ms - a.ms; }).slice(0, 12);
-        if (topK.length) {
-            s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#1565c0,#42a5f5); font-size:0.9em; margin:14px 20px 0;">Top GPU Kernels (all pods, by total time)</div>';
-            s += '<div id="' + base + '-kern" style="margin:0 20px; width:calc(100% - 40px);"></div>';
-        }
-
-        var cops = {};
-        pods.forEach(function(p) {
-            (p.top_cpu_ops || []).forEach(function(k) {
-                if (!cops[k.name]) cops[k.name] = { name: k.name, ms: 0, n: 0 };
-                cops[k.name].ms += k.total_ms || 0;
-                cops[k.name].n += k.count || 0;
-            });
-        });
-        var topC = Object.values(cops).sort(function(a, b) { return b.ms - a.ms; }).slice(0, 12);
-        if (topC.length) {
-            s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#6a1b9a,#ab47bc); font-size:0.9em; margin:14px 20px 0;">Top CPU Operations (all pods)</div>';
-            s += '<div id="' + base + '-cpu" style="margin:0 20px; width:calc(100% - 40px);"></div>';
-        }
-
-        var tblId = base + '-tbl';
-        s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#e65100,#ff9800); font-size:0.9em; margin:14px 20px 0;">Per-Pod Summary</div>';
-        s += '<table class="results-table" id="' + tblId + '" style="font-size:0.82em; margin:0 20px 8px; width:calc(100% - 40px);">' +
-            '<tr><th>Pod</th><th>GPU Time</th><th>CPU Time</th><th>Kernels</th><th>Events</th><th>Top Kernel</th></tr>';
-        pods.forEach(function(p) {
-            var tk = (p.top_kernels || [])[0] || {};
-            s += '<tr><td style="font-family:monospace;">' + (p.pod || '?') + '</td>' +
-                '<td>' + fmtMs(p.total_cuda_ms || 0) + '</td>' +
-                '<td>' + fmtMs(p.total_cpu_ms || 0) + '</td>' +
-                '<td data-val="' + (p.kernel_count || 0) + '">' + fmtK(p.kernel_count || 0) + '</td>' +
-                '<td data-val="' + (p.total_events || 0) + '">' + fmtK(p.total_events || 0) + '</td>' +
-                '<td style="font-family:monospace; font-size:0.78em; max-width:330px; word-break:break-all;" title="' + String(tk.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') + '">' + shortName(tk.name, 70) +
-                ' <span style="color:#64748b;">(' + (tk.pct || 0) + '%)</span></td></tr>';
-        });
-        s += '</table>';
+        // Top kernels cross-cycle table
+        s += buildComparisonTable(ctx, id, rows, 'top_kernels', 'Top GPU Kernels per Cycle (CUDA ms, all pods)',
+                                  '#1565c0', 'ms');
+        // Top CPU ops cross-cycle table
+        s += buildComparisonTable(ctx, id, rows, 'top_cpu_ops', 'Top CPU Operations per Cycle (ms, all pods)',
+                                  '#6a1b9a', 'ms');
 
         s += '</div>';
         return s;
     }
 
+    function buildComparisonTable(ctx, id, rows, field, title, color, unit) {
+        // Union of entries across cycles, ranked by the LAST cycle's total ms
+        var stats = {};
+        rows.forEach(function(r) {
+            var cyc = r._cycle;
+            var agg = aggKernels(torchOf(r), field);
+            Object.keys(agg).forEach(function(name) {
+                var st = stats[name];
+                if (!st) st = stats[name] = { name: name, byCycle: {} };
+                st.byCycle[cyc] = agg[name];
+            });
+        });
+        var lastCycle = rows[rows.length - 1]._cycle;
+        var list = Object.keys(stats).map(function(k) { return stats[k]; });
+        list.sort(function(a, b) {
+            var av = (a.byCycle[lastCycle] || {}).ms || 0;
+            var bv = (b.byCycle[lastCycle] || {}).ms || 0;
+            return bv - av;
+        });
+        list = list.slice(0, 12);
+        if (!list.length) return '';
+
+        var s = '';
+        var tblId = id + '-' + field;
+        s += '<div class="chart-card-header" style="background:linear-gradient(135deg,' + color + ',#' +
+             (field === 'top_kernels' ? '42a5f5' : 'ab47bc') + '); font-size:0.9em; margin:14px 20px 0;">' + title + '</div>';
+        s += '<table class="results-table" id="' + tblId + '" style="font-size:0.8em; margin:0 20px 8px; width:calc(100% - 40px);">' +
+            '<tr><th>' + (field === 'top_kernels' ? 'Kernel' : 'Operation') + '</th>';
+        rows.forEach(function(r) { s += '<th>c' + r._cycle + '</th>'; });
+        s += '<th>&#916;%</th></tr>';
+
+        list.forEach(function(st) {
+            var first = null, last = null;
+            s += '<tr><td style="font-family:monospace; font-size:0.82em; word-break:break-all;" title="' +
+                 String(st.name).replace(/"/g, '&quot;') + '">' + shortName(st.name, 45) + '</td>';
+            rows.forEach(function(r) {
+                var e = st.byCycle[r._cycle];
+                var ms = e ? e.ms : null;
+                if (ms !== null) {
+                    if (first === null) first = ms;
+                    last = ms;
+                }
+                s += '<td style="text-align:right;" data-val="' + (ms || 0) + '">' +
+                     (ms !== null ? (ms >= 1000 ? (ms / 1000).toFixed(2) + 's' : Math.round(ms) + unit) : '—') + '</td>';
+            });
+            var delta = (first !== null && last !== null && first > 0) ? (100 * (last - first) / first) : null;
+            var dColor = delta === null ? '#64748b' : (delta > 30 ? '#dc2626' : (delta < -30 ? '#16a34a' : '#64748b'));
+            s += '<td style="text-align:right; color:' + dColor + ';">' +
+                 (delta !== null ? (delta > 0 ? '+' : '') + delta.toFixed(0) + '%' : '—') + '</td></tr>';
+        });
+        s += '</table>';
+        return s;
+    }
+
     function render(data, ctx) {
         if (typeof Plotly === 'undefined') return;
-        entries(data).forEach(function(e) {
-            var base = ctx.chartId('inf-' + safeId(testKey(e)));
-            var pods = (e.pprof.torch || []).filter(function(p) { return p.parsed; });
-            if (!pods.length) return;
-
-            var el = document.getElementById(base + '-pods');
-            if (el) {
-                var labels = pods.map(function(p) { return (p.pod || '?').replace(/^aggregated-|^pd-/, ''); });
-                var lM = H.leftMarginFor(labels, 6.6, 22);
-                Plotly.newPlot(el, [
-                    { y: labels, x: pods.map(function(p) { return (p.total_cuda_ms || 0) / 1000; }),
-                      name: 'GPU (CUDA)', type: 'bar', orientation: 'h', marker: { color: '#1565c0' } },
-                    { y: labels, x: pods.map(function(p) { return (p.total_cpu_ms || 0) / 1000; }),
-                      name: 'CPU', type: 'bar', orientation: 'h', marker: { color: '#6a1b9a' } }
-                ], {
-                    barmode: 'group',
-                    margin: { l: lM, r: 30, t: 5, b: 28 },
-                    xaxis: { title: 'seconds' },
-                    yaxis: { automargin: true, tickfont: H.MONO_9 },
-                    height: Math.max(160, pods.length * 22 + 50),
-                    plot_bgcolor: '#fff', legend: { orientation: 'h', y: 1.12 }
-                }, { displayModeBar: false, responsive: true });
-            }
-
-            var kern = {};
-            pods.forEach(function(p) {
-                (p.top_kernels || []).forEach(function(k) {
-                    if (!kern[k.name]) kern[k.name] = { name: k.name, ms: 0, n: 0 };
-                    kern[k.name].ms += k.total_ms || 0;
-                    kern[k.name].n += k.count || 0;
-                });
+        var gs = groups(data);
+        Object.keys(gs).forEach(function(base) {
+            var rows = gs[base];
+            var id = ctx.chartId('inf-' + safeId(base));
+            var el = document.getElementById(id + '-pods');
+            if (!el) return;
+            var xs = rows.map(function(r) { return 'c' + r._cycle; });
+            var gpu = rows.map(function(r) {
+                return torchOf(r).reduce(function(a, p) { return a + (p.total_cuda_ms || 0); }, 0) / 1000;
             });
-            var topK = Object.values(kern).sort(function(a, b) { return b.ms - a.ms; }).slice(0, 10);
-            el = document.getElementById(base + '-kern');
-            if (el && topK.length) {
-                var kLabels = topK.map(function(k) { return shortName(k.name, 40); }).reverse();
-                var kM = H.leftMarginFor(kLabels, 6.6, 25);
-                Plotly.newPlot(el, [{
-                    y: kLabels,
-                    x: topK.map(function(k) { return k.ms / 1000; }).reverse(),
-                    type: 'bar', orientation: 'h', marker: { color: '#1565c0' },
-                    text: topK.map(function(k) { return (k.ms / 1000).toFixed(2) + 's · ' + fmtK(k.n) + 'x'; }).reverse(),
-                    textposition: 'outside', textfont: { size: 10, color: '#334155' },
-                    cliponaxis: false, constraintext: 'none',
-                    hovertemplate: '<b>%{y}</b><br>%{x:.2f}s GPU time<extra></extra>'
-                }], {
-                    margin: { l: kM, r: 90, t: 5, b: 28 },
-                    xaxis: { title: 'GPU seconds' },
-                    yaxis: { automargin: true, tickfont: H.MONO_9 },
-                    height: Math.max(150, topK.length * 24 + 45),
-                    plot_bgcolor: '#fff'
-                }, { displayModeBar: false, responsive: true });
-            }
-
-            var cops = {};
-            pods.forEach(function(p) {
-                (p.top_cpu_ops || []).forEach(function(k) {
-                    if (!cops[k.name]) cops[k.name] = { name: k.name, ms: 0, n: 0 };
-                    cops[k.name].ms += k.total_ms || 0;
-                    cops[k.name].n += k.count || 0;
-                });
+            var cpu = rows.map(function(r) {
+                return torchOf(r).reduce(function(a, p) { return a + (p.total_cpu_ms || 0); }, 0) / 1000;
             });
-            var topC = Object.values(cops).sort(function(a, b) { return b.ms - a.ms; }).slice(0, 10);
-            el = document.getElementById(base + '-cpu');
-            if (el && topC.length) {
-                var cLabels = topC.map(function(k) { return shortName(k.name, 40); }).reverse();
-                var cM = H.leftMarginFor(cLabels, 6.6, 25);
-                Plotly.newPlot(el, [{
-                    y: cLabels,
-                    x: topC.map(function(k) { return k.ms / 1000; }).reverse(),
-                    type: 'bar', orientation: 'h', marker: { color: '#6a1b9a' },
-                    text: topC.map(function(k) { return (k.ms / 1000).toFixed(2) + 's · ' + fmtK(k.n) + 'x'; }).reverse(),
-                    textposition: 'outside', textfont: { size: 10, color: '#334155' },
-                    cliponaxis: false, constraintext: 'none',
-                    hovertemplate: '<b>%{y}</b><br>%{x:.2f}s CPU time<extra></extra>'
-                }], {
-                    margin: { l: cM, r: 90, t: 5, b: 28 },
-                    xaxis: { title: 'CPU seconds' },
-                    yaxis: { automargin: true, tickfont: H.MONO_9 },
-                    height: Math.max(150, topC.length * 24 + 45),
-                    plot_bgcolor: '#fff'
-                }, { displayModeBar: false, responsive: true });
-            }
+            Plotly.newPlot(el, [
+                { x: xs, y: gpu, name: 'GPU (CUDA)', type: 'bar', marker: { color: '#1565c0' } },
+                { x: xs, y: cpu, name: 'CPU', type: 'bar', marker: { color: '#6a1b9a' } }
+            ], {
+                barmode: 'group',
+                margin: { l: 55, r: 20, t: 8, b: 28 },
+                yaxis: { title: 'seconds' },
+                plot_bgcolor: '#fff', height: 230,
+                legend: { orientation: 'h', y: 1.15 }
+            }, { displayModeBar: false, responsive: true });
         });
     }
 
@@ -232,7 +226,7 @@
         id: 'inference-profiles',
         label: 'Inference Profiles',
         icon: '&#128295;',
-        position: 'after:epp-profiles',
+        position: 'after:pod-profiles',
         build: build,
         render: render
     });
