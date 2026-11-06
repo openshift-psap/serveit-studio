@@ -227,6 +227,69 @@ def _loc_fns(prof, loc_id):
     return [_fn_name(prof, fid) for fid in fn_ids]
 
 
+def summarize_heap_profile(data, top_n=15):
+    """Summarize a Go heap pprof profile (inuse_space).
+
+    Returns dict: {inuse_mb, alloc_mb, sample_count,
+                   top_sites: [{name, mb, pct}]} sorted by inuse bytes.
+    Tracks EPP heap growth across long-run cycles (leak signal).
+    """
+    prof = parse_pprof(data)
+
+    inuse_idx = None
+    alloc_idx = None
+    for i, (t_idx, u_idx) in enumerate(prof.sample_types):
+        tname = prof.string_table[t_idx] if t_idx < len(prof.string_table) else ''
+        if tname in ('inuse_space', 'inuse_bytes'):
+            inuse_idx = i
+        if tname in ('alloc_space', 'alloc_bytes'):
+            alloc_idx = i
+    if inuse_idx is None and alloc_idx is None:
+        # Fall back to the first byte-typed column
+        for i, (t_idx, u_idx) in enumerate(prof.sample_types):
+            uname = prof.string_table[u_idx] if u_idx < len(prof.string_table) else ''
+            if 'byte' in uname:
+                inuse_idx = i
+                break
+    if inuse_idx is None:
+        return None
+
+    site_inuse = {}
+    total_inuse = 0
+    total_alloc = 0
+    n = 0
+    for location_ids, values in prof.samples:
+        n += 1
+        inuse = values[inuse_idx] if inuse_idx < len(values) else 0
+        alloc = values[alloc_idx] if (alloc_idx is not None and alloc_idx < len(values)) else 0
+        total_inuse += inuse
+        total_alloc += alloc
+        # Attribute to the leaf function (allocation site)
+        if location_ids:
+            loc = prof.locations.get(location_ids[-1])
+            fname = '?'
+            if loc and loc.function_ids:
+                f = prof.functions.get(loc.function_ids[0])
+                if f:
+                    fname = f.name
+            site_inuse[fname] = site_inuse.get(fname, 0) + inuse
+
+    top = []
+    for name, b in sorted(site_inuse.items(), key=lambda x: -x[1])[:top_n]:
+        top.append({
+            'name': name,
+            'mb': round(b / (1024 * 1024), 2),
+            'pct': round(100.0 * b / total_inuse, 1) if total_inuse else 0,
+        })
+
+    return {
+        'inuse_mb': round(total_inuse / (1024 * 1024), 1),
+        'alloc_mb': round(total_alloc / (1024 * 1024), 1) if total_alloc else None,
+        'sample_count': n,
+        'top_sites': top,
+    }
+
+
 def summarize_cpu_profile(data, top_n=25):
     """Summarize a CPU pprof profile.
 
