@@ -109,23 +109,50 @@
             base + ' — ' + rows.length + ' cycles</div>';
 
         // Leak flag: monotonic RSS growth across >=4 cycles
+        // Leak signal: ANONYMOUS memory (proc smaps) is the real one — total
+        // RSS includes file-backed page cache (weights mmap, CUDA libs) that
+        // grows with cache warming, not leaks. Fall back to RSS only when
+        // anon data is absent (older runs). Require >= 5% total growth to
+        // avoid flagging noise.
+        var anonSeries = rows.map(anonTotal).filter(function(v) { return v !== null; });
         var rssSeries = rows.map(rssTotal).filter(function(v) { return v !== null; });
-        var leak = false;
-        if (rssSeries.length >= 3) {
-            leak = rssSeries.every(function(v, i) { return i === 0 || v >= rssSeries[i - 1] * 0.995; });
+        var leak = false, leakSeries = null, leakLabel = '';
+        if (anonSeries.length >= 3) {
+            var monotonic = anonSeries.every(function(v, i) { return i === 0 || v >= anonSeries[i - 1] * 0.995; });
+            var growth = (anonSeries[anonSeries.length - 1] / anonSeries[0]) - 1;
+            if (monotonic && growth >= 0.05) {
+                leak = true; leakSeries = anonSeries;
+                leakLabel = 'Anonymous memory';
+            }
+        } else if (rssSeries.length >= 3) {
+            var monotonic = rssSeries.every(function(v, i) { return i === 0 || v >= rssSeries[i - 1] * 0.995; });
+            var growth = (rssSeries[rssSeries.length - 1] / rssSeries[0]) - 1;
+            if (monotonic && growth >= 0.05) {
+                leak = true; leakSeries = rssSeries;
+                leakLabel = 'Pod RSS (no anon data — may be page cache)';
+            }
         }
-        // EPP heap growth (Go pprof inuse_space) — independent leak signal
+        // EPP heap growth (Go pprof inuse_space) — require >= 20% growth
         var heapSeries = rows.map(eppHeap).filter(function(v) { return v !== null; });
         var heapLeak = false;
         if (heapSeries.length >= 3) {
-            heapLeak = heapSeries.every(function(v, i) { return i === 0 || v >= heapSeries[i - 1] * 0.98; });
+            var hMono = heapSeries.every(function(v, i) { return i === 0 || v >= heapSeries[i - 1] * 0.98; });
+            var hGrowth = (heapSeries[heapSeries.length - 1] / heapSeries[0]) - 1;
+            heapLeak = hMono && hGrowth >= 0.20;
         }
         if (leak) {
             s += '<div style="margin:10px 20px; padding:8px 14px; background:#fef2f2; border:1px solid #fca5a5; ' +
                 'border-radius:8px; color:#991b1b; font-size:0.88em;">' +
-                '&#9888;&#65039; Possible memory leak: pod RSS grew monotonically across cycles ' +
-                '(' + rssSeries[0] + ' MiB &#8594; ' + rssSeries[rssSeries.length - 1] + ' MiB, ' +
-                '+' + (((rssSeries[rssSeries.length - 1] / rssSeries[0]) - 1) * 100).toFixed(1) + '%)</div>';
+                '&#9888;&#65039; Possible memory leak: ' + leakLabel + ' grew monotonically across cycles ' +
+                '(' + leakSeries[0] + ' MiB &#8594; ' + leakSeries[leakSeries.length - 1] + ' MiB, ' +
+                '+' + (((leakSeries[leakSeries.length - 1] / leakSeries[0]) - 1) * 100).toFixed(1) + '%)</div>';
+        } else if (anonSeries.length >= 3) {
+            s += '<div style="margin:10px 20px; padding:8px 14px; background:#f0fdf4; border:1px solid #86efac; ' +
+                'border-radius:8px; color:#166534; font-size:0.88em;">' +
+                '&#10003; No memory leak: anonymous memory stable across cycles ' +
+                '(' + anonSeries[0] + ' MiB &#8594; ' + anonSeries[anonSeries.length - 1] + ' MiB, ' +
+                ((anonSeries[anonSeries.length - 1] / anonSeries[0]) - 1 >= 0 ? '+' : '') +
+                (((anonSeries[anonSeries.length - 1] / anonSeries[0]) - 1) * 100).toFixed(1) + '%)</div>';
         }
         if (heapLeak) {
             s += '<div style="margin:10px 20px; padding:8px 14px; background:#fef2f2; border:1px solid #fca5a5; ' +
