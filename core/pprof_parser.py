@@ -264,14 +264,11 @@ def summarize_heap_profile(data, top_n=15):
         alloc = values[alloc_idx] if (alloc_idx is not None and alloc_idx < len(values)) else 0
         total_inuse += inuse
         total_alloc += alloc
-        # Attribute to the leaf function (allocation site)
+        # Attribute to the leaf frame's function (allocation site).
+        # pprof location order is leaf-first.
         if location_ids:
-            loc = prof.locations.get(location_ids[-1])
-            fname = '?'
-            if loc and loc.function_ids:
-                f = prof.functions.get(loc.function_ids[0])
-                if f:
-                    fname = f.name
+            fns = _loc_fns(prof, location_ids[0])
+            fname = fns[0] if fns else '?'
             site_inuse[fname] = site_inuse.get(fname, 0) + inuse
 
     top = []
