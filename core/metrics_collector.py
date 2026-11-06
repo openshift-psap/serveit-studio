@@ -151,85 +151,6 @@ class MetricsCollector:
         logger.info(f"Benchmark duration: {duration}s, using rate window: {rate_window}s")
         return f"{rate_window}s"
 
-def extract_resource_series(metrics_file: str, max_points: int = 40) -> Optional[Dict]:
-    """Extract a compact per-pod CPU/memory time series from a saved
-    Prometheus metrics file, for the Resources report tab.
-
-    Reads the container_memory_working_set_bytes and
-    irate(container_cpu_usage_seconds_total) queries, downsamples each pod's
-    series to <= max_points bucket averages, and returns:
-      {pods: [...], times: [...seconds from start...],
-       mem_mib: {pod: [...]}, cpu_mc: {pod: [...]}}
-    """
-    import json as _json
-    import math as _math
-
-    try:
-        with open(metrics_file) as f:
-            data = _json.load(f)
-    except Exception:
-        return None
-    metrics = data.get("metrics", data) if isinstance(data, dict) else None
-    if not isinstance(metrics, dict):
-        return None
-
-    def series_for(pred):
-        for q, res in metrics.items():
-            if not pred(q):
-                continue
-            r = (res.get("data") or {}).get("result") if isinstance(res, dict) else None
-            if r:
-                return r
-        return None
-
-    mem = series_for(lambda q: "container_memory_working_set_bytes" in q)
-    cpu = series_for(
-        lambda q: "container_cpu_usage_seconds_total" in q and "irate" in q
-    )
-    if not mem and not cpu:
-        return None
-
-    def collect(result):
-        by_pod = {}
-        for s in result or []:
-            pod = (s.get("metric") or {}).get("pod") or "?"
-            vals = [(float(t), float(v)) for t, v in s.get("values", []) if v is not None]
-            if vals:
-                by_pod[pod] = vals
-        return by_pod
-
-    mem_by_pod = collect(mem)
-    cpu_by_pod = collect(cpu)
-    pods = sorted(set(mem_by_pod) | set(cpu_by_pod))
-    if not pods:
-        return None
-
-    t0 = min(vs[0][0] for vs in list(mem_by_pod.values()) + list(cpu_by_pod.values()))
-    t1 = max(vs[-1][0] for vs in list(mem_by_pod.values()) + list(cpu_by_pod.values()))
-    span = max(t1 - t0, 1)
-    n = min(max_points, max(2, int(span)))
-    step = span / n
-
-    def downsample(by_pod, scale):
-        out = {}
-        for pod, vals in by_pod.items():
-            buckets = [[] for _ in range(n)]
-            for t, v in vals:
-                idx = min(int((t - t0) / step), n - 1)
-                buckets[idx].append(v * scale)
-            out[pod] = [
-                round(sum(b) / len(b), 1) if b else None for b in buckets
-            ]
-        return out
-
-    return {
-        "pods": pods,
-        "times": [round(i * step) for i in range(n)],
-        "mem_mib": downsample(mem_by_pod, 1.0 / (1024 * 1024)) if mem_by_pod else {},
-        "cpu_mc": downsample(cpu_by_pod, 1000.0) if cpu_by_pod else {},
-    }
-
-
     def collect_gpu_metrics(self, start_time: int, end_time: int) -> Dict[str, Any]:
         """Collect DCGM GPU metrics."""
         logger.info("--- Collecting DCGM GPU metrics ---")
@@ -568,6 +489,87 @@ def extract_resource_series(metrics_file: str, max_points: int = 40) -> Optional
 
         logger.info(f"--- Metrics collection complete. Data saved to {output_file} ---")
         return all_metrics
+
+
+
+
+def extract_resource_series(metrics_file: str, max_points: int = 40) -> Optional[Dict]:
+    """Extract a compact per-pod CPU/memory time series from a saved
+    Prometheus metrics file, for the Resources report tab.
+
+    Reads the container_memory_working_set_bytes and
+    irate(container_cpu_usage_seconds_total) queries, downsamples each pod's
+    series to <= max_points bucket averages, and returns:
+      {pods: [...], times: [...seconds from start...],
+       mem_mib: {pod: [...]}, cpu_mc: {pod: [...]}}
+    """
+    import json as _json
+    import math as _math
+
+    try:
+        with open(metrics_file) as f:
+            data = _json.load(f)
+    except Exception:
+        return None
+    metrics = data.get("metrics", data) if isinstance(data, dict) else None
+    if not isinstance(metrics, dict):
+        return None
+
+    def series_for(pred):
+        for q, res in metrics.items():
+            if not pred(q):
+                continue
+            r = (res.get("data") or {}).get("result") if isinstance(res, dict) else None
+            if r:
+                return r
+        return None
+
+    mem = series_for(lambda q: "container_memory_working_set_bytes" in q)
+    cpu = series_for(
+        lambda q: "container_cpu_usage_seconds_total" in q and "irate" in q
+    )
+    if not mem and not cpu:
+        return None
+
+    def collect(result):
+        by_pod = {}
+        for s in result or []:
+            pod = (s.get("metric") or {}).get("pod") or "?"
+            vals = [(float(t), float(v)) for t, v in s.get("values", []) if v is not None]
+            if vals:
+                by_pod[pod] = vals
+        return by_pod
+
+    mem_by_pod = collect(mem)
+    cpu_by_pod = collect(cpu)
+    pods = sorted(set(mem_by_pod) | set(cpu_by_pod))
+    if not pods:
+        return None
+
+    t0 = min(vs[0][0] for vs in list(mem_by_pod.values()) + list(cpu_by_pod.values()))
+    t1 = max(vs[-1][0] for vs in list(mem_by_pod.values()) + list(cpu_by_pod.values()))
+    span = max(t1 - t0, 1)
+    n = min(max_points, max(2, int(span)))
+    step = span / n
+
+    def downsample(by_pod, scale):
+        out = {}
+        for pod, vals in by_pod.items():
+            buckets = [[] for _ in range(n)]
+            for t, v in vals:
+                idx = min(int((t - t0) / step), n - 1)
+                buckets[idx].append(v * scale)
+            out[pod] = [
+                round(sum(b) / len(b), 1) if b else None for b in buckets
+            ]
+        return out
+
+    return {
+        "pods": pods,
+        "times": [round(i * step) for i in range(n)],
+        "mem_mib": downsample(mem_by_pod, 1.0 / (1024 * 1024)) if mem_by_pod else {},
+        "cpu_mc": downsample(cpu_by_pod, 1000.0) if cpu_by_pod else {},
+    }
 
 
 def main():
