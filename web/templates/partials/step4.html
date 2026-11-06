@@ -592,6 +592,13 @@
                                         <div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Randomized per cycle: ISL, OSL, users, cache-hit %, turn delay</div>
                                     </div>
                                 </div>
+                                <div style="display:flex;align-items:center;gap:10px;margin-top:14px;padding:10px 14px;background:#f5f3ff;border:1px solid #d8b4fe;border-radius:8px;cursor:pointer;" onclick="var on=!document.getElementById('long-run-fixed').checked;document.getElementById('long-run-fixed').checked=on;config.long_run_fixed_workload=on;var j=document.getElementById('long-run-jitter');if(j){j.disabled=on;j.style.opacity=on?'0.4':'1';}saveConfig();">
+                                    <input type="checkbox" id="long-run-fixed" style="width:16px;height:16px;accent-color:#7c3aed;" onchange="config.long_run_fixed_workload=this.checked;var j=document.getElementById('long-run-jitter');if(j){j.disabled=this.checked;j.style.opacity=this.checked?'0.4':'1';}saveConfig();">
+                                    <div>
+                                        <div style="font-weight:600;font-size:0.88em;color:#5b21b6;">Fixed workload (identical every cycle)</div>
+                                        <div style="font-size:0.75em;color:#7c3aed;">Recommended for leak detection — identical load makes cycle-to-cycle comparison meaningful</div>
+                                    </div>
+                                </div>
                                 <div style="font-size:0.8em;color:#6b7280;line-height:1.5;margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;">
                                     Between cycles: random 1-5 min settle pause. Failed cycles are recorded and the run continues.
                                     Per-cycle pod RSS/CPU snapshots and EPP heap profiles are collected for leak-trend analysis (see the Long Run tab in the report).

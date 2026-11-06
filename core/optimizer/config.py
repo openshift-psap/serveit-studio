@@ -254,6 +254,9 @@ class RecipeOptimizerConfig:
     # 1-5min settle pause between cycles. For leak/degradation detection.
     long_run_cycles: int = 10
     long_run_jitter_pct: int = 20
+    # Fixed workload: identical params every cycle (jitter disabled) —
+    # required for meaningful cross-cycle leak/degradation comparison
+    long_run_fixed_workload: bool = False
 
     def to_dict(self) -> dict:
         """Serialize config to dict for DB persistence (excludes secrets)."""

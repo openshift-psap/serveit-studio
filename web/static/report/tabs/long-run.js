@@ -47,6 +47,21 @@
         return r._tc;
     }
 
+    function eppHeap(r) {
+        var h = (mj(r).pprof || {}).epp_heap;
+        return h ? h.inuse_mb : null;
+    }
+
+    function anonTotal(r) {
+        var snap = mj(r).resource_snapshot;
+        if (!snap) return null;
+        var t = 0, any = false;
+        Object.keys(snap).forEach(function(p) {
+            if (snap[p].anon_mb != null) { t += snap[p].anon_mb; any = true; }
+        });
+        return any ? t : null;
+    }
+
     function rssTotal(r) {
         var snap = mj(r).resource_snapshot;
         if (!snap) return null;
@@ -99,6 +114,12 @@
         if (rssSeries.length >= 3) {
             leak = rssSeries.every(function(v, i) { return i === 0 || v >= rssSeries[i - 1] * 0.995; });
         }
+        // EPP heap growth (Go pprof inuse_space) — independent leak signal
+        var heapSeries = rows.map(eppHeap).filter(function(v) { return v !== null; });
+        var heapLeak = false;
+        if (heapSeries.length >= 3) {
+            heapLeak = heapSeries.every(function(v, i) { return i === 0 || v >= heapSeries[i - 1] * 0.98; });
+        }
         if (leak) {
             s += '<div style="margin:10px 20px; padding:8px 14px; background:#fef2f2; border:1px solid #fca5a5; ' +
                 'border-radius:8px; color:#991b1b; font-size:0.88em;">' +
@@ -106,19 +127,27 @@
                 '(' + rssSeries[0] + ' MiB &#8594; ' + rssSeries[rssSeries.length - 1] + ' MiB, ' +
                 '+' + (((rssSeries[rssSeries.length - 1] / rssSeries[0]) - 1) * 100).toFixed(1) + '%)</div>';
         }
+        if (heapLeak) {
+            s += '<div style="margin:10px 20px; padding:8px 14px; background:#fef2f2; border:1px solid #fca5a5; ' +
+                'border-radius:8px; color:#991b1b; font-size:0.88em;">' +
+                '&#9888;&#65039; EPP heap growth: inuse_space grew monotonically across cycles ' +
+                '(' + heapSeries[0] + ' MB &#8594; ' + heapSeries[heapSeries.length - 1] + ' MB, ' +
+                '+' + (((heapSeries[heapSeries.length - 1] / heapSeries[0]) - 1) * 100).toFixed(1) + '%)</div>';
+        }
 
         // Trend charts row
         s += '<div style="display:flex; gap:10px; flex-wrap:wrap; margin:12px 20px;">';
         s += '<div id="' + id + '-ttft" style="flex:1; min-width:280px;"></div>';
         s += '<div id="' + id + '-tps" style="flex:1; min-width:280px;"></div>';
         s += '<div id="' + id + '-rss" style="flex:1; min-width:280px;"></div>';
+        s += '<div id="' + id + '-heap" style="flex:1; min-width:280px;"></div>';
         s += '</div>';
 
         // Per-cycle table
         var tblId = id + '-tbl';
         s += '<table class="results-table" id="' + tblId + '" style="font-size:0.82em; margin:8px 20px; width:calc(100% - 40px);">' +
             '<tr><th>Cycle</th><th>ISL</th><th>OSL</th><th>Users</th><th>Hit %</th>' +
-            '<th>TTFT p90</th><th>ITL p90</th><th>Req/s</th><th>Pod RSS</th><th>Pod CPU</th><th>Status</th></tr>';
+            '<th>TTFT p90</th><th>ITL p90</th><th>Req/s</th><th>Pod RSS</th><th>Anon</th><th>EPP Heap</th><th>Pod CPU</th><th>Status</th></tr>';
         rows.forEach(function(r) {
             var c = tc(r), m = mj(r);
             var rss = rssTotal(r), cpu = cpuTotal(r);
@@ -133,6 +162,8 @@
                 '<td data-val="' + (r.itl_p90 || 0) + '">' + (r.itl_p90 != null ? fmt(r.itl_p90, 1) + 'ms' : '—') + '</td>' +
                 '<td data-val="' + (m.throughput_mean || 0) + '">' + (m.throughput_mean != null ? fmt(m.throughput_mean, 2) : '—') + '</td>' +
                 '<td data-val="' + (rss || 0) + '">' + (rss != null ? (rss / 1024).toFixed(1) + ' GiB' : '—') + '</td>' +
+                '<td data-val="' + (anonTotal(r) || 0) + '">' + (anonTotal(r) != null ? (anonTotal(r) / 1024).toFixed(1) + ' GiB' : '—') + '</td>' +
+                '<td data-val="' + (eppHeap(r) || 0) + '">' + (eppHeap(r) != null ? fmt(eppHeap(r), 1) + ' MB' : '—') + '</td>' +
                 '<td data-val="' + (cpu || 0) + '">' + (cpu != null ? fmt(cpu, 0) + 'm' : '—') + '</td>' +
                 '<td>' + (ok ? '<span style="color:#16a34a;">&#10003;</span>' :
                     '<span style="color:#dc2626;">&#10007;</span>') + '</td></tr>';
@@ -174,6 +205,8 @@
                  'Throughput (req/s)', '#059669', 'req/s');
             line(id + '-rss', rs.map(function(r) { return rssTotal(r); }),
                  'Total Pod RSS (MiB) — leak check', '#dc2626', 'MiB');
+            line(id + '-heap', rs.map(function(r) { return eppHeap(r); }),
+                 'EPP Heap inuse (MB) — Go pprof', '#ea580c', 'MB');
         });
     }
 

@@ -1215,6 +1215,36 @@ class LongRunStrategy(OptimizationStrategy):
                             }
                         except ValueError:
                             pass
+                # Memory breakdown of the vLLM server process (smaps_rollup):
+                # anonymous vs private vs swap — a leak shows as monotonic
+                # anonymous growth while total RSS creeps up
+                m = subprocess.run(
+                    ["kubectl", "exec", pod, "-n", self.opt.orchestrator.namespace,
+                     "-c", "vllm", "--", "bash", "-c",
+                     "PID=$(for p in /proc/[0-9]*; do grep -ql _vllm_patched $p/cmdline 2>/dev/null && basename $p && break; done); "
+                     "[ -n \"$PID\" ] && cat /proc/$PID/smaps_rollup 2>/dev/null || true"],
+                    capture_output=True, text=True, timeout=20)
+                if m.returncode == 0 and m.stdout:
+                    entry = snap.setdefault(pod, {})
+                    for line in m.stdout.split("\n"):
+                        kv = line.split(":", 1)
+                        if len(kv) != 2:
+                            continue
+                        k = kv[0].strip()
+                        try:
+                            v_kb = int(kv[1].strip().split()[0])
+                        except (ValueError, IndexError):
+                            continue
+                        if k == "Rss":
+                            entry["proc_rss_mb"] = round(v_kb / 1024, 1)
+                        elif k == "Pss":
+                            entry["pss_mb"] = round(v_kb / 1024, 1)
+                        elif k == "Anonymous":
+                            entry["anon_mb"] = round(v_kb / 1024, 1)
+                        elif k == "Private_Dirty":
+                            entry["priv_mb"] = round(v_kb / 1024, 1)
+                        elif k == "Swap":
+                            entry["swap_mb"] = round(v_kb / 1024, 1)
             return snap or None
         except Exception:
             return None
@@ -1230,7 +1260,8 @@ class LongRunStrategy(OptimizationStrategy):
 
         self.opt.log("LONG RUN (SOAK): one deployment, cycled workload", 'decision')
         self.opt.log("-" * 80, 'info')
-        self.opt.log(f"Cycles: {cycles} | Jitter: ±{pct}% | Settle pause: 1-5 min random", 'info')
+        fixed = getattr(cfg, 'long_run_fixed_workload', False)
+        self.opt.log(f"Cycles: {cycles} | Workload: {'FIXED (identical every cycle)' if fixed or pct == 0 else 'jittered ±' + str(pct) + '%'} | Settle pause: 1-5 min random", 'info')
 
         arch = cfg.single_test_architecture or 'aggregated'
         has_rdma = bool(self.opt.cluster_resources and self.opt.cluster_resources.has_rdma)
@@ -1295,7 +1326,8 @@ class LongRunStrategy(OptimizationStrategy):
             cycle_cfg = copy.deepcopy(base)
             cycle_cfg.test_id = cycle_id
             cycle_cfg.deploy_key = base.deploy_key
-            self._jitter_config(cycle_cfg, pct)
+            if pct > 0 and not getattr(cfg, 'long_run_fixed_workload', False):
+                self._jitter_config(cycle_cfg, pct)
             self.opt.log(
                 f"   Workload: ISL={cycle_cfg.isl} OSL={cycle_cfg.osl} users={cycle_cfg.num_users} "
                 f"hit%={getattr(cycle_cfg, 'prefix_cache_hit_pct', None)} "

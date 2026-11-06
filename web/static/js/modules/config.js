@@ -1192,8 +1192,13 @@ restoreConsole();
 function longRunInitInputs() {
     var c = document.getElementById('long-run-cycles');
     var j = document.getElementById('long-run-jitter');
+    var f = document.getElementById('long-run-fixed');
     if (c && config.long_run_cycles) c.value = config.long_run_cycles;
     if (j && config.long_run_jitter_pct) j.value = config.long_run_jitter_pct;
+    if (f) {
+        f.checked = !!config.long_run_fixed_workload;
+        if (j) { j.disabled = f.checked; j.style.opacity = f.checked ? '0.4' : '1'; }
+    }
     var lr = document.getElementById('long-run-settings');
     if (lr) lr.style.display = config.goal === 'long_run' ? 'block' : 'none';
 }

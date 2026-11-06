@@ -636,6 +636,19 @@ class ProfileCollector:
 
         # 6. Build the report summary
         summary = {"files": [], "epp": None, "vllm": [], "torch": torch_results}
+
+        # Parse the EPP heap snapshot — inuse bytes + top allocation sites,
+        # trended across long-run cycles for leak detection
+        for cap in snapshots:
+            if cap.get("ptype") == "heap":
+                try:
+                    from core.pprof_parser import summarize_heap_profile
+                    heap = summarize_heap_profile(cap["data"])
+                    if heap:
+                        heap["pod"] = cap.get("pod")
+                        summary["epp_heap"] = heap
+                except Exception as e:
+                    logger.warning(f"heap parse failed: {e}")
         embed_budget = MAX_EMBED_BYTES
         for cap, meta in zip(all_captures, cap_written):
             entry = dict(meta)
