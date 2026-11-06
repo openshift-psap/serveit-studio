@@ -573,7 +573,7 @@
                         <div id="long-run-settings" style="border:2px solid #7c3aed;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:14px 20px;">
                                 <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">🔁 Long Run Settings</div>
-                                <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">One deployment, N benchmark cycles with randomized workload — pods never restart between cycles.</div>
+                                <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">One deployment, N benchmark cycles of the same workload — pods never restart between cycles.</div>
                             </div>
                             <div style="padding:16px 20px;">
                                 <div style="display:flex;gap:20px;flex-wrap:wrap;">
@@ -582,26 +582,15 @@
                                         <input type="number" id="long-run-cycles" min="2" max="200" value="10"
                                                style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.95em;"
                                                oninput="config.long_run_cycles = parseInt(this.value) || 10; saveConfig();">
-                                        <div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Each cycle = one full benchmark against the same pods</div>
-                                    </div>
-                                    <div style="flex:1;min-width:180px;">
-                                        <label style="display:block;font-weight:600;font-size:0.88em;color:#374151;margin-bottom:6px;">Workload Jitter (±%)</label>
-                                        <input type="number" id="long-run-jitter" min="0" max="100" value="20"
-                                               style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.95em;"
-                                               oninput="config.long_run_jitter_pct = parseInt(this.value) || 20; saveConfig();">
-                                        <div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Randomized per cycle: ISL, OSL, users, cache-hit %, turn delay</div>
-                                    </div>
-                                </div>
-                                <div style="display:flex;align-items:center;gap:10px;margin-top:14px;padding:10px 14px;background:#f5f3ff;border:1px solid #d8b4fe;border-radius:8px;cursor:pointer;" onclick="var on=!document.getElementById('long-run-fixed').checked;document.getElementById('long-run-fixed').checked=on;config.long_run_fixed_workload=on;var j=document.getElementById('long-run-jitter');if(j){j.disabled=on;j.style.opacity=on?'0.4':'1';}saveConfig();">
-                                    <input type="checkbox" id="long-run-fixed" style="width:16px;height:16px;accent-color:#7c3aed;" onchange="config.long_run_fixed_workload=this.checked;var j=document.getElementById('long-run-jitter');if(j){j.disabled=this.checked;j.style.opacity=this.checked?'0.4':'1';}saveConfig();">
-                                    <div>
-                                        <div style="font-weight:600;font-size:0.88em;color:#5b21b6;">Fixed workload (identical every cycle)</div>
-                                        <div style="font-size:0.75em;color:#7c3aed;">Recommended for leak detection — identical load makes cycle-to-cycle comparison meaningful</div>
+                                        <div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Each cycle = one full benchmark of the same workload against the same pods</div>
                                     </div>
                                 </div>
                                 <div style="font-size:0.8em;color:#6b7280;line-height:1.5;margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;">
+                                    The workload is identical every cycle, so cycle-to-cycle comparison is apples-to-apples —
+                                    any drift in TTFT/throughput/memory is real degradation, not load variance.
                                     Between cycles: random 1-5 min settle pause. Failed cycles are recorded and the run continues.
-                                    Per-cycle pod RSS/CPU snapshots and EPP heap profiles are collected for leak-trend analysis (see the Long Run tab in the report).
+                                    Per-cycle pod memory snapshots (smaps breakdown), EPP heap profiles (Go pprof), and torch
+                                    CPU/CUDA profiles are collected for leak-trend analysis (see the Long Run tab in the report).
                                 </div>
                             </div>
                         </div>

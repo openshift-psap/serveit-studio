@@ -1135,57 +1135,16 @@ class DPEPOnlyStrategy(OptimizationStrategy):
 
 
 class LongRunStrategy(OptimizationStrategy):
-    """Long Run (Soak): ONE deployment, N benchmark cycles with jittered
-    workload params — for memory-leak / CPU-drift / degradation detection.
+    """Long Run (Soak): ONE deployment, N benchmark cycles of the SAME
+    workload — for memory-leak / CPU-drift / degradation detection.
 
     The deployment is created once (cycle 1) and reused by every subsequent
     cycle via the runner's ♻️ reuse path: all cycles share deploy_key while
-    each keeps its own test_id (own DB row, artifacts, profiles). Between
-    cycles a random 1-5 min settle pause lets caches quiesce. Failed cycles
-    are recorded and the run continues.
+    each keeps its own test_id (own DB row, artifacts, profiles). The
+    workload is identical every cycle so cross-cycle comparison is
+    apples-to-apples. Between cycles a random 1-5 min settle pause lets
+    caches quiesce. Failed cycles are recorded and the run continues.
     """
-
-    def _jitter_int(self, value, pct, lo=None, hi=None, minimum=1):
-        if value is None:
-            return None
-        v = value * (1.0 + random.uniform(-pct / 100.0, pct / 100.0))
-        if lo is not None:
-            v = max(v, lo)
-        if hi is not None:
-            v = min(v, hi)
-        return max(minimum, int(round(v)))
-
-    def _jitter_float(self, value, pct, minimum=0.0):
-        if value is None:
-            return None
-        v = value * (1.0 + random.uniform(-pct / 100.0, pct / 100.0))
-        return max(minimum, round(v, 2))
-
-    def _jitter_config(self, cfg, pct):
-        """Jitter workload params in place. Clamps respect user min/max."""
-        cfg.isl = self._jitter_int(cfg.isl, pct, lo=getattr(cfg, 'isl_min', None),
-                                   hi=getattr(cfg, 'isl_max', None), minimum=128)
-        cfg.osl = self._jitter_int(cfg.osl, pct, lo=getattr(cfg, 'osl_min', None),
-                                   hi=getattr(cfg, 'osl_max', None), minimum=1)
-        cfg.num_users = self._jitter_int(cfg.num_users, pct, minimum=1)
-        if getattr(cfg, 'prefix_cache_hit_pct', None) is not None:
-            cfg.prefix_cache_hit_pct = self._jitter_int(cfg.prefix_cache_hit_pct, pct,
-                                                        lo=0, hi=100, minimum=0)
-        if getattr(cfg, 'turn_delay', None) is not None:
-            cfg.turn_delay = self._jitter_float(cfg.turn_delay, pct)
-        # Parallel workload shapes: jitter each independently; prefix stays
-        # sensible (<= 80% of its jittered isl)
-        for w in (getattr(cfg, 'parallel_workloads', None) or []):
-            if w.get('isl') is not None:
-                w['isl'] = self._jitter_int(w['isl'], pct, lo=w.get('isl_min'),
-                                            hi=w.get('isl_max'), minimum=128)
-            if w.get('osl') is not None:
-                w['osl'] = self._jitter_int(w['osl'], pct, lo=w.get('osl_min'),
-                                            hi=w.get('osl_max'), minimum=1)
-            if w.get('concurrency') is not None:
-                w['concurrency'] = self._jitter_int(w['concurrency'], pct, minimum=1)
-            if w.get('prefix_tokens') is not None and w.get('isl'):
-                w['prefix_tokens'] = min(w['prefix_tokens'], int(w['isl'] * 0.8))
 
     def _resource_snapshot(self, deploy_key):
         """Sample pod RSS/CPU right after a cycle (leak trend signal)."""
@@ -1256,12 +1215,10 @@ class LongRunStrategy(OptimizationStrategy):
 
         cfg = self.opt.config
         cycles = max(1, int(getattr(cfg, 'long_run_cycles', 10) or 10))
-        pct = max(0, min(100, int(getattr(cfg, 'long_run_jitter_pct', 20) or 20)))
 
         self.opt.log("LONG RUN (SOAK): one deployment, cycled workload", 'decision')
         self.opt.log("-" * 80, 'info')
-        fixed = getattr(cfg, 'long_run_fixed_workload', False)
-        self.opt.log(f"Cycles: {cycles} | Workload: {'FIXED (identical every cycle)' if fixed or pct == 0 else 'jittered ±' + str(pct) + '%'} | Settle pause: 1-5 min random", 'info')
+        self.opt.log(f"Cycles: {cycles} | Workload: identical every cycle | Settle pause: 1-5 min random", 'info')
 
         arch = cfg.single_test_architecture or 'aggregated'
         has_rdma = bool(self.opt.cluster_resources and self.opt.cluster_resources.has_rdma)
@@ -1326,8 +1283,6 @@ class LongRunStrategy(OptimizationStrategy):
             cycle_cfg = copy.deepcopy(base)
             cycle_cfg.test_id = cycle_id
             cycle_cfg.deploy_key = base.deploy_key
-            if pct > 0 and not getattr(cfg, 'long_run_fixed_workload', False):
-                self._jitter_config(cycle_cfg, pct)
             self.opt.log(
                 f"   Workload: ISL={cycle_cfg.isl} OSL={cycle_cfg.osl} users={cycle_cfg.num_users} "
                 f"hit%={getattr(cycle_cfg, 'prefix_cache_hit_pct', None)} "

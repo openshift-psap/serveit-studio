@@ -973,7 +973,7 @@ data:
                 "long_run": {
                     "label": "Long Run / Soak Test",
                     "steps": [
-                        "Deploy once, then cycle the jittered workload N times (no restarts)",
+                        "Deploy once, then run the same workload N times (no restarts)",
                     ],
                 },
             }
@@ -1061,8 +1061,6 @@ data:
                 tp_options=tp_options,  # Dynamic based on cluster hardware
                 objective=optimization_goal,  # 'ttft' selects TP by lowest latency
                 long_run_cycles=int(_get("long_run_cycles", 10) or 10),
-                long_run_jitter_pct=int(_get("long_run_jitter_pct", 20) or 20),
-                long_run_fixed_workload=bool(_get("long_run_fixed_workload", False)),
                 use_achievable_qps=use_achievable_qps,
                 calibrated_load_enabled=calibrated_load_enabled,
                 inferencex_sweep_enabled=inferencex_sweep_enabled,

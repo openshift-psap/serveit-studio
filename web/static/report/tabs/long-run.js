@@ -92,7 +92,7 @@
         s += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #7c3aed;">' +
             '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#a78bfa);">&#128260; Long Run (Soak) — Cycle Trends</div>' +
             '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
-            'One deployment, cycled workloads with randomized shapes. Pods are never restarted between cycles — ' +
+            'One deployment, the same workload every cycle. Pods are never restarted between cycles — ' +
             'watch for monotonic growth in pod RSS (memory leak) or TTFT drift (degradation).</div></div>';
 
         Object.keys(groups).forEach(function(base) {
