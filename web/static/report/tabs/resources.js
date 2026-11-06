@@ -4,23 +4,28 @@
 (function() {
     var H = window.ReportHelpers;
 
+    function mj(r) {
+        if (r._mj2 === undefined) {
+            var raw = r.metrics_json;
+            if (typeof raw === 'string') {
+                try { r._mj2 = JSON.parse(raw || '{}') || {}; }
+                catch (e) { r._mj2 = {}; }
+            } else {
+                r._mj2 = raw || {};
+            }
+        }
+        return r._mj2;
+    }
+
     function hasSeries(r) {
-        var s = (r.metrics_json || {}).resource_series;
-        return s && s.pods && s.pods.length;
+        var s = mj(r).resource_series;
+        return !!(s && s.pods && s.pods.length);
     }
 
     function entries(data) {
         return (data.all_results || []).filter(function(r) {
-            return hasSeries(r) || ((r.metrics_json || {}).resource_snapshot);
+            return hasSeries(r) || mj(r).resource_snapshot;
         });
-    }
-
-    function mj(r) {
-        if (r._mj2 === undefined) {
-            try { r._mj2 = (typeof r.metrics_json === 'string') ? JSON.parse(r.metrics_json || '{}') : (r.metrics_json || {}); }
-            catch (e) { r._mj2 = {}; }
-        }
-        return r._mj2;
     }
 
     function safeId(s) { return String(s).replace(/[^a-z0-9]/gi, ''); }
