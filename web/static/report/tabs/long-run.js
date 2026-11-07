@@ -55,11 +55,14 @@
     function anonTotal(r) {
         var snap = mj(r).resource_snapshot;
         if (!snap) return null;
-        var t = 0, any = false;
+        var t = 0, n = 0;
         Object.keys(snap).forEach(function(p) {
-            if (snap[p].anon_mb != null) { t += snap[p].anon_mb; any = true; }
+            // A real vLLM server process has hundreds of MB anonymous; tiny
+            // values mean the smaps read hit the wrong process (exec shell) —
+            // treat as missing so one bad cycle can't break the trend
+            if (snap[p].anon_mb != null && snap[p].anon_mb >= 50) { t += snap[p].anon_mb; n++; }
         });
-        return any ? t : null;
+        return n ? t : null;
     }
 
     function rssTotal(r) {
@@ -147,12 +150,19 @@
                 '(' + leakSeries[0] + ' MiB &#8594; ' + leakSeries[leakSeries.length - 1] + ' MiB, ' +
                 '+' + (((leakSeries[leakSeries.length - 1] / leakSeries[0]) - 1) * 100).toFixed(1) + '%)</div>';
         } else if (anonSeries.length >= 3) {
-            s += '<div style="margin:10px 20px; padding:8px 14px; background:#f0fdf4; border:1px solid #86efac; ' +
-                'border-radius:8px; color:#166534; font-size:0.88em;">' +
-                '&#10003; No memory leak: anonymous memory stable across cycles ' +
-                '(' + anonSeries[0] + ' MiB &#8594; ' + anonSeries[anonSeries.length - 1] + ' MiB, ' +
-                ((anonSeries[anonSeries.length - 1] / anonSeries[0]) - 1 >= 0 ? '+' : '') +
-                (((anonSeries[anonSeries.length - 1] / anonSeries[0]) - 1) * 100).toFixed(1) + '%)</div>';
+            var aGrowth = (anonSeries[anonSeries.length - 1] / anonSeries[0]) - 1;
+            var aPct = (aGrowth >= 0 ? '+' : '') + (aGrowth * 100).toFixed(1) + '%';
+            if (aGrowth < 0.05) {
+                s += '<div style="margin:10px 20px; padding:8px 14px; background:#f0fdf4; border:1px solid #86efac; ' +
+                    'border-radius:8px; color:#166534; font-size:0.88em;">' +
+                    '&#10003; No memory leak: anonymous memory stable across cycles ' +
+                    '(' + anonSeries[0] + ' MiB &#8594; ' + anonSeries[anonSeries.length - 1] + ' MiB, ' + aPct + ')</div>';
+            } else {
+                s += '<div style="margin:10px 20px; padding:8px 14px; background:#fffbeb; border:1px solid #fcd34d; ' +
+                    'border-radius:8px; color:#92400e; font-size:0.88em;">' +
+                    '&#9888;&#65039; Anonymous memory grew ' + aPct + ' across cycles (not monotonic) — ' +
+                    'watch the RSS trend; intermittent growth can still be a slow leak</div>';
+            }
         }
         if (heapLeak) {
             s += '<div style="margin:10px 20px; padding:8px 14px; background:#fef2f2; border:1px solid #fca5a5; ' +

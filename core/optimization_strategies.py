@@ -1180,7 +1180,12 @@ class LongRunStrategy(OptimizationStrategy):
                 m = subprocess.run(
                     ["kubectl", "exec", pod, "-n", self.opt.orchestrator.namespace,
                      "-c", "vllm", "--", "bash", "-c",
-                     "PID=$(for p in /proc/[0-9]*; do grep -ql _vllm_patched $p/cmdline 2>/dev/null && basename $p && break; done); "
+                     # Match the vLLM server process specifically: its cmdline is
+                     # 'python3 /tmp/_vllm_patched serve ...'. A plain substring
+                     # grep also matched this exec'd shell (cmdline contains the
+                     # string as a grep argument) and read the shell's smaps.
+                     "PID=$(for p in /proc/[0-9]*; do "
+                     "tr '\\0' ' ' < $p/cmdline 2>/dev/null | grep -q '^python3 /tmp/_vllm_patched' && basename $p && break; done); "
                      "[ -n \"$PID\" ] && cat /proc/$PID/smaps_rollup 2>/dev/null || true"],
                     capture_output=True, text=True, timeout=20)
                 if m.returncode == 0 and m.stdout:
