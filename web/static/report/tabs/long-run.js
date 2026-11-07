@@ -41,8 +41,17 @@
 
     function tc(r) {
         if (r._tc === undefined) {
-            try { r._tc = JSON.parse(r.test_config_json || '{}') || {}; }
-            catch (e) { r._tc = {}; }
+            // charts payload carries the parsed object as test_config; older
+            // shapes may carry a JSON string as test_config_json
+            var raw = r.test_config;
+            if (raw && typeof raw === 'string') {
+                try { r._tc = JSON.parse(raw) || {}; } catch (e) { r._tc = {}; }
+            } else {
+                r._tc = raw || {};
+                if (!r._tc.isl && r.test_config_json) {
+                    try { r._tc = JSON.parse(r.test_config_json) || {}; } catch (e) {}
+                }
+            }
         }
         return r._tc;
     }
@@ -183,18 +192,28 @@
         // Per-cycle table
         var tblId = id + '-tbl';
         s += '<table class="results-table" id="' + tblId + '" style="font-size:0.82em; margin:8px 20px; width:calc(100% - 40px);">' +
-            '<tr><th>Cycle</th><th>ISL</th><th>OSL</th><th>Users</th><th>Hit %</th>' +
-            '<th>TTFT p90</th><th>ITL p90</th><th>Req/s</th><th>Pod RSS</th><th>Anon</th><th>EPP Heap</th><th>Pod CPU</th><th>Status</th></tr>';
+            (function() {
+                var cols = [['Cycle', 'num'], ['ISL', 'num'], ['OSL', 'num'], ['Users', 'num'],
+                            ['Hit %', 'num'], ['TTFT p90', 'num'], ['ITL p90', 'num'], ['Req/s', 'num'],
+                            ['Pod RSS', 'num'], ['Anon', 'num'], ['EPP Heap', 'num'], ['Pod CPU', 'num'],
+                            ['Status', 'str']];
+                var h = '<tr>';
+                cols.forEach(function(c, i) {
+                    h += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tblId + '\',' + i +
+                         ',\'' + c[1] + '\')">' + c[0] + ' &#x21C5;</th>';
+                });
+                return h + '</tr>';
+            })();
         rows.forEach(function(r) {
             var c = tc(r), m = mj(r);
             var rss = rssTotal(r), cpu = cpuTotal(r);
             var ok = r.status === 'completed' || m.success;
             s += '<tr>' +
-                '<td style="font-weight:600;">' + (r.config_name || ('#' + r._cycle)) + '</td>' +
-                '<td>' + (c.isl != null ? c.isl : '—') + '</td>' +
-                '<td>' + (c.osl != null ? c.osl : '—') + '</td>' +
-                '<td>' + (c.num_users != null ? c.num_users : '—') + '</td>' +
-                '<td>' + (c.prefix_cache_hit_pct != null ? c.prefix_cache_hit_pct : '—') + '</td>' +
+                '<td style="font-weight:600;" data-val="' + r._cycle + '">' + (r.config_name || ('#' + r._cycle)) + '</td>' +
+                '<td data-val="' + (c.isl || 0) + '">' + (c.isl != null ? c.isl : '—') + '</td>' +
+                '<td data-val="' + (c.osl || 0) + '">' + (c.osl != null ? c.osl : '—') + '</td>' +
+                '<td data-val="' + (c.num_users || 0) + '">' + (c.num_users != null ? c.num_users : '—') + '</td>' +
+                '<td data-val="' + (c.prefix_cache_hit_pct || 0) + '">' + (c.prefix_cache_hit_pct != null ? c.prefix_cache_hit_pct : '—') + '</td>' +
                 '<td data-val="' + (r.ttft_p90 || 0) + '">' + (r.ttft_p90 != null ? fmt(r.ttft_p90, 0) + 'ms' : '—') + '</td>' +
                 '<td data-val="' + (r.itl_p90 || 0) + '">' + (r.itl_p90 != null ? fmt(r.itl_p90, 1) + 'ms' : '—') + '</td>' +
                 '<td data-val="' + (m.throughput_mean || 0) + '">' + (m.throughput_mean != null ? fmt(m.throughput_mean, 2) : '—') + '</td>' +
@@ -202,7 +221,7 @@
                 '<td data-val="' + (anonTotal(r) || 0) + '">' + (anonTotal(r) != null ? (anonTotal(r) / 1024).toFixed(1) + ' GiB' : '—') + '</td>' +
                 '<td data-val="' + (eppHeap(r) || 0) + '">' + (eppHeap(r) != null ? fmt(eppHeap(r), 1) + ' MB' : '—') + '</td>' +
                 '<td data-val="' + (cpu || 0) + '">' + (cpu != null ? fmt(cpu, 0) + 'm' : '—') + '</td>' +
-                '<td>' + (ok ? '<span style="color:#16a34a;">&#10003;</span>' :
+                '<td data-val="' + (ok ? 'completed' : 'failed') + '">' + (ok ? '<span style="color:#16a34a;">&#10003;</span>' :
                     '<span style="color:#dc2626;">&#10007;</span>') + '</td></tr>';
         });
         s += '</table></div>';
