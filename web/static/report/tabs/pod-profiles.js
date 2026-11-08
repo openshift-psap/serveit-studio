@@ -98,8 +98,10 @@
 
         var tblId = id + '-tbl';
         s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#c084fc); font-size:0.9em; margin:14px 20px 0;">Top Functions per Cycle (cumulative %)</div>';
-        s += '<table class="results-table" id="' + tblId + '" style="font-size:0.8em; margin:0 20px 8px; width:calc(100% - 40px);">' +
-            '<tr><th>Function</th>';
+        // 50 cycles = ~52 columns — scroll horizontally, function name pinned
+        s += '<div style="margin:0 20px 8px; overflow-x:auto; max-width:calc(100% - 40px);">';
+        s += '<table class="results-table" id="' + tblId + '" style="font-size:0.8em; width:max-content; min-width:100%;">' +
+            '<tr><th style="position:sticky; left:0; z-index:2; min-width:220px;">Function</th>';
         rows.forEach(function(r) {
             s += '<th>c' + r._cycle + '</th>';
         });
@@ -107,7 +109,7 @@
 
         fns.forEach(function(st) {
             var first = null, last = null;
-            s += '<tr><td style="font-family:monospace; font-size:0.85em; word-break:break-all;">' + H.truncate(st.name, 55) + '</td>';
+            s += '<tr><td style="font-family:monospace; font-size:0.85em; position:sticky; left:0; background:#fff; z-index:1; white-space:nowrap;">' + H.truncate(st.name, 55) + '</td>';
             rows.forEach(function(r) {
                 var f = st.byCycle[r._cycle];
                 var pct = f ? f.cum_pct : null;
@@ -123,7 +125,7 @@
             s += '<td style="text-align:right; color:' + dColor + ';">' +
                  (delta !== null ? (delta > 0 ? '+' : '') + delta.toFixed(1) : '—') + '</td></tr>';
         });
-        s += '</table>';
+        s += '</table></div>';
 
         // Per-cycle summary line
         s += '<div style="margin:4px 20px 12px; color:#64748b; font-size:0.8em;">' +

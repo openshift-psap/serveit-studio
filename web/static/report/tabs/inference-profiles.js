@@ -166,14 +166,16 @@
         var tblId = id + '-' + field;
         s += '<div class="chart-card-header" style="background:linear-gradient(135deg,' + color + ',#' +
              (field === 'top_kernels' ? '42a5f5' : 'ab47bc') + '); font-size:0.9em; margin:14px 20px 0;">' + title + '</div>';
-        s += '<table class="results-table" id="' + tblId + '" style="font-size:0.8em; margin:0 20px 8px; width:calc(100% - 40px);">' +
-            '<tr><th>' + (field === 'top_kernels' ? 'Kernel' : 'Operation') + '</th>';
+        // 50 cycles = ~52 columns — scroll horizontally, name column pinned
+        s += '<div style="margin:0 20px 8px; overflow-x:auto; max-width:calc(100% - 40px);">';
+        s += '<table class="results-table" id="' + tblId + '" style="font-size:0.8em; width:max-content; min-width:100%;">' +
+            '<tr><th style="position:sticky; left:0; z-index:2; min-width:240px;">' + (field === 'top_kernels' ? 'Kernel' : 'Operation') + '</th>';
         rows.forEach(function(r) { s += '<th>c' + r._cycle + '</th>'; });
         s += '<th>&#916;%</th></tr>';
 
         list.forEach(function(st) {
             var first = null, last = null;
-            s += '<tr><td style="font-family:monospace; font-size:0.82em; word-break:break-all;" title="' +
+            s += '<tr><td style="font-family:monospace; font-size:0.82em; position:sticky; left:0; background:#fff; z-index:1; white-space:nowrap;" title="' +
                  String(st.name).replace(/"/g, '&quot;') + '">' + shortName(st.name, 45) + '</td>';
             rows.forEach(function(r) {
                 var e = st.byCycle[r._cycle];
@@ -190,7 +192,7 @@
             s += '<td style="text-align:right; color:' + dColor + ';">' +
                  (delta !== null ? (delta > 0 ? '+' : '') + delta.toFixed(0) + '%' : '—') + '</td></tr>';
         });
-        s += '</table>';
+        s += '</table></div>';
         return s;
     }
 
