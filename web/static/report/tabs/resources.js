@@ -200,9 +200,9 @@
                     if (v !== null && v !== undefined && v < fleetMinRender) fleetMinRender = v;
                 });
             });
-            heatmap(base + '-mem', 'mem_mib', 'YlGnBu', 'GiB', 1024, '%{z:.1f} GiB',
+            heatmap(base + '-mem', 'mem_mib', 'YlOrRd', 'GiB', 1024, '%{z:.1f} GiB',
                     (fleetMinRender !== Infinity ? fleetMinRender / 1024 : null));
-            heatmap(base + '-cpu', 'cpu_mc', 'Purples', 'mCPU', 1, '%{z:.0f}m', null);
+            heatmap(base + '-cpu', 'cpu_mc', 'Reds', 'mCPU', 1, '%{z:.0f}m', null);
         });
     }
 

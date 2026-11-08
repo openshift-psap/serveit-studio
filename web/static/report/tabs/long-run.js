@@ -358,7 +358,7 @@
                     });
                     Plotly.newPlot(elU, [{
                         x: xsA, y: yLabels, z: zU, type: 'heatmap',
-                        colorscale: 'YlGnBu',
+                        colorscale: 'Reds',
                         colorbar: { title: { text: '% busy', side: 'right' }, thickness: 12 },
                         zmin: 0, zmax: 100,
                         hovertemplate: '%{y} @ %{x}<br>GPU busy %{z:.1f}% of the benchmark<extra></extra>',
@@ -377,7 +377,7 @@
                     });
                     Plotly.newPlot(elS, [{
                         x: xsA, y: yLabels, z: zS, type: 'heatmap',
-                        colorscale: 'YlGnBu',
+                        colorscale: 'Reds',
                         colorbar: { title: { text: '% fleet', side: 'right' }, thickness: 12 },
                         zmin: 0, zmax: 100,
                         hovertemplate: '%{y} @ %{x}<br>%{z:.1f}% of fleet GPU work<extra></extra>',
