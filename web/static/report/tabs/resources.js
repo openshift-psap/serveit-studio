@@ -62,8 +62,11 @@
             '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee);">&#128207; Pod Resources — CPU / Memory Tracking</div>' +
             '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
             'Per-pod container memory (working set) and CPU during each benchmark window. ' +
-            'Color intensity shows usage — horizontal stripes reveal routing imbalance, ' +
-            'darkening over time hints at growth.</div></div>';
+            '<b>Read carefully:</b> the working set includes the mmap&#39;d model weights ' +
+            '(file-backed, ~15-20 GiB, present in every serving pod regardless of load) — ' +
+            'high RSS does <b>not</b> mean high load. The load-proportional part is the ' +
+            'anonymous memory shown in the badges and the Long Run tab. Horizontal stripes ' +
+            'reveal routing imbalance; darkening over time hints at growth.</div></div>';
 
         list.forEach(function(r) {
             s += buildTest(ctx, r);
@@ -86,15 +89,27 @@
             var cpuSt = statsOf(series, 'cpu_mc');
 
             // Summary badges
-            var peakMem = 0, sumAvgMem = 0, nMem = 0, peakCpu = 0;
+            var peakMem = 0, sumAvgMem = 0, nMem = 0, peakCpu = 0, fleetMin = Infinity;
             Object.keys(memSt).forEach(function(p) {
                 peakMem = Math.max(peakMem, memSt[p].max);
+                fleetMin = Math.min(fleetMin, memSt[p].min);
                 sumAvgMem += memSt[p].avg; nMem++;
             });
             Object.keys(cpuSt).forEach(function(p) { peakCpu = Math.max(peakCpu, cpuSt[p].max); });
+            // Anonymous memory per pod (smaps snapshot) — the load-proportional part
+            var anonVals = [];
+            if (snap) {
+                Object.keys(snap).forEach(function(p) {
+                    if (snap[p].anon_mb != null && snap[p].anon_mb >= 50) anonVals.push(snap[p].anon_mb);
+                });
+            }
+            var anonAvg = anonVals.length ? anonVals.reduce(function(a, b) { return a + b; }, 0) / anonVals.length : null;
             if (nMem) {
+                var aboveBase = peakMem - fleetMin;
                 s += '<div style="display:flex; gap:12px; flex-wrap:wrap; margin:12px 20px 4px; font-size:0.85em;">' +
-                    '<span style="background:#0891b2; color:#fff; padding:4px 12px; border-radius:12px;">&#128190; Peak pod RSS: ' + fmtMiB(peakMem) + '</span>' +
+                    '<span style="background:#0891b2; color:#fff; padding:4px 12px; border-radius:12px;">&#128190; Peak pod RSS: ' + fmtMiB(peakMem) +
+                    ' <span style="opacity:0.85;">(+' + fmtMiB(aboveBase) + ' over the ' + fmtMiB(fleetMin) + ' weights baseline)</span></span>' +
+                    (anonAvg != null ? '<span style="background:#0d9488; color:#fff; padding:4px 12px; border-radius:12px;">Anonymous (load) memory: ' + fmtMiB(anonAvg) + '/pod</span>' : '') +
                     '<span style="background:#0e7490; color:#fff; padding:4px 12px; border-radius:12px;">Fleet avg RSS: ' + fmtMiB(sumAvgMem / nMem) + '/pod</span>' +
                     (peakCpu ? '<span style="background:#7c3aed; color:#fff; padding:4px 12px; border-radius:12px;">&#9889; Peak pod CPU: ' + Math.round(peakCpu) + 'm</span>' : '') +
                     '<span style="background:#155e75; color:#fff; padding:4px 12px; border-radius:12px;">' + series.pods.length + ' pods</span>' +
@@ -123,7 +138,7 @@
             s += '</table>';
 
             // Heatmaps
-            s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee); font-size:0.9em; margin:14px 20px 0;">Memory Heatmap (working set, GiB)</div>';
+            s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee); font-size:0.9em; margin:14px 20px 0;">Memory Heatmap (working set, GiB — color starts at the weights baseline, not zero)</div>';
             s += '<div id="' + base + '-mem" style="margin:0 20px; width:calc(100% - 40px);"></div>';
             s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#a78bfa); font-size:0.9em; margin:14px 20px 0;">CPU Heatmap (millicores)</div>';
             s += '<div id="' + base + '-cpu" style="margin:0 20px; width:calc(100% - 40px);"></div>';
@@ -152,7 +167,7 @@
             var yLabels = pods.map(shortPod);
             var height = Math.max(180, pods.length * 26 + 70);
 
-            function heatmap(elId, field, colorscale, unit, divisor, fmt) {
+            function heatmap(elId, field, colorscale, unit, divisor, fmt, zminOverride) {
                 var el = document.getElementById(elId);
                 if (!el) return;
                 var z = pods.map(function(p) {
@@ -164,6 +179,7 @@
                 Plotly.newPlot(el, [{
                     x: xs, y: yLabels, z: z, type: 'heatmap',
                     colorscale: colorscale,
+                    zmin: (zminOverride !== null && zminOverride !== undefined) ? zminOverride : undefined,
                     colorbar: { title: { text: unit, side: 'right' }, thickness: 12 },
                     hovertemplate: '%{y} @ %{x}s<br>' + fmt + '<extra></extra>',
                     xgap: 1, ygap: 1
@@ -175,8 +191,18 @@
                 }, { displayModeBar: false, responsive: true });
             }
 
-            heatmap(base + '-mem', 'mem_mib', 'YlGnBu', 'GiB', 1024, '%{z:.1f} GiB');
-            heatmap(base + '-cpu', 'cpu_mc', 'Purples', 'mCPU', 1, '%{z:.0f}m');
+            // Memory heatmap: zmin = the fleet-wide minimum (the weights
+            // baseline every pod carries at zero load). Color intensity then
+            // reads as load-proportional memory, not "how full the pod is".
+            var fleetMinRender = Infinity;
+            pods.forEach(function(p) {
+                ((series.mem_mib || {})[p] || []).forEach(function(v) {
+                    if (v !== null && v !== undefined && v < fleetMinRender) fleetMinRender = v;
+                });
+            });
+            heatmap(base + '-mem', 'mem_mib', 'YlGnBu', 'GiB', 1024, '%{z:.1f} GiB',
+                    (fleetMinRender !== Infinity ? fleetMinRender / 1024 : null));
+            heatmap(base + '-cpu', 'cpu_mc', 'Purples', 'mCPU', 1, '%{z:.0f}m', null);
         });
     }
 
