@@ -1184,7 +1184,27 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             start_dt = datetime.fromisoformat(start_time)
             end_dt = datetime.fromisoformat(end_time)
 
-            # Reconnect port-forward if it died (e.g., server restart during run)
+            # Reconnect port-forward if it died (e.g., server restart during
+            # run) OR if its token expired — the kubectl process stays alive
+            # while the API rejects it with 401s, so poll() alone can't
+            # detect it (hit runs 172 @cycle 50 and 173 @cycle 42, ~12h in)
+            pf_token_expired = False
+            if self._pf_process and self._pf_process.poll() is None and self.metrics_collector:
+                try:
+                    probe = self.metrics_collector.session.get(
+                        f"{self.metrics_collector.config.thanos_url}/api/v1/query?query=up",
+                        timeout=5)
+                    pf_token_expired = probe.status_code in (401, 403)
+                except Exception:
+                    pf_token_expired = False
+            if pf_token_expired:
+                logger.warning("Prometheus port-forward token expired — killing and reconnecting")
+                try:
+                    self._pf_process.terminate()
+                    self._pf_process.wait(timeout=5)
+                except Exception:
+                    pass
+                self._pf_process = None
             if not self._pf_process:
                 logger.warning("No port-forward process — establishing connection")
                 kubeconfig_path = os.environ.get("KUBECONFIG")
