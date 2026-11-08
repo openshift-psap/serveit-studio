@@ -231,8 +231,10 @@
         // Concentration (few lit rows while the fleet idles) exposes
         // routing/affinity skew, the hidden cause of batched-decode
         // slowdowns.
-        s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#2dd4bf); font-size:0.9em; margin:14px 20px 0;">Pod Activity Distribution — share of fleet GPU time per pod per cycle</div>';
+        s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#2dd4bf); font-size:0.9em; margin:14px 20px 0;">GPU Utilization — % of the benchmark each pod\'s GPU was busy</div>';
         s += '<div id="' + id + '-pods-activity" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
+        s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee); font-size:0.9em; margin:14px 20px 0;">Work Distribution — % of fleet GPU work per pod</div>';
+        s += '<div id="' + id + '-pods-share" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
 
         // Per-cycle table
         var tblId = id + '-tbl';
@@ -310,40 +312,25 @@
             line(id + '-heap', rs.map(function(r) { return eppHeap(r); }),
                  'EPP Heap inuse (MB) — Go pprof', '#ea580c', 'MB');
 
-            // Pod activity heatmap: pods (y) x cycles (x), GPU seconds.
-            // Rows that stay dark = pods the router never sent load to.
+            // Two honest views of pod GPU activity:
+            //   1. UTILIZATION — % of the benchmark each pod's GPU spent
+            //      executing kernels (GPU-ms / test duration). Answers
+            //      "did the GPUs work hard?" (run 173: ~4% = hardly).
+            //   2. SHARE — % of the fleet's total GPU work per pod.
+            //      Answers "which pods did the work?" (concentration).
+            // NOTE: 'Teal' is not a valid plotly-2.35 colorscale — it
+            // silently fell back to the default scale where 0 = DARK
+            // BLUE, painting idle pods as the heaviest. YlGnBu is valid
+            // and reads light at 0, dark at max.
             (function() {
-                var el = document.getElementById(id + '-pods-activity');
-                if (!el) return;
                 var pods = fleetPods(rs);
                 if (pods.length < 2) return;
-                // Percentage of the fleet's GPU time in each cycle — the
-                // distribution story. 3 lit pods read as ~33% each; idle
-                // pods 0%. Hover still shows the absolute GPU-seconds.
-                var z = pods.map(function(p) {
-                    return rs.map(function(r) {
-                        var t = torchPods(r).filter(function(x) { return x.pod === p; })[0];
-                        var gpuMs = (t && t.kernel_count) ? (t.total_cuda_ms || 0) : 0;
-                        var fleetMs = fleetGpuMs(r);
-                        return fleetMs > 0 ? Math.round(1000 * gpuMs / fleetMs) / 10 : 0;
-                    });
-                });
                 var yLabels = pods.map(function(p) { return p.replace(/^aggregated-|^prefill-|^decode-/, ''); });
                 var xsA = rs.map(function(r) { return '#' + r._cycle; });
-                Plotly.newPlot(el, [{
-                    x: xsA, y: yLabels, z: z, type: 'heatmap',
-                    colorscale: 'Teal',
-                    colorbar: { title: { text: '% fleet GPU', side: 'right' }, thickness: 12 },
-                    zmin: 0, zmax: 100,
-                    hovertemplate: '%{y} @ %{x}<br>%{z:.1f}% of fleet GPU time<extra></extra>',
-                    xgap: 1, ygap: 1
-                }], {
+                var heatLayout = {
                     margin: { l: 70, r: 15, t: 8, b: 48 },
                     xaxis: {
                         title: 'cycle',
-                        // actual cycle number on every tick — Plotly's
-                        // auto-pruning collapsed 50 cycles into sparse
-                        // ticks that read like ranges
                         dtick: 1,
                         tickfont: { size: 8, family: 'monospace' },
                         tickangle: rs.length > 20 ? -45 : 0,
@@ -352,7 +339,51 @@
                     yaxis: { automargin: true, tickfont: H.MONO_9 },
                     plot_bgcolor: '#fff',
                     height: Math.max(180, pods.length * 24 + 60)
-                }, { displayModeBar: false, responsive: true });
+                };
+                var heatOpts = { displayModeBar: false, responsive: true };
+
+                function podGpuMs(r, p) {
+                    var t = torchPods(r).filter(function(x) { return x.pod === p; })[0];
+                    return (t && t.kernel_count) ? (t.total_cuda_ms || 0) : 0;
+                }
+
+                // 1. Utilization: GPU-ms / benchmark duration
+                var elU = document.getElementById(id + '-pods-activity');
+                if (elU) {
+                    var zU = pods.map(function(p) {
+                        return rs.map(function(r) {
+                            var dur = (tc(r).test_duration || 300) * 1000;
+                            return Math.round(1000 * podGpuMs(r, p) / dur) / 10;
+                        });
+                    });
+                    Plotly.newPlot(elU, [{
+                        x: xsA, y: yLabels, z: zU, type: 'heatmap',
+                        colorscale: 'YlGnBu',
+                        colorbar: { title: { text: '% busy', side: 'right' }, thickness: 12 },
+                        zmin: 0, zmax: 100,
+                        hovertemplate: '%{y} @ %{x}<br>GPU busy %{z:.1f}% of the benchmark<extra></extra>',
+                        xgap: 1, ygap: 1
+                    }], JSON.parse(JSON.stringify(heatLayout)), heatOpts);
+                }
+
+                // 2. Share of fleet GPU work
+                var elS = document.getElementById(id + '-pods-share');
+                if (elS) {
+                    var zS = pods.map(function(p) {
+                        return rs.map(function(r) {
+                            var fleetMs = fleetGpuMs(r);
+                            return fleetMs > 0 ? Math.round(1000 * podGpuMs(r, p) / fleetMs) / 10 : 0;
+                        });
+                    });
+                    Plotly.newPlot(elS, [{
+                        x: xsA, y: yLabels, z: zS, type: 'heatmap',
+                        colorscale: 'YlGnBu',
+                        colorbar: { title: { text: '% fleet', side: 'right' }, thickness: 12 },
+                        zmin: 0, zmax: 100,
+                        hovertemplate: '%{y} @ %{x}<br>%{z:.1f}% of fleet GPU work<extra></extra>',
+                        xgap: 1, ygap: 1
+                    }], JSON.parse(JSON.stringify(heatLayout)), heatOpts);
+                }
             })();
         });
     }
