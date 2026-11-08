@@ -231,7 +231,7 @@
         // Concentration (few lit rows while the fleet idles) exposes
         // routing/affinity skew, the hidden cause of batched-decode
         // slowdowns.
-        s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#2dd4bf); font-size:0.9em; margin:14px 20px 0;">GPU Utilization — % of the benchmark each pod\'s GPU was busy</div>';
+        s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#2dd4bf); font-size:0.9em; margin:14px 20px 0;">GPU Utilization — % of the profile window each pod\'s GPU was busy (500 engine steps)</div>';
         s += '<div id="' + id + '-pods-activity" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
         s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee); font-size:0.9em; margin:14px 20px 0;">Work Distribution — % of fleet GPU work per pod</div>';
         s += '<div id="' + id + '-pods-share" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
@@ -347,13 +347,24 @@
                     return (t && t.kernel_count) ? (t.total_cuda_ms || 0) : 0;
                 }
 
-                // 1. Utilization: GPU-ms / benchmark duration
+                // 1. Utilization: GPU-ms / the PROFILE WINDOW wall span.
+                // The window is the 500 recorded engine steps — NOT the
+                // whole benchmark. Dividing window-limited GPU time by the
+                // full test duration understated utilization ~6x. Use the
+                // recorded window_s when present; for older summaries
+                // estimate it as 500 steps x the observed ITL (the decode
+                // step interval).
+                function windowSec(r, t) {
+                    if (t && t.window_s) return t.window_s;
+                    return 500 * (r.itl_p90 || 100) / 1000;
+                }
                 var elU = document.getElementById(id + '-pods-activity');
                 if (elU) {
                     var zU = pods.map(function(p) {
                         return rs.map(function(r) {
-                            var dur = (tc(r).test_duration || 300) * 1000;
-                            return Math.round(1000 * podGpuMs(r, p) / dur) / 10;
+                            var t = torchPods(r).filter(function(x) { return x.pod === p; })[0];
+                            var w = windowSec(r, t) * 1000;
+                            return w > 0 ? Math.round(1000 * podGpuMs(r, p) / w) / 10 : 0;
                         });
                     });
                     Plotly.newPlot(elU, [{
@@ -361,7 +372,7 @@
                         colorscale: 'Reds',
                         colorbar: { title: { text: '% busy', side: 'right' }, thickness: 12 },
                         zmin: 0, zmax: 100,
-                        hovertemplate: '%{y} @ %{x}<br>GPU busy %{z:.1f}% of the benchmark<extra></extra>',
+                        hovertemplate: '%{y} @ %{x}<br>GPU busy %{z:.1f}% of the profile window<extra></extra>',
                         xgap: 1, ygap: 1
                     }], JSON.parse(JSON.stringify(heatLayout)), heatOpts);
                 }

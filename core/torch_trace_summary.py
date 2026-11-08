@@ -113,6 +113,8 @@ def summarize(path, top_n=15):
     total_cuda_us = 0
     total_cpu_us = 0
     kernel_count = 0
+    ts_min = None
+    ts_max = None
 
     for evt in iter_events(path):
         if evt.get("ph") != "X":
@@ -122,6 +124,16 @@ def summarize(path, top_n=15):
         name = evt.get("name") or "?"
         dur = evt.get("dur") or 0
         cats[cat] += 1
+
+        # Profile-window wall span (first event start to last event end) —
+        # the denominator for honest in-window GPU utilization
+        ts = evt.get("ts")
+        if ts is not None:
+            end = ts + (dur or 0)
+            if ts_min is None or ts < ts_min:
+                ts_min = ts
+            if ts_max is None or end > ts_max:
+                ts_max = end
 
         if cat == "kernel" or cat == "gpu_memcpy" or cat == "gpu_memset":
             total_cuda_us += dur
@@ -160,11 +172,22 @@ def summarize(path, top_n=15):
             })
         return out
 
+    window_s = round((ts_max - ts_min) / 1e6, 1) if (ts_min is not None and ts_max is not None and ts_max > ts_min) else None
+    # ts span is in microseconds, same unit as total_cuda_us
+    gpu_busy_pct = round(100.0 * total_cuda_us / (ts_max - ts_min), 1) if window_s else None
+
     return {
         "total_events": total_events,
         "kernel_count": kernel_count,
         "total_cuda_ms": round(total_cuda_us / 1000.0, 1),
         "total_cpu_ms": round(total_cpu_us / 1000.0, 1),
+        # Wall-clock duration of the profiled window and the GPU duty
+        # cycle within it (kernel-execution time / window span). This is
+        # the honest utilization figure — NOT cuda_ms / benchmark
+        # duration, which mixes a window-limited numerator with a
+        # full-test denominator.
+        "window_s": window_s,
+        "gpu_busy_pct": gpu_busy_pct,
         "top_kernels": top(kernel_stats, total_cuda_us),
         "top_cpu_ops": top(cpu_stats, total_cpu_us),
         "categories": dict(cats.most_common(8)),
