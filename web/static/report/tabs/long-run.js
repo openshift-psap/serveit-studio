@@ -100,6 +100,13 @@
         return fleetPods(rows).length;
     }
 
+    // Total GPU kernel time across pods for one cycle
+    function fleetGpuMs(r) {
+        return torchPods(r).reduce(function(a, t) {
+            return a + (t.kernel_count ? (t.total_cuda_ms || 0) : 0);
+        }, 0);
+    }
+
     function tokPerSec(r) {
         var m = mj(r);
         return m.tokens_per_second != null ? m.tokens_per_second : m.output_tps_mean;
@@ -224,7 +231,7 @@
         // Concentration (few lit rows while the fleet idles) exposes
         // routing/affinity skew, the hidden cause of batched-decode
         // slowdowns.
-        s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#2dd4bf); font-size:0.9em; margin:14px 20px 0;">Pod Activity Distribution — GPU seconds per pod per cycle (torch window)</div>';
+        s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#2dd4bf); font-size:0.9em; margin:14px 20px 0;">Pod Activity Distribution — share of fleet GPU time per pod per cycle</div>';
         s += '<div id="' + id + '-pods-activity" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
 
         // Per-cycle table
@@ -310,10 +317,15 @@
                 if (!el) return;
                 var pods = fleetPods(rs);
                 if (pods.length < 2) return;
+                // Percentage of the fleet's GPU time in each cycle — the
+                // distribution story. 3 lit pods read as ~33% each; idle
+                // pods 0%. Hover still shows the absolute GPU-seconds.
                 var z = pods.map(function(p) {
                     return rs.map(function(r) {
                         var t = torchPods(r).filter(function(x) { return x.pod === p; })[0];
-                        return t && t.kernel_count ? Math.round((t.total_cuda_ms || 0) / 100) / 10 : 0;
+                        var gpuMs = (t && t.kernel_count) ? (t.total_cuda_ms || 0) : 0;
+                        var fleetMs = fleetGpuMs(r);
+                        return fleetMs > 0 ? Math.round(1000 * gpuMs / fleetMs) / 10 : 0;
                     });
                 });
                 var yLabels = pods.map(function(p) { return p.replace(/^aggregated-|^prefill-|^decode-/, ''); });
@@ -321,8 +333,9 @@
                 Plotly.newPlot(el, [{
                     x: xsA, y: yLabels, z: z, type: 'heatmap',
                     colorscale: 'Teal',
-                    colorbar: { title: { text: 'GPU s', side: 'right' }, thickness: 12 },
-                    hovertemplate: '%{y} @ %{x}<br>%{z:.1f} GPU-s in the profile window<extra></extra>',
+                    colorbar: { title: { text: '% fleet GPU', side: 'right' }, thickness: 12 },
+                    zmin: 0, zmax: 100,
+                    hovertemplate: '%{y} @ %{x}<br>%{z:.1f}% of fleet GPU time<extra></extra>',
                     xgap: 1, ygap: 1
                 }], {
                     margin: { l: 70, r: 15, t: 8, b: 48 },
