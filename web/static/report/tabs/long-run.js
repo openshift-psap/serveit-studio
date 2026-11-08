@@ -74,6 +74,11 @@
         return n ? t : null;
     }
 
+    function tokPerSec(r) {
+        var m = mj(r);
+        return m.tokens_per_second != null ? m.tokens_per_second : m.output_tps_mean;
+    }
+
     function rssTotal(r) {
         var snap = mj(r).resource_snapshot;
         if (!snap) return null;
@@ -194,7 +199,7 @@
         s += '<table class="results-table" id="' + tblId + '" style="font-size:0.82em; margin:8px 20px; width:calc(100% - 40px);">' +
             (function() {
                 var cols = [['Cycle', 'num'], ['ISL', 'num'], ['OSL', 'num'], ['Users', 'num'],
-                            ['Hit %', 'num'], ['TTFT p90', 'num'], ['ITL p90', 'num'], ['Req/s', 'num'],
+                            ['Hit %', 'num'], ['TTFT p90', 'num'], ['ITL p90', 'num'], ['Tokens/s', 'num'],
                             ['Pod RSS', 'num'], ['Anon', 'num'], ['EPP Heap', 'num'], ['Pod CPU', 'num'],
                             ['Status', 'str']];
                 var h = '<tr>';
@@ -216,7 +221,7 @@
                 '<td data-val="' + (c.prefix_cache_hit_pct || 0) + '">' + (c.prefix_cache_hit_pct != null ? c.prefix_cache_hit_pct : '—') + '</td>' +
                 '<td data-val="' + (r.ttft_p90 || 0) + '">' + (r.ttft_p90 != null ? fmt(r.ttft_p90, 0) + 'ms' : '—') + '</td>' +
                 '<td data-val="' + (r.itl_p90 || 0) + '">' + (r.itl_p90 != null ? fmt(r.itl_p90, 1) + 'ms' : '—') + '</td>' +
-                '<td data-val="' + (m.throughput_mean || 0) + '">' + (m.throughput_mean != null ? fmt(m.throughput_mean, 2) : '—') + '</td>' +
+                '<td data-val="' + (tokPerSec(r) || 0) + '">' + (tokPerSec(r) != null ? fmt(tokPerSec(r), 0) : '—') + '</td>' +
                 '<td data-val="' + (rss || 0) + '">' + (rss != null ? (rss / 1024).toFixed(1) + ' GiB' : '—') + '</td>' +
                 '<td data-val="' + (anonTotal(r) || 0) + '">' + (anonTotal(r) != null ? (anonTotal(r) / 1024).toFixed(1) + ' GiB' : '—') + '</td>' +
                 '<td data-val="' + (eppHeap(r) || 0) + '">' + (eppHeap(r) != null ? fmt(eppHeap(r), 1) + ' MB' : '—') + '</td>' +
@@ -257,8 +262,8 @@
 
             line(id + '-ttft', rs.map(function(r) { return r.ttft_p90 || null; }),
                  'TTFT p90 (ms) — drift check', '#2563eb', 'ms');
-            line(id + '-tps', rs.map(function(r) { return mj(r).throughput_mean || null; }),
-                 'Throughput (req/s)', '#059669', 'req/s');
+            line(id + '-tps', rs.map(function(r) { return tokPerSec(r); }),
+                 'Token Throughput (tok/s)', '#059669', 'tok/s');
             line(id + '-rss', rs.map(function(r) { return rssTotal(r); }),
                  'Total Pod RSS (MiB) — leak check', '#dc2626', 'MiB');
             line(id + '-heap', rs.map(function(r) { return eppHeap(r); }),

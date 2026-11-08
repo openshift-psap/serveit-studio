@@ -1481,7 +1481,9 @@ class ReportAnalyzer:
         import json
         successful = [r for r in results if r.is_successful]
         all_results = []
-        for r in sorted(successful, key=lambda r: r.ttft_p90):
+        # Preserve test-execution order (DB id order from the loader) —
+        # charts and tables should follow the run sequence, not metric rank
+        for r in successful:
             # Parse manifest types available for download
             manifest_types = []
             manifests_data = {}

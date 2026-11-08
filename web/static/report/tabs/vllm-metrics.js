@@ -61,7 +61,6 @@
             ['aggregated', 'pd', 'ep'].forEach(function(a) {
                 var pts = byArch[a];
                 if (!pts || !pts.length) return;
-                pts.sort(function(x, y) { return (x.p90 || 0) - (y.p90 || 0); });
                 var color = ARCH_COLORS[a];
                 traces.push({ x: pts.map(function(p) { return p.cfg; }), y: pts.map(function(p) { return p.p90; }),
                     name: ARCH_LABELS[a] + ' P90', mode: 'lines+markers', line: { color: color, width: 3 }, marker: { size: 10, color: color },
@@ -97,7 +96,6 @@
             var dd = dedupByConfig(); var traces = [];
             ['aggregated', 'pd', 'ep'].forEach(function(a) {
                 var pts = dd.byArch[a]; if (!pts || !pts.length) return;
-                pts.sort(function(x, y) { return (vllm.token_rates.generation[x.idx] || 0) - (vllm.token_rates.generation[y.idx] || 0); });
                 var color = ARCH_COLORS[a];
                 traces.push({ x: pts.map(function(p) { return p.cfg; }), y: pts.map(function(p) { return vllm.token_rates.prompt[p.idx]; }),
                     name: ARCH_LABELS[a] + ' Prompt', mode: 'lines+markers', line: { color: color, width: 2, dash: 'dot' }, marker: { size: 8, color: color },
