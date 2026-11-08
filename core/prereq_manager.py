@@ -585,7 +585,10 @@ class PrereqManager:
             # always adds prefix-cache-scorer and queue-scorer; overwrite
             # AFTER the loop applies it so the correct config wins.
             _epp_cfg_for_spec = epp_config or {}
-            if _epp_cfg_for_spec.get("preset") == "custom" and _epp_cfg_for_spec.get("prefixCacheAffinityEnabled"):
+            if _epp_cfg_for_spec.get("raw_yaml") or (
+                _epp_cfg_for_spec.get("preset") == "custom"
+                and _epp_cfg_for_spec.get("prefixCacheAffinityEnabled")
+            ):
                 self.update_epp_config(
                     architecture,
                     _epp_cfg_for_spec,
@@ -625,6 +628,23 @@ class PrereqManager:
             return None
         config = arch_config[architecture]
         epp = epp_config or {}
+
+        # Raw-YAML passthrough: the user's exact EndpointPickerConfig,
+        # rendered verbatim (indent 4 for the configmap data block). Takes
+        # precedence over presets and the spec system — used when the
+        # target config doesn't fit the spec assumptions (e.g. no profile
+        # handler or picker).
+        raw_yaml = (epp.get("raw_yaml") or "").strip()
+        if raw_yaml:
+            body = "\n".join("    " + l if l.strip() else l for l in raw_yaml.split("\n"))
+            return {
+                "namespace": namespace or "",
+                "gaie_name": config["gaie_name"],
+                "config_file": config["config_file"],
+                "epp_v011_plus": True,
+                "spec_mode": True,
+                "spec_body_yaml": body,
+            }
         epp_preset = epp.get("preset", "balanced")
         spec_dict = epp.get("spec")
         # Custom configs with the affinity filter go through spec_mode so
