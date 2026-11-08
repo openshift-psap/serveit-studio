@@ -438,7 +438,9 @@ class ProfileCollector:
                 logger.warning(f"stop_profile non-2xx for {pod_name}")
 
             # List trace files — retry while empty (flush is asynchronous
-            # and can lag the stop_profile 200 response by tens of seconds)
+            # and can lag the stop_profile 200 response by tens of seconds).
+            # If no traces after the loop, re-send stop_profile once (the
+            # first call may have raced the auto-stop) and re-check.
             trace_files = []
             for attempt_i in range(6):
                 time.sleep(10 if attempt_i else 15)
@@ -449,6 +451,14 @@ class ProfileCollector:
                     trace_files = _parse_ls_lh(ls_result.stdout)
                     if trace_files:
                         break
+            if not trace_files:
+                self._post_via_workload_pod(stop_url, 60)
+                time.sleep(10)
+                ls_result = self._run_kubectl(
+                    ["exec", pod_name, "-n", self.namespace, "-c", "vllm",
+                     "--", "ls", "-lh", "/tmp/torch_traces/"], timeout=30)
+                if ls_result.returncode == 0:
+                    trace_files = _parse_ls_lh(ls_result.stdout)
             try:
                 summary = {
                     "profiler": "torch",
@@ -503,7 +513,10 @@ class ProfileCollector:
                         log_callback(f"   \U0001f52c {pod_name}: {summary.get('kernel_count', 0)} kernels, "
                                      f"{summary.get('total_cuda_ms', 0)}ms CUDA, {summary.get('total_cpu_ms', 0)}ms CPU")
                     else:
-                        log_callback(f"   \U0001f52c {pod_name}: {len(trace_files)} trace file(s) (parse failed)")
+                        if not trace_files:
+                            log_callback(f"   \U0001f52c {pod_name}: idle (no trace — pod served no load)")
+                        else:
+                            log_callback(f"   \U0001f52c {pod_name}: {len(trace_files)} trace file(s) (parse failed)")
 
             except Exception as e:
                 logger.warning(f"torch profile collection failed for {pod_name}: {e}")

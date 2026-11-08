@@ -413,6 +413,26 @@ class PrereqManager:
                 "use_prefix_based_decider": epp.get("usePrefixBasedDecider", True),
             }
 
+            # Raw-YAML EPP configs: replace the flat legacy template vars
+            # with the exact raw render so the MAIN loop applies the correct
+            # configmap on the first pass. Without this, the main loop
+            # applies the legacy render, then the post-deploy gate
+            # overwrites with the raw version — detected as a change every
+            # cycle, restarting the EPP pod repeatedly.
+            _raw_yaml = (epp.get("raw_yaml") or "").strip()
+            if _raw_yaml and not epp_use_defaults:
+                _raw_ctx = self.build_epp_template_context(
+                    architecture, epp,
+                    scheduler_image=self.scheduler_image,
+                    namespace=self.namespace,
+                )
+                if _raw_ctx:
+                    # Merge: raw context provides spec_mode/spec_body_yaml;
+                    # keep non-configmap keys (gaie_image, gateway, etc.)
+                    for k, v in _raw_ctx.items():
+                        if k not in ("namespace",):  # namespace already set
+                            context[k] = v
+
             # Label namespace for DRA webhook (if DRA is in use)
             if self.gateway_class != "istio" or True:  # Always label — harmless if webhook isn't deployed
                 self.kubectl.run(
@@ -584,8 +604,12 @@ class PrereqManager:
             # (the user's exact composition). The legacy template above
             # always adds prefix-cache-scorer and queue-scorer; overwrite
             # AFTER the loop applies it so the correct config wins.
+            # Post-deploy EPP config update: only needed when the main
+            # loop did NOT already render the correct config (i.e., custom
+            # + affinity-filter configs that don't carry raw_yaml). Raw-yaml
+            # configs are handled in the main loop's context above.
             _epp_cfg_for_spec = epp_config or {}
-            if _epp_cfg_for_spec.get("raw_yaml") or (
+            if not _epp_cfg_for_spec.get("raw_yaml") and (
                 _epp_cfg_for_spec.get("preset") == "custom"
                 and _epp_cfg_for_spec.get("prefixCacheAffinityEnabled")
             ):
