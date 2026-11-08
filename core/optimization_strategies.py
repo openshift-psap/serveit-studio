@@ -1269,6 +1269,34 @@ class LongRunStrategy(OptimizationStrategy):
 
         # All cycles share one deployment identity
         base.deploy_key = base.test_id
+
+        # Long-run test-ids are deterministic (longrun-<arch>-tpN-...-cNNN),
+        # so a previous run's artifacts at the same paths would be
+        # overwritten cycle by cycle. Archive them before cycle 1 writes.
+        try:
+            import glob
+            import os
+            import shutil
+            import time as _t
+            _art = glob.glob(f"/mnt/storage/test-artifacts/{base.test_id}-c*")
+            _res = glob.glob(f"/mnt/storage/results/{base.test_id}-c*")
+            if _art or _res:
+                _stamp = _t.strftime('%Y%m%d-%H%M%S')
+                _adir = f"/mnt/storage/test-artifacts/run-archive-{_stamp}"
+                _rdir = f"/mnt/storage/results-run-archive-{_stamp}"
+                if _art:
+                    os.makedirs(_adir, exist_ok=True)
+                    for d in _art:
+                        shutil.move(d, os.path.join(_adir, os.path.basename(d)))
+                if _res:
+                    os.makedirs(_rdir, exist_ok=True)
+                    for d in _res:
+                        shutil.move(d, os.path.join(_rdir, os.path.basename(d)))
+                self.opt.log(
+                    f"   📦 Archived {len(_art)} artifact dir(s) + {len(_res)} results dir(s) "
+                    f"from a previous run → run-archive-{_stamp}", 'info')
+        except Exception as e:
+            self.opt.log(f"   ⚠️ Artifact archive failed (non-fatal): {e}", 'warning')
         self.opt.log(f"Deployment: {base.deploy_key} (created once, reused for all cycles)", 'info')
 
         completed = 0

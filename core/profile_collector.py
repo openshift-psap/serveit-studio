@@ -610,8 +610,10 @@ class ProfileCollector:
         if handle.get("torch_procs"):
             torch_results = self.collect_torch_profiles(handle["torch_procs"], log_callback, None, test_id)
 
-        # 4. Heap + goroutine snapshots (post-load, point-in-time)
+        # 4. Heap + goroutine snapshots (post-load, point-in-time).
+        # embed_budget is shared: snapshot blobs first, then CPU-capture blobs.
         snapshots = []
+        embed_budget = MAX_EMBED_BYTES
         epp = self.discover_epp_pod(config.architecture)
         if epp:
             for ptype in ("heap", "goroutine"):
@@ -621,6 +623,14 @@ class ProfileCollector:
                     snapshots.append({"kind": "epp", "pod": epp["name"],
                                      "node": epp.get("node"), "port": epp["port"],
                                      "ptype": ptype, "data": data})
+                    # Carry the raw blob within the embed budget so the
+                    # DB save persists it to profiles_blob (raw .prof files
+                    # are downloadable from the report)
+                    if embed_budget > 0:
+                        _b = base64.b64encode(data).decode("ascii")
+                        if len(_b) <= embed_budget:
+                            snapshots[-1]["blob"] = _b
+                            embed_budget -= len(_b)
 
         # 5. Write CPU capture files to the artifact dir
         all_captures = cpu_captures + snapshots
@@ -630,12 +640,15 @@ class ProfileCollector:
             try:
                 out.parent.mkdir(parents=True, exist_ok=True)
                 out.write_bytes(cap["data"])
-                cap_written.append({
+                _fe = {
                     "kind": cap["kind"], "pod": cap["pod"], "port": cap["port"],
                     "node": cap.get("node"),
                     "ptype": cap["ptype"], "path": str(out.relative_to(artifact_dir)),
                     "size": len(cap["data"]),
-                })
+                }
+                if cap.get("blob"):
+                    _fe["blob"] = cap["blob"]
+                cap_written.append(_fe)
             except Exception as e:
                 logger.warning(f"failed writing profile {out}: {e}")
 
@@ -656,7 +669,6 @@ class ProfileCollector:
                         summary["epp_heap"] = heap
                 except Exception as e:
                     logger.warning(f"heap parse failed: {e}")
-        embed_budget = MAX_EMBED_BYTES
         for cap, meta in zip(all_captures, cap_written):
             entry = dict(meta)
             if embed_budget > 0:
