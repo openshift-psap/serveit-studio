@@ -83,14 +83,21 @@
         return t.filter(function(p) { return p.kernel_count; }).length;
     }
 
-    function fleetSize(rows) {
+    // Full fleet pod list: every pod observed anywhere in the run — raw
+    // torch entries (parsed or not) and resource snapshots. Pods that
+    // never served load still get a (permanently dark) heatmap row.
+    function fleetPods(rows) {
         var seen = {};
         rows.forEach(function(r) {
-            torchPods(r).forEach(function(t) { seen[t.pod] = 1; });
+            (((mj(r).pprof || {}).torch) || []).forEach(function(t) { if (t && t.pod) seen[t.pod] = 1; });
             var snap = mj(r).resource_snapshot || {};
             Object.keys(snap).forEach(function(p) { seen[p] = 1; });
         });
-        return Object.keys(seen).length;
+        return Object.keys(seen).sort();
+    }
+
+    function fleetSize(rows) {
+        return fleetPods(rows).length;
     }
 
     function tokPerSec(r) {
@@ -301,9 +308,7 @@
             (function() {
                 var el = document.getElementById(id + '-pods-activity');
                 if (!el) return;
-                var podSet = {};
-                rs.forEach(function(r) { torchPods(r).forEach(function(t) { podSet[t.pod] = 1; }); });
-                var pods = Object.keys(podSet).sort();
+                var pods = fleetPods(rs);
                 if (pods.length < 2) return;
                 var z = pods.map(function(p) {
                     return rs.map(function(r) {
@@ -320,8 +325,17 @@
                     hovertemplate: '%{y} @ %{x}<br>%{z:.1f} GPU-s in the profile window<extra></extra>',
                     xgap: 1, ygap: 1
                 }], {
-                    margin: { l: 70, r: 15, t: 8, b: 30 },
-                    xaxis: { title: 'cycle' },
+                    margin: { l: 70, r: 15, t: 8, b: 48 },
+                    xaxis: {
+                        title: 'cycle',
+                        // actual cycle number on every tick — Plotly's
+                        // auto-pruning collapsed 50 cycles into sparse
+                        // ticks that read like ranges
+                        dtick: 1,
+                        tickfont: { size: 8, family: 'monospace' },
+                        tickangle: rs.length > 20 ? -45 : 0,
+                        automargin: true
+                    },
                     yaxis: { automargin: true, tickfont: H.MONO_9 },
                     plot_bgcolor: '#fff',
                     height: Math.max(180, pods.length * 24 + 60)
