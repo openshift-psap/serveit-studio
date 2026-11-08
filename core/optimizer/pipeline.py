@@ -1712,6 +1712,11 @@ class RecipeOptimizer(
         """Build EPP config dict for prereq_manager from optimizer config."""
         if not getattr(self.config, "epp_custom_enabled", True):
             return {"preset": "default"}
+        # Raw-YAML passthrough: the user's exact EndpointPickerConfig —
+        # no plugin munging, no derived parameters, render verbatim
+        user_epp_raw = (self.config.epp_config or {}).get("raw_yaml")
+        if user_epp_raw:
+            return {"preset": "custom", "raw_yaml": user_epp_raw}
         block_size = self._compute_block_size()
         lru_capacity = self._compute_lru_capacity(block_size)
         plugins = None
