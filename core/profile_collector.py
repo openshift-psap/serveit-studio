@@ -437,12 +437,13 @@ class ProfileCollector:
             if not self._post_via_workload_pod(stop_url, 120):
                 logger.warning(f"stop_profile non-2xx for {pod_name}")
 
-            # List trace files — retry while empty (flush is asynchronous
-            # and can lag the stop_profile 200 response by tens of seconds).
-            # If no traces after the loop, re-send stop_profile once (the
-            # first call may have raced the auto-stop) and re-check.
+            # List trace files — retry while empty. The flush can lag the
+            # stop_profile response, but IDLE pods (never reached the
+            # 700-step window) will never produce traces no matter how
+            # long we wait. 3 attempts (~35s) balances flush lag against
+            # wasted time on idle pods.
             trace_files = []
-            for attempt_i in range(6):
+            for attempt_i in range(3):
                 time.sleep(10 if attempt_i else 15)
                 ls_result = self._run_kubectl(
                     ["exec", pod_name, "-n", self.namespace, "-c", "vllm",
@@ -451,14 +452,6 @@ class ProfileCollector:
                     trace_files = _parse_ls_lh(ls_result.stdout)
                     if trace_files:
                         break
-            if not trace_files:
-                self._post_via_workload_pod(stop_url, 60)
-                time.sleep(10)
-                ls_result = self._run_kubectl(
-                    ["exec", pod_name, "-n", self.namespace, "-c", "vllm",
-                     "--", "ls", "-lh", "/tmp/torch_traces/"], timeout=30)
-                if ls_result.returncode == 0:
-                    trace_files = _parse_ls_lh(ls_result.stdout)
             try:
                 summary = {
                     "profiler": "torch",

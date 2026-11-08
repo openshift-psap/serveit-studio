@@ -1223,7 +1223,7 @@ class LongRunStrategy(OptimizationStrategy):
 
         self.opt.log("LONG RUN (SOAK): one deployment, cycled workload", 'decision')
         self.opt.log("-" * 80, 'info')
-        self.opt.log(f"Cycles: {cycles} | Workload: identical every cycle | Settle pause: 3m fixed", 'info')
+        self.opt.log(f"Cycles: {cycles} | Workload: identical every cycle | Settle pause: 90s fixed", 'info')
 
         arch = cfg.single_test_architecture or 'aggregated'
         has_rdma = bool(self.opt.cluster_resources and self.opt.cluster_resources.has_rdma)
@@ -1393,8 +1393,8 @@ class LongRunStrategy(OptimizationStrategy):
             # Fixed settle pause between cycles (not after the last) —
             # identical every cycle so cross-cycle timing is comparable
             if cycle < cycles and not self.opt._should_stop():
-                pause = 180  # 3 minutes, fixed
-                self.opt.log(f"  ⏸️ Settle pause: 3m before cycle {cycle + 1}", 'info')
+                pause = 90  # 90 seconds, fixed
+                self.opt.log(f"  ⏸️ Settle pause: 90s before cycle {cycle + 1}", 'info')
                 for _ in range(pause):
                     if self.opt._should_stop():
                         break
