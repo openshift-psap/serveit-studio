@@ -354,19 +354,29 @@
                 // recorded window_s when present; for older summaries
                 // estimate it as 500 steps x the observed ITL (the decode
                 // step interval).
-                function windowSec(r, t) {
-                    if (t && t.window_s) return t.window_s;
-                    return 500 * (r.itl_p90 || 100) / 1000;
+                // Only pods with a RECORDED window_s (trace timestamp span)
+                // get a utilization value. Earlier runs deleted traces
+                // before the parser recorded the window — estimating it
+                // (500 x ITL) produced numbers that contradicted the
+                // memory-bound decode physics, so no estimates.
+                function windowSec(t) {
+                    return (t && t.window_s) ? t.window_s : null;
                 }
                 var elU = document.getElementById(id + '-pods-activity');
                 if (elU) {
                     var zU = pods.map(function(p) {
                         return rs.map(function(r) {
                             var t = torchPods(r).filter(function(x) { return x.pod === p; })[0];
-                            var w = windowSec(r, t) * 1000;
-                            return w > 0 ? Math.round(1000 * podGpuMs(r, p) / w) / 10 : 0;
+                            var w = windowSec(t);
+                            return w ? Math.round(1000 * podGpuMs(r, p) / (w * 1000)) / 10 : null;
                         });
                     });
+                    var hasAnyWindow = zU.some(function(row) { return row.some(function(v) { return v !== null; }); });
+                    if (!hasAnyWindow) {
+                        elU.innerHTML = '<div style="padding:18px; color:#64748b; font-size:0.88em; text-align:center;">' +
+                            'GPU utilization unavailable for this run — the profile-window duration was not recorded. ' +
+                            'Runs after the parser fix record it from trace timestamps.</div>';
+                    } else {
                     Plotly.newPlot(elU, [{
                         x: xsA, y: yLabels, z: zU, type: 'heatmap',
                         colorscale: 'Reds',
@@ -375,6 +385,7 @@
                         hovertemplate: '%{y} @ %{x}<br>GPU busy %{z:.1f}% of the profile window<extra></extra>',
                         xgap: 1, ygap: 1
                     }], JSON.parse(JSON.stringify(heatLayout)), heatOpts);
+                    }
                 }
 
                 // 2. Share of fleet GPU work
