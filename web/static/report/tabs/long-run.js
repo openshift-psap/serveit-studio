@@ -74,6 +74,25 @@
         return n ? t : null;
     }
 
+    function torchPods(r) {
+        return ((mj(r).pprof || {}).torch || []).filter(function(t) { return t.parsed; });
+    }
+
+    function activePods(r) {
+        var t = torchPods(r);
+        return t.filter(function(p) { return p.kernel_count; }).length;
+    }
+
+    function fleetSize(rows) {
+        var seen = {};
+        rows.forEach(function(r) {
+            torchPods(r).forEach(function(t) { seen[t.pod] = 1; });
+            var snap = mj(r).resource_snapshot || {};
+            Object.keys(snap).forEach(function(p) { seen[p] = 1; });
+        });
+        return Object.keys(seen).length;
+    }
+
     function tokPerSec(r) {
         var m = mj(r);
         return m.tokens_per_second != null ? m.tokens_per_second : m.output_tps_mean;
@@ -194,6 +213,13 @@
         s += '<div id="' + id + '-heap" style="flex:1; min-width:280px;"></div>';
         s += '</div>';
 
+        // Pod activity distribution — which pods actually served load.
+        // Concentration (few lit rows while the fleet idles) exposes
+        // routing/affinity skew, the hidden cause of batched-decode
+        // slowdowns.
+        s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#2dd4bf); font-size:0.9em; margin:14px 20px 0;">Pod Activity Distribution — GPU seconds per pod per cycle (torch window)</div>';
+        s += '<div id="' + id + '-pods-activity" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
+
         // Per-cycle table
         var tblId = id + '-tbl';
         s += '<table class="results-table" id="' + tblId + '" style="font-size:0.82em; margin:8px 20px; width:calc(100% - 40px);">' +
@@ -201,7 +227,7 @@
                 var cols = [['Cycle', 'num'], ['ISL', 'num'], ['OSL', 'num'], ['Users', 'num'],
                             ['Hit %', 'num'], ['TTFT p90', 'num'], ['ITL p90', 'num'], ['Tokens/s', 'num'],
                             ['Pod RSS', 'num'], ['Anon', 'num'], ['EPP Heap', 'num'], ['Pod CPU', 'num'],
-                            ['Status', 'str']];
+                            ['Pods', 'num'], ['Status', 'str']];
                 var h = '<tr>';
                 cols.forEach(function(c, i) {
                     h += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tblId + '\',' + i +
@@ -226,6 +252,7 @@
                 '<td data-val="' + (anonTotal(r) || 0) + '">' + (anonTotal(r) != null ? (anonTotal(r) / 1024).toFixed(1) + ' GiB' : '—') + '</td>' +
                 '<td data-val="' + (eppHeap(r) || 0) + '">' + (eppHeap(r) != null ? fmt(eppHeap(r), 1) + ' MB' : '—') + '</td>' +
                 '<td data-val="' + (cpu || 0) + '">' + (cpu != null ? fmt(cpu, 0) + 'm' : '—') + '</td>' +
+                '<td data-val="' + activePods(r) + '">' + activePods(r) + '/' + fleetSize(rows) + '</td>' +
                 '<td data-val="' + (ok ? 'completed' : 'failed') + '">' + (ok ? '<span style="color:#16a34a;">&#10003;</span>' :
                     '<span style="color:#dc2626;">&#10007;</span>') + '</td></tr>';
         });
@@ -268,6 +295,38 @@
                  'Total Pod RSS (MiB) — leak check', '#dc2626', 'MiB');
             line(id + '-heap', rs.map(function(r) { return eppHeap(r); }),
                  'EPP Heap inuse (MB) — Go pprof', '#ea580c', 'MB');
+
+            // Pod activity heatmap: pods (y) x cycles (x), GPU seconds.
+            // Rows that stay dark = pods the router never sent load to.
+            (function() {
+                var el = document.getElementById(id + '-pods-activity');
+                if (!el) return;
+                var podSet = {};
+                rs.forEach(function(r) { torchPods(r).forEach(function(t) { podSet[t.pod] = 1; }); });
+                var pods = Object.keys(podSet).sort();
+                if (pods.length < 2) return;
+                var z = pods.map(function(p) {
+                    return rs.map(function(r) {
+                        var t = torchPods(r).filter(function(x) { return x.pod === p; })[0];
+                        return t && t.kernel_count ? Math.round((t.total_cuda_ms || 0) / 100) / 10 : 0;
+                    });
+                });
+                var yLabels = pods.map(function(p) { return p.replace(/^aggregated-|^prefill-|^decode-/, ''); });
+                var xsA = rs.map(function(r) { return '#' + r._cycle; });
+                Plotly.newPlot(el, [{
+                    x: xsA, y: yLabels, z: z, type: 'heatmap',
+                    colorscale: 'Teal',
+                    colorbar: { title: { text: 'GPU s', side: 'right' }, thickness: 12 },
+                    hovertemplate: '%{y} @ %{x}<br>%{z:.1f} GPU-s in the profile window<extra></extra>',
+                    xgap: 1, ygap: 1
+                }], {
+                    margin: { l: 70, r: 15, t: 8, b: 30 },
+                    xaxis: { title: 'cycle' },
+                    yaxis: { automargin: true, tickfont: H.MONO_9 },
+                    plot_bgcolor: '#fff',
+                    height: Math.max(180, pods.length * 24 + 60)
+                }, { displayModeBar: false, responsive: true });
+            })();
         });
     }
 
