@@ -171,26 +171,34 @@
         s += '<table class="results-table" id="' + tblId + '" style="font-size:0.8em; width:max-content; min-width:100%;">' +
             '<tr><th style="position:sticky; left:0; z-index:2; min-width:240px;">' + (field === 'top_kernels' ? 'Kernel' : 'Operation') + '</th>';
         rows.forEach(function(r) { s += '<th>c' + r._cycle + '</th>'; });
-        s += '<th>&#916;%</th></tr>';
+        s += '<th>&#963;%</th></tr>';
 
         list.forEach(function(st) {
-            var first = null, last = null;
             s += '<tr><td style="font-family:monospace; font-size:0.82em; position:sticky; left:0; background:#fff; z-index:1; white-space:nowrap;" title="' +
                  String(st.name).replace(/"/g, '&quot;') + '">' + shortName(st.name, 45) + '</td>';
+            var values = [];
             rows.forEach(function(r) {
                 var e = st.byCycle[r._cycle];
                 var ms = e ? e.ms : null;
-                if (ms !== null) {
-                    if (first === null) first = ms;
-                    last = ms;
-                }
+                if (ms !== null) values.push(ms);
                 s += '<td style="text-align:right;" data-val="' + (ms || 0) + '">' +
                      (ms !== null ? (ms >= 1000 ? (ms / 1000).toFixed(2) + 's' : Math.round(ms) + unit) : '—') + '</td>';
             });
-            var delta = (first !== null && last !== null && first > 0) ? (100 * (last - first) / first) : null;
-            var dColor = delta === null ? '#64748b' : (delta > 30 ? '#dc2626' : (delta < -30 ? '#16a34a' : '#64748b'));
-            s += '<td style="text-align:right; color:' + dColor + ';">' +
-                 (delta !== null ? (delta > 0 ? '+' : '') + delta.toFixed(0) + '%' : '—') + '</td></tr>';
+            // σ% = stdev / mean × 100 (coefficient of variation) — with a
+            // fixed workload, high σ means the kernel's time is erratic
+            // (drift, fragmentation, thermal). The trend is visible in the
+            // per-cycle columns; σ adds the stability measure.
+            var sigmaPct = null;
+            if (values.length > 1) {
+                var mean = values.reduce(function(a, b) { return a + b; }, 0) / values.length;
+                if (mean > 0) {
+                    var vr = values.reduce(function(a, b) { return a + (b - mean) * (b - mean); }, 0) / (values.length - 1);
+                    sigmaPct = Math.round(1000 * Math.sqrt(vr) / mean) / 10;
+                }
+            }
+            var sColor = sigmaPct === null ? '#64748b' : (sigmaPct > 15 ? '#dc2626' : (sigmaPct < 5 ? '#16a34a' : '#64748b'));
+            s += '<td style="text-align:right; color:' + sColor + ';" title="stdev / mean × 100 across cycles">' +
+                 (sigmaPct !== null ? sigmaPct.toFixed(1) + '%' : '—') + '</td></tr>';
         });
         s += '</table></div>';
         return s;
