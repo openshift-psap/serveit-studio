@@ -299,10 +299,13 @@
             var genMax = genRate.max != null ? Math.round(genRate.max) : (r._gen_tps_max != null ? Math.round(r._gen_tps_max) : null);
             var totalAvg = (promptAvg != null && genAvg != null) ? promptAvg + genAvg : null;
             var vllmReqRate = (pm.vllm_e2e_count_rate || {}).avg;
+            if (vllmReqRate == null) vllmReqRate = r._vllm_req_rate != null ? r._vllm_req_rate : null;
             var vllmReqStr = vllmReqRate != null ? vllmReqRate.toFixed(2) : 'N/A';
             var guidellmReq = r.throughput_mean != null ? r.throughput_mean.toFixed(2) : 'N/A';
             var avgRunning = (pm.vllm_requests_running || {}).avg;
+            if (avgRunning == null) avgRunning = r._avg_running != null ? r._avg_running : null;
             var avgWaiting = (pm.vllm_requests_waiting || {}).avg;
+            if (avgWaiting == null) avgWaiting = r._avg_waiting != null ? r._avg_waiting : null;
             var cacheHit = r.cache_hit_pct != null ? r.cache_hit_pct + '%' : 'N/A';
             var kvUsage = m.kv_cache_usage != null ? (m.kv_cache_usage * 100).toFixed(1) + '%' : 'N/A';
             var na = 'N/A';

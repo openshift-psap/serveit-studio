@@ -60,28 +60,33 @@ async function downloadHTMLReport(runId, data) {
                 const mj = typeof r.metrics_json === 'string'
                     ? JSON.parse(r.metrics_json) : r.metrics_json;
                 const pm = mj.prometheus_metrics || {};
+                // Null-safe extraction — 0 is a valid value for these metrics,
+                // so `|| null` would wrongly discard it (e.g. avg waiting = 0)
+                const num = (v) => (v === undefined ? null : v);
+                const pmAvg = (k) => num((pm[k] || {}).avg);
+                const pmMax = (k) => num((pm[k] || {}).max);
                 // Pre-extract the flat fields the configurations tab charts
                 // need (they read _prompt_tps_avg etc. — small, ~10 numbers)
-                r._prompt_tps_avg = (pm.vllm_prompt_tokens_rate || {}).avg || null;
-                r._prompt_tps_max = (pm.vllm_prompt_tokens_rate || {}).max || null;
-                r._gen_tps_avg = (pm.vllm_generation_tokens_rate || {}).avg || null;
-                r._gen_tps_max = (pm.vllm_generation_tokens_rate || {}).max || null;
-                r._per_gpu_tps = mj.per_gpu_throughput_tokens_sec || null;
-                r._vllm_req_rate = (pm.vllm_e2e_count_rate || {}).avg || null;
-                r._avg_running = (pm.vllm_requests_running || {}).avg || null;
-                r._avg_waiting = (pm.vllm_requests_waiting || {}).avg || null;
-                r._kv_cache_usage = mj.kv_cache_usage || null;
-                r._prompt_tokens_mean = mj.prompt_tokens_mean || null;
-                r._output_tokens_mean = mj.output_tokens_mean || null;
-                r._throughput_mean_mj = mj.throughput_mean || null;
-                r._cache_hits_avg = (pm.vllm_prefix_cache_hits_rate || {}).avg || null;
-                r._cache_queries_avg = (pm.vllm_prefix_cache_queries_rate || {}).avg || null;
-                r._kv_cache_avg = (pm.vllm_kv_cache_pct || {}).avg || null;
-                r._kv_cache_max = (pm.vllm_kv_cache_pct || {}).max || null;
-                r._decode_time_rate = (pm.vllm_decode_time_rate || {}).avg || null;
-                r._prefill_time_rate = (pm.vllm_prefill_time_rate || {}).avg || null;
-                r._preemptions_rate = (pm.vllm_preemptions_rate || {}).avg || null;
-                r._model_load_time_s = mj.model_load_time_s || null;
+                r._prompt_tps_avg = pmAvg('vllm_prompt_tokens_rate');
+                r._prompt_tps_max = pmMax('vllm_prompt_tokens_rate');
+                r._gen_tps_avg = pmAvg('vllm_generation_tokens_rate');
+                r._gen_tps_max = pmMax('vllm_generation_tokens_rate');
+                r._per_gpu_tps = mj.per_gpu_throughput_tokens_sec != null ? mj.per_gpu_throughput_tokens_sec : null;
+                r._vllm_req_rate = pmAvg('vllm_e2e_count_rate');
+                r._avg_running = pmAvg('vllm_requests_running');
+                r._avg_waiting = pmAvg('vllm_requests_waiting');
+                r._kv_cache_usage = mj.kv_cache_usage != null ? mj.kv_cache_usage : null;
+                r._prompt_tokens_mean = mj.prompt_tokens_mean != null ? mj.prompt_tokens_mean : null;
+                r._output_tokens_mean = mj.output_tokens_mean != null ? mj.output_tokens_mean : null;
+                r._throughput_mean_mj = mj.throughput_mean != null ? mj.throughput_mean : null;
+                r._cache_hits_avg = pmAvg('vllm_prefix_cache_hits_rate');
+                r._cache_queries_avg = pmAvg('vllm_prefix_cache_queries_rate');
+                r._kv_cache_avg = pmAvg('vllm_kv_cache_pct');
+                r._kv_cache_max = pmMax('vllm_kv_cache_pct');
+                r._decode_time_rate = pmAvg('vllm_decode_time_rate');
+                r._prefill_time_rate = pmAvg('vllm_prefill_time_rate');
+                r._preemptions_rate = pmAvg('vllm_preemptions_rate');
+                r._model_load_time_s = mj.model_load_time_s != null ? mj.model_load_time_s : null;
                 // Strip the large sub-objects the tabs don't render
                 const slim = Object.assign({}, mj);
                 delete slim.prometheus_metrics;
