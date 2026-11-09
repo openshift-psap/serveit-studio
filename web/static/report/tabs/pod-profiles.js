@@ -105,29 +105,25 @@
         rows.forEach(function(r) {
             s += '<th>c' + r._cycle + '</th>';
         });
-        s += '<th>&#963; pp</th></tr>';
+        s += '<th>&#916; pp</th></tr>';
 
         fns.forEach(function(st) {
+            var first = null, last = null;
             s += '<tr><td style="font-family:monospace; font-size:0.85em; position:sticky; left:0; background:#fff; z-index:1; white-space:nowrap;">' + H.truncate(st.name, 55) + '</td>';
-            var values = [];
             rows.forEach(function(r) {
                 var f = st.byCycle[r._cycle];
                 var pct = f ? f.cum_pct : null;
-                if (pct !== null) values.push(pct);
+                if (pct !== null) {
+                    if (first === null) first = pct;
+                    last = pct;
+                }
                 s += '<td style="text-align:right;" data-val="' + (pct || 0) + '">' +
                      (pct !== null ? pct.toFixed(1) + '%' : '—') + '</td>';
             });
-            // σ pp = stdev of cumulative-% across cycles (absolute pp, not
-            // normalized — the values are already percentages)
-            var sigma = null;
-            if (values.length > 1) {
-                var mean = values.reduce(function(a, b) { return a + b; }, 0) / values.length;
-                var vr = values.reduce(function(a, b) { return a + (b - mean) * (b - mean); }, 0) / (values.length - 1);
-                sigma = Math.round(10 * Math.sqrt(vr)) / 10;
-            }
-            var sColor = sigma === null ? '#64748b' : (sigma > 3 ? '#dc2626' : (sigma < 1 ? '#16a34a' : '#64748b'));
-            s += '<td style="text-align:right; color:' + sColor + ';" title="stdev of cumulative % across cycles">' +
-                 (sigma !== null ? sigma.toFixed(1) : '—') + '</td></tr>';
+            var delta = (first !== null && last !== null) ? last - first : null;
+            var dColor = delta === null ? '#64748b' : (delta > 5 ? '#dc2626' : (delta < -5 ? '#16a34a' : '#64748b'));
+            s += '<td style="text-align:right; color:' + dColor + ';">' +
+                 (delta !== null ? (delta > 0 ? '+' : '') + delta.toFixed(1) : '—') + '</td></tr>';
         });
         s += '</table></div>';
 

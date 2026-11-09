@@ -99,42 +99,6 @@
         if (!rec) return;
         var cr = coreResults(data);
 
-        // Percentile Comparison: Winner vs Aggregated (ported from charts.js)
-        var pEl = document.getElementById(ctx.chartId('chart-percentile-bars'));
-        if (pEl && rec.recommendations) {
-            var winner = rec.recommendations[0];
-            if (winner) {
-                var winnerResult = cr.find(function(r) {
-                    return r.config_name === winner.config_name || r.test_id === winner.test_id;
-                });
-                var aggResult = cr.find(function(r) {
-                    return (r.architecture || '').toUpperCase() === 'AGGREGATED' && r !== winnerResult;
-                });
-                if (winnerResult && aggResult) {
-                    var pcts = ['p50', 'p90', 'p95', 'p99'];
-                    var ttftTraces = [
-                        { x: pcts, y: pcts.map(function(p) { return winnerResult['ttft_' + p]; }), name: 'Winner TTFT', type: 'bar', marker: { color: '#10b981' } },
-                        { x: pcts, y: pcts.map(function(p) { return aggResult['ttft_' + p]; }), name: 'Aggregated TTFT', type: 'bar', marker: { color: '#f59e0b' } }
-                    ];
-                    var tputTraces = [
-                        { x: pcts, y: pcts.map(function(p) { return winnerResult['throughput_' + p] || winnerResult.throughput_mean; }), name: 'Winner Throughput', type: 'bar', marker: { color: '#06b6d4', xaxis: 'x2', yaxis: 'y2' } },
-                        { x: pcts, y: pcts.map(function(p) { return aggResult['throughput_' + p] || aggResult.throughput_mean; }), name: 'Aggregated Throughput', type: 'bar', marker: { color: '#8b5cf6', xaxis: 'x2', yaxis: 'y2' } }
-                    ];
-                    Plotly.newPlot(pEl, ttftTraces.concat(tputTraces), {
-                        barmode: 'group',
-                        xaxis: { title: 'Percentile', domain: [0, 0.45] },
-                        yaxis: { title: 'TTFT (ms) — lower is better' },
-                        xaxis2: { title: 'Percentile', domain: [0.55, 1], anchor: 'y2' },
-                        yaxis2: { title: 'Throughput (req/s) — higher is better', anchor: 'x2' },
-                        margin: { l: 60, r: 60, t: 10, b: 40 },
-                        height: 350,
-                        legend: { orientation: 'h', y: 1.12 },
-                        plot_bgcolor: '#fff'
-                    }, { responsive: true, displayModeBar: false });
-                }
-            }
-        }
-
         // Architecture comparison chart
         var el = document.getElementById(ctx.chartId('chart-arch'));
         if (el && cr.length > 1) {

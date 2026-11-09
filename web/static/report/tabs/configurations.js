@@ -261,7 +261,7 @@
     var tokenResults = coreResults.filter(function(r) {
         var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
         var pm = m.prometheus_metrics || {};
-        return r.output_tps_mean || m.output_tps_mean || pm.vllm_generation_tokens_rate || r._gen_tps_avg;
+        return r.output_tps_mean || m.output_tps_mean || pm.vllm_generation_tokens_rate;
     });
     if (tokenResults.length) {
         var tkTableId = 'token-tput-table-' + runId;
@@ -293,10 +293,10 @@
             var pm = m.prometheus_metrics || {};
             var promptRate = pm.vllm_prompt_tokens_rate || {};
             var genRate = pm.vllm_generation_tokens_rate || {};
-            var promptAvg = promptRate.avg != null ? Math.round(promptRate.avg) : (r._prompt_tps_avg != null ? Math.round(r._prompt_tps_avg) : null);
-            var promptMax = promptRate.max != null ? Math.round(promptRate.max) : (r._prompt_tps_max != null ? Math.round(r._prompt_tps_max) : null);
-            var genAvg = genRate.avg != null ? Math.round(genRate.avg) : (r._gen_tps_avg != null ? Math.round(r._gen_tps_avg) : null);
-            var genMax = genRate.max != null ? Math.round(genRate.max) : (r._gen_tps_max != null ? Math.round(r._gen_tps_max) : null);
+            var promptAvg = promptRate.avg != null ? Math.round(promptRate.avg) : null;
+            var promptMax = promptRate.max != null ? Math.round(promptRate.max) : null;
+            var genAvg = genRate.avg != null ? Math.round(genRate.avg) : null;
+            var genMax = genRate.max != null ? Math.round(genRate.max) : null;
             var totalAvg = (promptAvg != null && genAvg != null) ? promptAvg + genAvg : null;
             var vllmReqRate = (pm.vllm_e2e_count_rate || {}).avg;
             var vllmReqStr = vllmReqRate != null ? vllmReqRate.toFixed(2) : 'N/A';
@@ -379,19 +379,17 @@
                 var mj = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
                 var pm = mj.prometheus_metrics || {};
                 labels.push(_tagLabel(r.config_name, r.architecture));
-                var _rAvg = (pm.vllm_requests_running || {}).avg || r._avg_running || 0;
-                var _rMax = (pm.vllm_requests_running || {}).max || r._avg_running || 0;
-                var _kvA = ((pm.vllm_kv_cache_pct || {}).avg != null) ? (pm.vllm_kv_cache_pct.avg * 100) : ((r._kv_cache_avg != null) ? (r._kv_cache_avg * 100) : 0);
-                var _kvM = ((pm.vllm_kv_cache_pct || {}).max != null) ? (pm.vllm_kv_cache_pct.max * 100) : ((r._kv_cache_max != null) ? (r._kv_cache_max * 100) : 0);
-                kvAvg.push(_kvA);
-                kvMax.push(_kvM);
-                runAvg.push(_rAvg || r._avg_running || 0);
-                runMax.push(_rMax || r._avg_running || 0);
+                var _rAvg = (pm.vllm_requests_running || {}).avg || 0;
+                var _rMax = (pm.vllm_requests_running || {}).max || 0;
+                kvAvg.push(((pm.vllm_kv_cache_pct || {}).avg || 0) * 100);
+                kvMax.push(((pm.vllm_kv_cache_pct || {}).max || 0) * 100);
+                runAvg.push(_rAvg);
+                runMax.push(_rMax);
                 runSpread.push(_rMax - _rAvg);
-                waitAvg.push((pm.vllm_requests_waiting || {}).avg || r._avg_waiting || 0);
-                prefillT.push((pm.vllm_prefill_time_rate || {}).avg || r._prefill_time_rate || 0);
-                decodeT.push((pm.vllm_decode_time_rate || {}).avg || r._decode_time_rate || 0);
-                preempt.push((pm.vllm_preemptions_rate || {}).avg || r._preemptions_rate || 0);
+                waitAvg.push((pm.vllm_requests_waiting || {}).avg || 0);
+                prefillT.push((pm.vllm_prefill_time_rate || {}).avg || 0);
+                decodeT.push((pm.vllm_decode_time_rate || {}).avg || 0);
+                preempt.push((pm.vllm_preemptions_rate || {}).avg || 0);
             });
             var traces = [
                 { x: labels, y: kvAvg, name: 'KV Cache Avg %', type: 'bar', marker: { color: '#3b82f6' } },
@@ -425,174 +423,12 @@
         if (!coreResults.length) return '';
         return s;
     }
-    function render(data, ctx) {
-        if (typeof Plotly === 'undefined') return;
-        var charts = (data.charts || {});
-        var LAYOUT = { margin: { t: 10, b: 40, l: 50, r: 20 }, height: 350, plot_bgcolor: '#fff' };
-        var CONFIG = { responsive: true, displayModeBar: false };
-
-        // Throughput vs Latency scatter (ported from charts.js)
-        var scatterEl = document.getElementById(ctx.chartId('chart-scatter'));
-        if (scatterEl && charts.scatter && charts.scatter.traces && charts.scatter.traces.length) {
-            var filtered = charts.scatter.traces.map(function(t) {
-                var keep = [];
-                (t.test_ids || []).forEach(function(tid, i) {
-                    if (tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0 && tid.indexOf('step13-') !== 0) keep.push(i);
-                });
-                if (!keep.length && (t.x || []).length) keep = t.x.map(function(_, i) { return i; });
-                return {
-                    x: keep.map(function(i) { return (t.x || [])[i]; }),
-                    y: keep.map(function(i) { return (t.y || [])[i]; }),
-                    text: keep.map(function(i) { return (t.text || [])[i]; }),
-                    name: t.name, color: t.color,
-                    sizes: keep.map(function(i) { return (t.sizes || [])[i]; })
-                };
-            }).filter(function(t) { return t.x && t.x.length; });
-            var allSizes = [];
-            filtered.forEach(function(t) { (t.sizes || []).forEach(function(s) { allSizes.push(s); }); });
-            var maxSize = Math.max.apply(null, allSizes) || 1;
-            var traces = filtered.map(function(t) {
-                return {
-                    x: t.x, y: t.y, text: t.text, name: t.name,
-                    mode: 'markers',
-                    marker: {
-                        size: (t.sizes || []).map(function(s) { return 8 + (s / maxSize) * 22; }),
-                        color: t.color, opacity: 0.7, line: { width: 1, color: 'white' }
-                    },
-                    hovertemplate: '<b>%{text}</b><extra></extra>'
-                };
-            });
-            Plotly.newPlot(scatterEl, traces, Object.assign({}, LAYOUT, {
-                xaxis: { title: 'TTFT P90 (ms) — lower is better' },
-                yaxis: { title: 'Throughput Mean (req/s) — higher is better' },
-                showlegend: true, height: 450
-            }), CONFIG);
-        }
-
-        // GPU Efficiency bar (ported from charts.js)
-        var effEl = document.getElementById(ctx.chartId('chart-efficiency'));
-        if (effEl && charts.efficiency && charts.efficiency.configs && charts.efficiency.configs.length) {
-            Plotly.newPlot(effEl, [{
-                x: charts.efficiency.configs,
-                y: charts.efficiency.values,
-                type: 'bar', marker: { color: charts.efficiency.colors },
-                text: charts.efficiency.values.map(function(v) { return v != null ? v.toFixed(3) : ''; }),
-                textposition: 'outside', textfont: { size: 14, color: '#333' },
-                cliponaxis: false, constraintext: 'none',
-                hovertemplate: '<b>%{x}</b><br>%{y:.3f} req/s/GPU<extra></extra>'
-            }], Object.assign({}, LAYOUT, {
-                margin: { t: 10, b: 120, l: 50, r: 20 }, xaxis: { tickangle: -45 },
-                yaxis: { title: 'Mean req/s per GPU — higher is better' }, height: 400
-            }), CONFIG);
-        }
-
-        // Per-User Token Throughput bar (ported from charts.js)
-        var puEl = document.getElementById(ctx.chartId('chart-per-user-efficiency'));
-        if (puEl && charts.per_user_efficiency && charts.per_user_efficiency.configs && charts.per_user_efficiency.configs.length) {
-            Plotly.newPlot(puEl, [{
-                x: charts.per_user_efficiency.configs,
-                y: charts.per_user_efficiency.values,
-                type: 'bar', marker: { color: charts.per_user_efficiency.colors },
-                text: charts.per_user_efficiency.values.map(function(v) { return v != null ? v.toFixed(1) : ''; }),
-                textposition: 'outside', textfont: { size: 14, color: '#333' },
-                cliponaxis: false, constraintext: 'none',
-                hovertemplate: '<b>%{x}</b><br>%{y:.1f} tokens/s/user<extra></extra>'
-            }], Object.assign({}, LAYOUT, {
-                margin: { t: 10, b: 120, l: 50, r: 20 }, xaxis: { tickangle: -45 },
-                yaxis: { title: 'Output tokens/s per concurrent user — higher is better' }, height: 400
-            }), CONFIG);
-        }
-
-        // Token Throughput: GPU Computed vs Server Total vs Client (ported)
-        var ttEl = document.getElementById('chart-token-tput' + ctx.chartId(''));
-        if (ttEl) {
-            var coreResults = (data.all_results || []).filter(function(r) {
-                return r.quality !== 'discard';
-            });
-            var tokenResults = coreResults.filter(function(r) {
-                var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
-                return r.output_tps_mean || m.output_tps_mean || r._gen_tps_avg;
-            });
-            if (tokenResults.length) {
-                var gpuTput = [], serverTput = [], clientTput = [], labels = [];
-                tokenResults.forEach(function(r) {
-                    var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
-                    labels.push(r.config_name || '?');
-                    var genTps = r._gen_tps_avg || 0;
-                    var promptTps = r._prompt_tps_avg || 0;
-                    var cacheHit = r._cache_hits_avg || 0;
-                    var cacheQueries = r._cache_queries_avg || 0;
-                    var hitRate = cacheQueries > 0 ? cacheHit / cacheQueries : 0;
-                    gpuTput.push(genTps + promptTps * (1 - hitRate));
-                    serverTput.push(genTps + promptTps);
-                    var tput = r.throughput_mean || 0;
-                    var pMean = r._prompt_tokens_mean || 0;
-                    var oMean = r._output_tokens_mean || 0;
-                    clientTput.push((pMean + oMean) * tput);
-                });
-                Plotly.newPlot(ttEl, [
-                    { x: labels, y: gpuTput, name: 'GPU Computed', type: 'bar', marker: { color: '#3b82f6' } },
-                    { x: labels, y: serverTput, name: 'Server Total', type: 'bar', marker: { color: '#93c5fd' } },
-                    { x: labels, y: clientTput, name: 'Client', type: 'bar', marker: { color: '#f59e0b' } }
-                ], Object.assign({}, LAYOUT, {
-                    barmode: 'group', xaxis: { tickangle: -30 }, yaxis: { title: 'tokens/s' },
-                    margin: { t: 10, b: 120, l: 60, r: 20 }, height: 500,
-                    legend: { orientation: 'h', y: 1.1 }
-                }), CONFIG);
-            }
-        }
-
-        // vLLM Engine Metrics (ported from charts.js, uses flat fields)
-        var engEl = document.getElementById('chart-cfg-engine' + (typeof _sfx !== 'undefined' ? _sfx : ''));
-        if (engEl) {
-            var engResults = (data.all_results || []).filter(function(r) {
-                var tid = r.test_id || '';
-                return tid.indexOf('step2-') !== 0 && tid.indexOf('step3-') !== 0 &&
-                       tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0 && tid.indexOf('step13-') !== 0;
-            });
-            if (engResults.length) {
-                var labels = [], kvAvg = [], kvMax = [], runAvg = [], runMax = [], waitAvg = [], prefillT = [], decodeT = [];
-                engResults.forEach(function(r) {
-                    var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
-                    var pm = m.prometheus_metrics || {};
-                    labels.push(r.config_name || '?');
-                    var _rA = (pm.vllm_requests_running || {}).avg || r._avg_running || 0;
-                    var _rM = (pm.vllm_requests_running || {}).max || r._avg_running || 0;
-                    runAvg.push(_rA); runMax.push(_rM);
-                    kvAvg.push((pm.vllm_kv_cache_pct || {}).avg != null ? (pm.vllm_kv_cache_pct.avg * 100) : (r._kv_cache_avg != null ? r._kv_cache_avg * 100 : 0));
-                    kvMax.push((pm.vllm_kv_cache_pct || {}).max != null ? (pm.vllm_kv_cache_pct.max * 100) : (r._kv_cache_max != null ? r._kv_cache_max * 100 : 0));
-                    waitAvg.push((pm.vllm_requests_waiting || {}).avg || r._avg_waiting || 0);
-                    prefillT.push((pm.vllm_prefill_time_rate || {}).avg || r._prefill_time_rate || 0);
-                    decodeT.push((pm.vllm_decode_time_rate || {}).avg || r._decode_time_rate || 0);
-                });
-                Plotly.newPlot(engEl, [
-                    { x: labels, y: kvAvg, name: 'KV Cache Avg %', type: 'bar', marker: { color: '#3b82f6' } },
-                    { x: labels, y: kvMax, name: 'KV Cache Max %', type: 'bar', marker: { color: '#93c5fd' } },
-                    { x: labels, y: runAvg, name: 'Avg Running Reqs', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#059669', width: 3 }, marker: { size: 8 } },
-                    { x: labels, y: runMax, name: 'Max Running Reqs', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#059669', width: 2, dash: 'dash' }, marker: { size: 6 } },
-                    { x: labels, y: waitAvg, name: 'Avg Waiting Reqs', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#ef4444', width: 2, dash: 'dot' }, marker: { size: 6 } }
-                ], {
-                    barmode: 'group',
-                    margin: { t: 40, b: 140, l: 60, r: 60 },
-                    xaxis: { tickangle: -35 },
-                    yaxis: { title: 'KV Cache %', side: 'left', rangemode: 'tozero' },
-                    yaxis2: { title: 'Count', overlaying: 'y', side: 'right', rangemode: 'tozero' },
-                    legend: { x: 0, y: 1.15, orientation: 'h' },
-                    height: 500, plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff'
-                }, { responsive: true });
-            }
-        }
-    }
-
     ReportTabs.register({
         id: 'configurations', label: 'Configurations', icon: '&#9776;',
         position: 'after:recommendation',
         build: build,
         render: function(data, ctx) {
             if (typeof Plotly === 'undefined') return;
-            // New chart renders (scatter, efficiency, per-user, engine metrics)
-            try { render(data, ctx); } catch (e) { console.warn('configurations chart render failed', e); }
-            // Legacy queued renders from build (tables, EPP charts)
             _renders.forEach(function(fn) { try { fn(); } catch (e) { console.warn('configurations render failed', e); } });
         }
     });
