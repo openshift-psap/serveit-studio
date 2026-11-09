@@ -163,6 +163,7 @@
                     y: ar.map(function(r) { return r.cache_hit_pct; }),
                     text: ar.map(function(r) { return r.cache_hit_pct.toFixed(1) + '%'; }),
                     textposition: 'outside', textfont: { size: 13 },
+                    cliponaxis: false,
                     name: arch, type: 'bar',
                     marker: { color: archColors3[arch] }
                 });
@@ -170,8 +171,8 @@
             Plotly.newPlot('chart-cfg-cache-hit' + _sfx, traces, {
                 height: 850, barmode: 'group',
                 xaxis: { tickangle: -35, gridcolor: '#e2e8f0' },
-                yaxis: { title: 'Cache Hit %', gridcolor: '#e2e8f0', range: [0, 100] },
-                showlegend: true, legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
+                yaxis: { title: 'Cache Hit %', gridcolor: '#e2e8f0', range: [0, 110], dtick: 25 },
+                showlegend: true, legend: { x: 0, y: 1.02, bgcolor: 'rgba(255,255,255,0.9)' },
                 margin: { t: 20, b: 120, l: 60, r: 20 },
                 plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
             }, { responsive: true });

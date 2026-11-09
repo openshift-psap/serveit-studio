@@ -455,8 +455,8 @@
                 Plotly.newPlot('chart-sweep-cache-hit' + _sfx, traces, {
                     ...plotlyLayout, height: 850,
                     xaxis: { title: 'Concurrency', gridcolor: '#e2e8f0' },
-                    yaxis: { title: 'Cache Hit %', gridcolor: '#e2e8f0', range: [0, 100] },
-                    showlegend: true, legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
+                    yaxis: { title: 'Cache Hit %', gridcolor: '#e2e8f0', range: [0, 110], dtick: 25 },
+                    showlegend: true, legend: { x: 0, y: 1.02, bgcolor: 'rgba(255,255,255,0.9)' },
                     margin: { t: 20, b: 60, l: 60, r: 20 },
                     plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
                 }, { responsive: true });
