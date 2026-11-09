@@ -1573,6 +1573,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     log_callback("⏩ Reusing existing deployment (sweep mode)")
                 result.deployment_success = True
                 result.deployment_ready = True
+                # Pods were reused — no model load occurred, but the field must be set
+                # so the Deployment Timing tab shows all tests (not just fresh deploys)
+                result.model_load_time_s = 0
 
             if not skip_deploy:
                 if log_callback:
