@@ -261,7 +261,7 @@
     var tokenResults = coreResults.filter(function(r) {
         var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
         var pm = m.prometheus_metrics || {};
-        return r.output_tps_mean || m.output_tps_mean || pm.vllm_generation_tokens_rate;
+        return r.output_tps_mean || m.output_tps_mean || pm.vllm_generation_tokens_rate || r._gen_tps_avg;
     });
     if (tokenResults.length) {
         var tkTableId = 'token-tput-table-' + runId;
@@ -293,10 +293,10 @@
             var pm = m.prometheus_metrics || {};
             var promptRate = pm.vllm_prompt_tokens_rate || {};
             var genRate = pm.vllm_generation_tokens_rate || {};
-            var promptAvg = promptRate.avg != null ? Math.round(promptRate.avg) : null;
-            var promptMax = promptRate.max != null ? Math.round(promptRate.max) : null;
-            var genAvg = genRate.avg != null ? Math.round(genRate.avg) : null;
-            var genMax = genRate.max != null ? Math.round(genRate.max) : null;
+            var promptAvg = promptRate.avg != null ? Math.round(promptRate.avg) : (r._prompt_tps_avg != null ? Math.round(r._prompt_tps_avg) : null);
+            var promptMax = promptRate.max != null ? Math.round(promptRate.max) : (r._prompt_tps_max != null ? Math.round(r._prompt_tps_max) : null);
+            var genAvg = genRate.avg != null ? Math.round(genRate.avg) : (r._gen_tps_avg != null ? Math.round(r._gen_tps_avg) : null);
+            var genMax = genRate.max != null ? Math.round(genRate.max) : (r._gen_tps_max != null ? Math.round(r._gen_tps_max) : null);
             var totalAvg = (promptAvg != null && genAvg != null) ? promptAvg + genAvg : null;
             var vllmReqRate = (pm.vllm_e2e_count_rate || {}).avg;
             var vllmReqStr = vllmReqRate != null ? vllmReqRate.toFixed(2) : 'N/A';
@@ -379,17 +379,19 @@
                 var mj = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
                 var pm = mj.prometheus_metrics || {};
                 labels.push(_tagLabel(r.config_name, r.architecture));
-                var _rAvg = (pm.vllm_requests_running || {}).avg || 0;
-                var _rMax = (pm.vllm_requests_running || {}).max || 0;
-                kvAvg.push(((pm.vllm_kv_cache_pct || {}).avg || 0) * 100);
-                kvMax.push(((pm.vllm_kv_cache_pct || {}).max || 0) * 100);
-                runAvg.push(_rAvg);
-                runMax.push(_rMax);
+                var _rAvg = (pm.vllm_requests_running || {}).avg || r._avg_running || 0;
+                var _rMax = (pm.vllm_requests_running || {}).max || r._avg_running || 0;
+                var _kvA = ((pm.vllm_kv_cache_pct || {}).avg != null) ? (pm.vllm_kv_cache_pct.avg * 100) : ((r._kv_cache_avg != null) ? (r._kv_cache_avg * 100) : 0);
+                var _kvM = ((pm.vllm_kv_cache_pct || {}).max != null) ? (pm.vllm_kv_cache_pct.max * 100) : ((r._kv_cache_max != null) ? (r._kv_cache_max * 100) : 0);
+                kvAvg.push(_kvA);
+                kvMax.push(_kvM);
+                runAvg.push(_rAvg || r._avg_running || 0);
+                runMax.push(_rMax || r._avg_running || 0);
                 runSpread.push(_rMax - _rAvg);
-                waitAvg.push((pm.vllm_requests_waiting || {}).avg || 0);
-                prefillT.push((pm.vllm_prefill_time_rate || {}).avg || 0);
-                decodeT.push((pm.vllm_decode_time_rate || {}).avg || 0);
-                preempt.push((pm.vllm_preemptions_rate || {}).avg || 0);
+                waitAvg.push((pm.vllm_requests_waiting || {}).avg || r._avg_waiting || 0);
+                prefillT.push((pm.vllm_prefill_time_rate || {}).avg || r._prefill_time_rate || 0);
+                decodeT.push((pm.vllm_decode_time_rate || {}).avg || r._decode_time_rate || 0);
+                preempt.push((pm.vllm_preemptions_rate || {}).avg || r._preemptions_rate || 0);
             });
             var traces = [
                 { x: labels, y: kvAvg, name: 'KV Cache Avg %', type: 'bar', marker: { color: '#3b82f6' } },

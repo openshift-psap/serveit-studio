@@ -59,6 +59,30 @@ async function downloadHTMLReport(runId, data) {
             try {
                 const mj = typeof r.metrics_json === 'string'
                     ? JSON.parse(r.metrics_json) : r.metrics_json;
+                const pm = mj.prometheus_metrics || {};
+                // Pre-extract the flat fields the configurations tab charts
+                // need (they read _prompt_tps_avg etc. — small, ~10 numbers)
+                r._prompt_tps_avg = (pm.vllm_prompt_tokens_rate || {}).avg || null;
+                r._prompt_tps_max = (pm.vllm_prompt_tokens_rate || {}).max || null;
+                r._gen_tps_avg = (pm.vllm_generation_tokens_rate || {}).avg || null;
+                r._gen_tps_max = (pm.vllm_generation_tokens_rate || {}).max || null;
+                r._per_gpu_tps = mj.per_gpu_throughput_tokens_sec || null;
+                r._vllm_req_rate = (pm.vllm_e2e_count_rate || {}).avg || null;
+                r._avg_running = (pm.vllm_requests_running || {}).avg || null;
+                r._avg_waiting = (pm.vllm_requests_waiting || {}).avg || null;
+                r._kv_cache_usage = mj.kv_cache_usage || null;
+                r._prompt_tokens_mean = mj.prompt_tokens_mean || null;
+                r._output_tokens_mean = mj.output_tokens_mean || null;
+                r._throughput_mean_mj = mj.throughput_mean || null;
+                r._cache_hits_avg = (pm.vllm_prefix_cache_hits_rate || {}).avg || null;
+                r._cache_queries_avg = (pm.vllm_prefix_cache_queries_rate || {}).avg || null;
+                r._kv_cache_avg = (pm.vllm_kv_cache_pct || {}).avg || null;
+                r._kv_cache_max = (pm.vllm_kv_cache_pct || {}).max || null;
+                r._decode_time_rate = (pm.vllm_decode_time_rate || {}).avg || null;
+                r._prefill_time_rate = (pm.vllm_prefill_time_rate || {}).avg || null;
+                r._preemptions_rate = (pm.vllm_preemptions_rate || {}).avg || null;
+                r._model_load_time_s = mj.model_load_time_s || null;
+                // Strip the large sub-objects the tabs don't render
                 const slim = Object.assign({}, mj);
                 delete slim.prometheus_metrics;
                 delete slim.workloads;
@@ -295,4 +319,8 @@ const REPORT_CSS = `
 .charts-loading { text-align: center; padding: 60px 20px; color: #94a3b8; font-size: 1.1em; }
 .js-plotly-plot { width: 100% !important; }
 .report-subtab-pane.active .js-plotly-plot { width: 100% !important; }
+.stat-card { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 130px; padding: 14px 18px; background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border: 1px solid #e2e8f0; text-align: center; margin: 4px; }
+.stat-card .val { font-size: 1.35em; font-weight: 800; color: #1e293b; }
+.stat-card .lbl { font-size: 0.72em; font-weight: 600; color: #64748b; margin-top: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.stat-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 12px; }
 `;
