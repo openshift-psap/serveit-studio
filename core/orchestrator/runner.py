@@ -1838,11 +1838,18 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     result.test_start_time = datetime.now().isoformat()
 
                     # Start pod CPU profile captures on the first attempt so
-                    # the capture window covers the benchmark load
+                    # the capture window covers the benchmark load.
+                    # Torch profiler start is deferred ~60s into the load for
+                    # long tests: starting before the load couples the
+                    # recording window to the cold-start prefill storm and
+                    # collapses the attempt (tracing overhead stretches the
+                    # step budget across the whole test). Steady-state
+                    # start = warm cache, fast steps, bounded window.
                     if guidellm_attempt == 1:
                         try:
+                            _torch_delay = 90 if (getattr(config, "test_duration", 0) or 0) >= 240 else 0
                             self._profile_handle = self.profile_collector.start_cpu_captures(
-                                config, log_callback=log_callback
+                                config, log_callback=log_callback, torch_delay_s=_torch_delay
                             )
                         except Exception as e:
                             logger.warning(f"profile capture start failed: {e}")

@@ -23,6 +23,7 @@ import logging
 import os
 import subprocess
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Callable, Dict, Optional
@@ -313,7 +314,8 @@ class ProfileCollector:
 
     # ── collection lifecycle ────────────────────────────────────────────────
 
-    def start_cpu_captures(self, config, log_callback: Optional[Callable[[str], None]] = None) -> Dict:
+    def start_cpu_captures(self, config, log_callback: Optional[Callable[[str], None]] = None,
+                           torch_delay_s: int = 0) -> Dict:
         test_id = config.test_id
         selector = config.deploy_selector_id
         window = min(MAX_CPU_WINDOW_S, max(30, getattr(config, "test_duration", 300) or 300))
@@ -377,44 +379,73 @@ class ProfileCollector:
             if log_callback:
                 log_callback(f"   \U0001f52c vLLM CPU profile capture started on {probed}/{len(pods)} pod(s) ({window}s window)")
 
-            # Torch profiling (same window, separate background process)
-            handle["torch_procs"] = self.start_torch_profiles(selector, window, log_callback)
+            # Torch profiling (same window, separate background process).
+            # torch_delay_s > 0 defers the start into the load — see
+            # start_torch_profiles for why starting before the load is
+            # harmful.
+            handle["torch_procs"] = self.start_torch_profiles(
+                selector, window, log_callback, delay_s=torch_delay_s)
 
         return handle
 
     # ── torch profiler ──────────────────────────────────────────────────────
 
-    def start_torch_profiles(self, selector_id, window_s, log_callback=None):
+    def start_torch_profiles(self, selector_id, window_s, log_callback=None, delay_s=0):
         """Start torch profiler on all vLLM pods via /start_profile API.
 
         Uses curl from the workload pod (like Go pprof) — the endpoint
         responds slowly, so fire-and-forget with short timeout.
+
+        delay_s > 0 starts the profiler from a background thread that
+        sleeps first, landing mid-load. Starting BEFORE the load couples
+        the recording window to the cold-start prefill storm: the
+        200-step warmup delay elapses while idle, recording begins with
+        the first heavy prefills, tracing overhead slows each engine
+        step, the step budget stretches across the whole attempt, and
+        the load collapses (observed: 4.5-minute traced windows, ~30
+        completed requests vs ~350 unprofiled). Starting ~60-90s in —
+        past the prefill storm, prefix cache warm, steps fast — bounds
+        recording to a short steady-state slice.
         """
-        self._resolve_workload_pod()
-        pods = self.discover_vllm_pods(selector_id)
         results = []
-        for pod in pods:
-            pod_name = pod["name"] if isinstance(pod, dict) else pod
-            if not self.workload_pod:
-                continue
-            r = self._run_kubectl(["get", "pod", pod_name, "-n", self.namespace,
-                                    "-o", "jsonpath={.status.podIP}"])
-            if r.returncode != 0 or not r.stdout.strip():
-                continue
-            pod_ip = r.stdout.strip()
-            started = False
-            started_port = None
-            for port in [8000, 8200]:
-                url = f"http://{pod_ip}:{port}/start_profile"
-                if self._post_via_workload_pod(url, 15):
-                    started = True
-                    started_port = port
-                    break
-            results.append({"pod": pod_name, "started": started, "ip": pod_ip,
-                            "port": started_port or 8000})
-        if log_callback and results:
-            n_started = sum(1 for r in results if r.get("started"))
-            log_callback(f"   \U0001f52c Torch profiler started on {n_started}/{len(results)} pod(s)")
+
+        def _start_now():
+            self._resolve_workload_pod()
+            pods = self.discover_vllm_pods(selector_id)
+            for pod in pods:
+                pod_name = pod["name"] if isinstance(pod, dict) else pod
+                if not self.workload_pod:
+                    continue
+                r = self._run_kubectl(["get", "pod", pod_name, "-n", self.namespace,
+                                        "-o", "jsonpath={.status.podIP}"])
+                if r.returncode != 0 or not r.stdout.strip():
+                    continue
+                pod_ip = r.stdout.strip()
+                started = False
+                started_port = None
+                for port in [8000, 8200]:
+                    url = f"http://{pod_ip}:{port}/start_profile"
+                    if self._post_via_workload_pod(url, 15):
+                        started = True
+                        started_port = port
+                        break
+                results.append({"pod": pod_name, "started": started, "ip": pod_ip,
+                                "port": started_port or 8000})
+            if log_callback and results:
+                n_started = sum(1 for r in results if r.get("started"))
+                suffix = f" (delayed {delay_s}s — steady-state slice)" if delay_s else ""
+                log_callback(f"   \U0001f52c Torch profiler started on {n_started}/{len(results)} pod(s){suffix}")
+
+        if delay_s > 0:
+            def _delayed():
+                time.sleep(delay_s)
+                _start_now()
+            t = threading.Thread(target=_delayed, daemon=True)
+            t.start()
+            # results populate asynchronously; collection runs at test end
+            # (minutes later), long after the thread finishes
+            return results
+        _start_now()
         return results
 
     def collect_torch_profiles(self, results, log_callback=None, written=None, test_id=None):
