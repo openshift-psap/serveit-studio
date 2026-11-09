@@ -520,27 +520,29 @@
                 var gpuTput = [], serverTput = [], clientTput = [], labels = [];
                 tokenResults.forEach(function(r) {
                     var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
-                    labels.push(r.config_name || '?');
-                    var genTps = r._gen_tps_avg || 0;
-                    var promptTps = r._prompt_tps_avg || 0;
-                    var cacheHit = r._cache_hits_avg || 0;
-                    var cacheQueries = r._cache_queries_avg || 0;
-                    var hitRate = cacheQueries > 0 ? cacheHit / cacheQueries : 0;
-                    gpuTput.push(genTps + promptTps * (1 - hitRate));
-                    serverTput.push(genTps + promptTps);
-                    var tput = r.throughput_mean || 0;
-                    var pMean = r._prompt_tokens_mean || 0;
-                    var oMean = r._output_tokens_mean || 0;
-                    clientTput.push((pMean + oMean) * tput);
+                    var pm = m.prometheus_metrics || {};
+                    labels.push(_tagLabel(r.config_name, r.architecture));
+                    // Prometheus-first with offline flat-field fallback
+                    var promptTps = r._prompt_tps_avg != null ? r._prompt_tps_avg : ((pm.vllm_prompt_tokens_rate || {}).avg || 0);
+                    var genTps = r._gen_tps_avg != null ? r._gen_tps_avg : ((pm.vllm_generation_tokens_rate || {}).avg || 0);
+                    var cacheHits = r._cache_hits_avg != null ? r._cache_hits_avg : ((pm.vllm_prefix_cache_hits_rate || {}).avg || 0);
+                    var cacheQueries = r._cache_queries_avg != null ? r._cache_queries_avg : ((pm.vllm_prefix_cache_queries_rate || {}).avg || 0);
+                    var hitRate = cacheQueries > 0 ? cacheHits / cacheQueries : 0;
+                    gpuTput.push(Math.round(promptTps * (1 - hitRate)) + Math.round(genTps));
+                    serverTput.push(Math.round(promptTps + genTps));
+                    var tput = r.throughput_mean || m.throughput_mean || 0;
+                    var pMean = r._prompt_tokens_mean != null ? r._prompt_tokens_mean : (m.prompt_tokens_mean || 0);
+                    var oMean = r._output_tokens_mean != null ? r._output_tokens_mean : (m.output_tokens_mean || 0);
+                    clientTput.push(Math.round((pMean + oMean) * tput));
                 });
                 Plotly.newPlot(ttEl, [
-                    { x: labels, y: gpuTput, name: 'GPU Computed', type: 'bar', marker: { color: '#3b82f6' } },
-                    { x: labels, y: serverTput, name: 'Server Total', type: 'bar', marker: { color: '#93c5fd' } },
-                    { x: labels, y: clientTput, name: 'Client', type: 'bar', marker: { color: '#f59e0b' } }
+                    { x: labels, y: gpuTput, name: 'GPU Computed', type: 'bar', marker: { color: '#3b82f6' }, text: gpuTput.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 13, color: '#1e293b' } },
+                    { x: labels, y: serverTput, name: 'Server Total', type: 'bar', marker: { color: '#93c5fd' }, text: serverTput.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 13, color: '#1e293b' } },
+                    { x: labels, y: clientTput, name: 'Client', type: 'bar', marker: { color: '#f59e0b' }, text: clientTput.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 13, color: '#1e293b' } }
                 ], Object.assign({}, LAYOUT, {
-                    barmode: 'group', xaxis: { tickangle: -30 }, yaxis: { title: 'tokens/s' },
-                    margin: { t: 10, b: 120, l: 60, r: 20 }, height: 500,
-                    legend: { orientation: 'h', y: 1.1 }
+                    barmode: 'group', xaxis: { tickangle: -35 }, yaxis: { title: 'Total Tokens/s (Prompt + Generation)' },
+                    margin: { t: 60, b: 140, l: 60, r: 20 }, height: 850,
+                    legend: { orientation: 'h', y: 1.15 }
                 }), CONFIG);
             }
         }
