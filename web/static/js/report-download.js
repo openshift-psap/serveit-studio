@@ -102,7 +102,7 @@ ${REPORT_CSS}
 </style>
 </head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;margin:0;padding:20px;">
-<div style="max-width:1600px;margin:0 auto;">
+<div style="width:100%;">
 <div style="padding:12px 20px;background:linear-gradient(135deg,#b45309,#f59e0b);color:#fff;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;">
 <div><div style="font-size:1.3em;font-weight:700;">ServeIt Studio Report — Run #${runId}</div>
 <div style="font-size:0.9em;opacity:0.9;margin-top:4px;">${model} · ${goal} · ${date}</div></div>
@@ -216,13 +216,24 @@ ${scripts}
         });
     }
     window.addEventListener('resize', resizeAllCharts);
-    // Resize after initial render (lets layout settle)
-    setTimeout(resizeAllCharts, 100);
-    setTimeout(resizeAllCharts, 500);
+    // 'load' fires after ALL resources (incl. Plotly CDN) are loaded —
+    // setTimeout can race the CDN script and resize before Plotly exists
+    window.addEventListener('load', resizeAllCharts);
+    // Backup resizes in case 'load' already fired (cached CDN)
+    setTimeout(resizeAllCharts, 200);
+    setTimeout(resizeAllCharts, 1000);
     // Also resize when any subtab becomes active
     document.querySelectorAll('.report-subtab').forEach(function(el) {
         el.addEventListener('click', function() { setTimeout(resizeAllCharts, 50); });
     });
+
+    // Also handle DOMContentLoaded for fast browsers where 'load' fires
+    // before Plotly finishes initializing
+    if (document.readyState === 'complete') {
+        resizeAllCharts();
+    } else {
+        document.addEventListener('DOMContentLoaded', function() { setTimeout(resizeAllCharts, 50); });
+    }
 
     // Sortable tables
     window.sortReportTable = function(tableId, colIdx, type) {
