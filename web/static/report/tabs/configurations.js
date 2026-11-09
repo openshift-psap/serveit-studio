@@ -588,9 +588,11 @@
         id: 'configurations', label: 'Configurations', icon: '&#9776;',
         position: 'after:recommendation',
         build: build,
-        render: render,
         render: function(data, ctx) {
             if (typeof Plotly === 'undefined') return;
+            // New chart renders (scatter, efficiency, per-user, engine metrics)
+            try { render(data, ctx); } catch (e) { console.warn('configurations chart render failed', e); }
+            // Legacy queued renders from build (tables, EPP charts)
             _renders.forEach(function(fn) { try { fn(); } catch (e) { console.warn('configurations render failed', e); } });
         }
     });
