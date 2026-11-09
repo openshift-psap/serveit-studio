@@ -542,6 +542,134 @@
             }
         }
 
+        // PD configurations TTFT charts (one per percentile) — ported from charts.js
+        var coreResults = (data.all_results || []).filter(function(r) {
+            if (r.quality === 'discard') return false;
+            var tid = r.test_id || r.config_name || '';
+            return tid.indexOf('step2-') !== 0 && tid.indexOf('step3-') !== 0;
+        });
+        [{key:'p90',field:'ttft_p90',itlField:'itl_p90',color:'#3b82f6',chartId:'chart-pd-ttft-p90'},
+         {key:'p95',field:'ttft_p95',itlField:'itl_p95',color:'#dc2626',chartId:'chart-pd-ttft-p95'},
+         {key:'p99',field:'ttft_p99',itlField:'itl_p99',color:'#7c3aed',chartId:'chart-pd-ttft-p99'}
+        ].forEach(function(pctl) {
+            var archResults = coreResults.filter(function(r) { return r.architecture === 'PD'; });
+            if (!archResults.length) return;
+            var sorted = archResults.slice().sort(function(a, b) { return a.prefill_pods - b.prefill_pods; });
+            var labels = sorted.map(function(r) { return _tagLabel(r.config_name, r.architecture); });
+            var ttftVals = sorted.map(function(r) { return r[pctl.field]; });
+            var tputVals = sorted.map(function(r) { return r.throughput_mean || r.throughput_p90; });
+            var itlVals = sorted.map(function(r) { return r[pctl.itlField] != null ? r[pctl.itlField] : null; });
+            var hasItl = itlVals.some(function(v) { return v != null; });
+            var validTtft = ttftVals.filter(function(v) { return v != null; });
+            if (!validTtft.length) return;
+            var bestTtftIdx = ttftVals.indexOf(Math.min.apply(null, validTtft));
+            var bestTputIdx = tputVals.indexOf(Math.max.apply(null, tputVals));
+            var pLabel = pctl.key.toUpperCase();
+
+            var el = document.getElementById(ctx.chartId(pctl.chartId));
+            if (!el) return;
+
+            var traces = [
+                { x: labels, y: ttftVals, type: 'scatter', mode: 'lines+markers', name: 'TTFT ' + pLabel,
+                  line: { color: pctl.color, width: 3, shape: 'spline' },
+                  marker: { color: pctl.color, size: 12, symbol: 'circle', line: { width: 2, color: 'white' } },
+                  fill: 'tozeroy', fillcolor: pctl.color + '14' },
+                { x: [labels[bestTtftIdx]], y: [validTtft[0]], type: 'scatter', mode: 'markers', name: 'Best TTFT',
+                  marker: { color: '#10b981', size: 22, symbol: 'circle', line: { width: 3, color: 'white' } }, showlegend: true },
+                { x: labels, y: tputVals, type: 'scatter', mode: 'lines+markers', name: 'Throughput Mean', yaxis: 'y2',
+                  line: { color: '#f59e0b', width: 3, shape: 'spline' },
+                  marker: { color: '#f59e0b', size: 10, symbol: 'diamond', line: { width: 2, color: 'white' } } },
+                { x: [labels[bestTputIdx]], y: [tputVals[bestTputIdx]], type: 'scatter', mode: 'markers', name: 'Best Throughput', yaxis: 'y2',
+                  marker: { color: '#e11d48', size: 22, symbol: 'diamond', line: { width: 3, color: 'white' } }, showlegend: true },
+            ];
+
+            var layout = {
+                height: 850,
+                margin: { t: 30, b: 180, l: 60, r: 60 },
+                xaxis: { title: { text: 'Configuration', standoff: 20 }, tickangle: -40, anchor: hasItl ? 'y3' : 'y' },
+                yaxis: { title: 'TTFT ' + pLabel + ' (ms)', side: 'left', titlefont: { color: pctl.color }, tickfont: { color: pctl.color }, tickformat: '.2s', domain: hasItl ? [0.28, 1] : [0, 1] },
+                yaxis2: { title: 'Throughput Mean (req/s)', side: 'right', overlaying: 'y', titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
+                showlegend: true,
+                legend: { x: 0, y: 1.12, orientation: 'h' },
+            };
+
+            if (hasItl) {
+                var validItl = itlVals.filter(function(v) { return v != null; });
+                var bestItlIdx = itlVals.indexOf(Math.min.apply(null, validItl));
+                traces.push(
+                    { x: labels, y: itlVals, type: 'scatter', mode: 'lines+markers', name: 'ITL ' + pLabel, yaxis: 'y3',
+                      line: { color: '#ef4444', width: 2, shape: 'spline' },
+                      marker: { color: '#ef4444', size: 8, symbol: 'square', line: { width: 1, color: 'white' } }, connectgaps: true },
+                    { x: [labels[bestItlIdx]], y: [itlVals[bestItlIdx]], type: 'scatter', mode: 'markers', name: 'Best ITL', yaxis: 'y3',
+                      marker: { color: '#10b981', size: 16, symbol: 'square', line: { width: 2, color: 'white' } }, showlegend: true }
+                );
+                layout.yaxis3 = { title: 'ITL ' + pLabel + ' (ms)', side: 'left', titlefont: { color: '#ef4444', size: 11 }, tickfont: { color: '#ef4444', size: 10 }, domain: [0, 0.22] };
+            }
+
+            Plotly.newPlot(el, traces, layout, CONFIG);
+        });
+
+        // Aggregated configurations chart (all percentiles in one grouped bar chart) — ported from charts.js
+        var aggResults = coreResults.filter(function(r) { return r.architecture === 'AGGREGATED' && r.ttft_p90; });
+        var aggEl = document.getElementById(ctx.chartId('chart-agg-ttft-all'));
+        if (aggResults.length > 1 && aggEl) {
+            var aggSorted = aggResults.slice().sort(function(a, b) { return (a.tp || 1) - (b.tp || 1); });
+            var aggLabels = aggSorted.map(function(r) { return (r.replicas || Math.floor(r.gpus / (r.tp || 1))) + '×TP' + (r.tp || '?') + ((r.pp && r.pp > 1) ? ' PPx' + r.pp : ''); });
+            var aggColors = { p90: '#3b82f6', p95: '#dc2626', p99: '#7c3aed' };
+            var aggTraces = [];
+            ['p90', 'p95', 'p99'].forEach(function(p) {
+                aggTraces.push({
+                    x: aggLabels,
+                    y: aggSorted.map(function(r) { return r['ttft_' + p]; }),
+                    name: 'TTFT ' + p.toUpperCase(),
+                    type: 'bar',
+                    marker: { color: aggColors[p], opacity: 0.85 },
+                    hovertemplate: '%{x}<br>TTFT ' + p.toUpperCase() + ': %{y:.1f} ms<extra></extra>',
+                });
+            });
+            var aggTputVals = aggSorted.map(function(r) { return r.throughput_mean || r.throughput_p90; });
+            aggTraces.push({
+                x: aggLabels, y: aggTputVals,
+                name: 'Throughput Mean',
+                type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
+                line: { color: '#f59e0b', width: 3, shape: 'spline' },
+                marker: { color: '#f59e0b', size: 10, symbol: 'diamond', line: { width: 2, color: 'white' } },
+                hovertemplate: 'Throughput Mean: %{y:.2f} req/s<extra></extra>',
+            });
+            var itlDashes = { p90: 'solid', p95: 'dash', p99: 'dot' };
+            var itlSymbols = { p90: 'square', p95: 'square-open', p99: 'square-open-dot' };
+            var hasAggItl = aggSorted.some(function(r) { return r.itl_p90 != null; });
+            if (hasAggItl) {
+                ['p90', 'p95', 'p99'].forEach(function(p) {
+                    aggTraces.push({
+                        x: aggLabels,
+                        y: aggSorted.map(function(r) { return r['itl_' + p]; }),
+                        name: 'ITL ' + p.toUpperCase(),
+                        type: 'scatter', mode: 'lines+markers', yaxis: 'y3',
+                        line: { color: '#ef4444', width: 2, dash: itlDashes[p] },
+                        marker: { color: '#ef4444', size: 7, symbol: itlSymbols[p] },
+                        hovertemplate: 'ITL ' + p.toUpperCase() + ': %{y:.2f} ms<extra></extra>',
+                        connectgaps: true,
+                    });
+                });
+            }
+            var aggLayout = {
+                height: 850,
+                barmode: 'group',
+                margin: { t: 30, b: 80, l: 60, r: hasAggItl ? 110 : 60 },
+                xaxis: { title: 'Aggregated Configuration', domain: hasAggItl ? [0, 0.96] : [0, 1] },
+                yaxis: { title: 'TTFT (ms) — lower is better', side: 'left', tickformat: '.2s' },
+                yaxis2: { title: 'Throughput Mean (req/s)', side: 'right', overlaying: 'y', anchor: hasAggItl ? 'free' : 'x', position: hasAggItl ? 0.97 : 1, titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
+                showlegend: true,
+                legend: { x: 0, y: 1.18, orientation: 'h' },
+                plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff'
+            };
+            if (hasAggItl) {
+                aggLayout.yaxis3 = { title: 'ITL (ms)', side: 'right', overlaying: 'y', anchor: 'free', position: 1, titlefont: { color: '#ef4444', size: 11 }, tickfont: { color: '#ef4444', size: 10 } };
+            }
+            Plotly.newPlot(aggEl, aggTraces, aggLayout, CONFIG);
+        }
+
         // vLLM Engine Metrics (ported from charts.js, uses flat fields)
         var engEl = document.getElementById('chart-cfg-engine' + (typeof _sfx !== 'undefined' ? _sfx : ''));
         if (engEl) {
