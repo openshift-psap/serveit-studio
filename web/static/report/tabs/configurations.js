@@ -18,7 +18,7 @@
         function chartCardLocal(title, desc, id) {
             return '<div class="chart-card"><div class="chart-card-header">' + title + '</div>' +
                 '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' + desc + '</div>' +
-                '<div class="chart-card-body"><div id="' + id + _sfx + '" style="width:100%;height:850px;"></div></div></div>';
+                '<div class="chart-card-body"><div id="' + ctx.chartId(id) + '" style="width:100%;height:850px;"></div></div></div>';
         }
         var charts = data.charts || {};
         var rec = data.recommendation || {};
