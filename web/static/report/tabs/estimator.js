@@ -60,8 +60,8 @@
                 '</div>' +
                 '<div id="' + ctx.chartId('est-scaling-info') + '" style="background:#fffbeb;border-top:1px solid #fde68a;border-bottom:1px solid #fde68a;padding:14px 20px;margin:0 -20px;font-size:0.9em;color:#92400e;width:calc(100% + 40px);"></div>' +
                 '<div style="padding:0 20px;display:flex;gap:12px;align-items:center;">' +
-                    '<button class="action-button" onclick="runEstimatorTab(\'' + ctx.chartId('') + '\')" style="margin-top:16px;padding:10px 28px;font-size:0.95em;border-radius:8px;background:linear-gradient(135deg,#d97706,#b45309);border:none;color:white;cursor:pointer;font-weight:600;box-shadow:0 2px 8px rgba(217,119,6,0.3);">Estimate</button>' +
-                    '<button onclick="downloadEstimatorReportTab(\'' + ctx.chartId('') + '\')" style="margin-top:16px;padding:10px 24px;font-size:0.9em;border-radius:8px;background:#f1f5f9;border:1px solid #cbd5e1;color:#475569;cursor:pointer;font-weight:600;">Download Report</button>' +
+                    '<button class="action-button" onclick="runEstimatorTab(this)" style="margin-top:16px;padding:10px 28px;font-size:0.95em;border-radius:8px;background:linear-gradient(135deg,#d97706,#b45309);border:none;color:white;cursor:pointer;font-weight:600;box-shadow:0 2px 8px rgba(217,119,6,0.3);">Estimate</button>' +
+                    '<button onclick="downloadEstimatorReportTab(this)" style="margin-top:16px;padding:10px 24px;font-size:0.9em;border-radius:8px;background:#f1f5f9;border:1px solid #cbd5e1;color:#475569;cursor:pointer;font-weight:600;">Download Report</button>' +
                 '</div>' +
                 '<div id="' + ctx.chartId('est-results') + '"></div>' +
                 '<div id="' + ctx.chartId('est-chart') + '" style="width:100%;margin-top:16px;"></div>' +
@@ -70,8 +70,7 @@
     }
 
     // Fill the methodology explanation box
-    function fillScalingInfo(suffix) {
-        var el = document.getElementById('est-scaling-info' + suffix);
+    function fillScalingInfo(el) {
         if (!el) return;
         var bullets = '';
         bullets += '<li><strong>Throughput SLA</strong>: Replicas = ceil(target req/s &divide; measured req/s per replica). GPUs = replicas &times; GPUs per replica.</li>';
@@ -84,21 +83,34 @@
 
     function render(data, ctx) {
         // Fill the methodology box on render
-        var suffix = ctx.mode === 'live' ? (typeof _chartSuffix !== 'undefined' ? _chartSuffix : '') : '';
-        fillScalingInfo(suffix);
+        fillScalingInfo(document.getElementById(ctx.chartId('est-scaling-info')));
+    }
+
+    // Element lookup scoped to the estimator card the button lives in.
+    // Works for both id schemes: live suffix (est-tput-target-rt1) and
+    // offline dl- prefix (dl-est-tput-target).
+    function estScope(btn) {
+        var card = btn.closest('.chart-card');
+        if (!card) return null;
+        return {
+            card: card,
+            el: function(base) { return card.querySelector('[id*="' + base + '"]'); }
+        };
     }
 
     // The estimator is interactive — triggered by the Estimate button.
-    window.runEstimatorTab = function(suffix) {
+    window.runEstimatorTab = function(btn) {
         if (typeof Plotly === 'undefined') return;
+        var sc = estScope(btn);
+        if (!sc) return;
         var allResults = (_lastData && _lastData.all_results) || [];
         if (!allResults.length) return;
 
-        var targetTput = parseFloat(document.getElementById('est-tput-target' + suffix).value) || 100;
-        var ttftTarget = parseFloat(document.getElementById('est-ttft-target' + suffix).value) || 500;
-        var ttftPctl = document.getElementById('est-ttft-pctl' + suffix).value || 'p99';
-        var itlTarget = parseFloat(document.getElementById('est-itl-target' + suffix).value) || 20;
-        var itlPctl = document.getElementById('est-itl-pctl' + suffix).value || 'p90';
+        var targetTput = parseFloat(sc.el('est-tput-target').value) || 100;
+        var ttftTarget = parseFloat(sc.el('est-ttft-target').value) || 500;
+        var ttftPctl = sc.el('est-ttft-pctl').value || 'p99';
+        var itlTarget = parseFloat(sc.el('est-itl-target').value) || 20;
+        var itlPctl = sc.el('est-itl-pctl').value || 'p90';
 
         var valid = allResults.filter(function(r) {
             return r.quality !== 'discard' && r.gpus > 0 && (r.throughput_mean > 0 || r.throughput_p90 > 0);
@@ -127,13 +139,18 @@
             var itlMeets = itlVal != null && itlVal > 0 ? itlVal <= itlTarget : null;
             results.push({ config_name: key, architecture: (r.architecture || 'UNKNOWN').toUpperCase(),
                 gpus_per_replica: r.gpus, replicas: replicas, total_gpus: totalGpus, measured_tput: tput,
-                ttft_val: ttftVal, ttft_meets: ttftMeets, itl_val: itlVal, itl_meets: itlMeets });
+                target_tput: targetTput,
+                ttft_val: ttftVal, ttft_meets: ttftMeets, ttft_target: ttftTarget, ttft_pctl: ttftPctl,
+                itl_val: itlVal, itl_meets: itlMeets, itl_target: itlTarget, itl_pctl: itlPctl });
         });
         results.sort(function(a, b) { return a.total_gpus - b.total_gpus; });
 
-        var box = document.getElementById('est-results' + suffix);
-        var chartEl = document.getElementById('est-chart' + suffix);
+        var box = sc.el('est-results');
+        var chartEl = sc.el('est-chart');
         if (!results.length) { box.innerHTML = '<p style="color:#6b7280;padding:16px;">No valid configurations to estimate.</p>'; return; }
+
+        // Store results for the Download Report button
+        window._lastEstResults = results;
 
         var bestGpus = results[0].total_gpus;
         var sep = 'border-left:3px solid #e2e8f0;';
@@ -188,11 +205,13 @@
     };
 
     // Download the estimator results as a standalone HTML report
-    window.downloadEstimatorReportTab = function(suffix) {
+    window.downloadEstimatorReportTab = function(btn) {
         var results = window._lastEstResults || [];
         if (!results.length) { alert('Run the estimator first'); return; }
+        var sc = estScope(btn);
+        if (!sc) return;
         var bestGpus = results[0].total_gpus;
-        var chartEl = document.getElementById('est-chart' + suffix);
+        var chartEl = sc.el('est-chart');
         if (!chartEl) return;
         Plotly.toImage(chartEl, { format: 'svg', width: 1200, height: Math.max(400, results.length * 60 + 80) }).then(function(chartSvg) {
             var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>GPU Estimate Report</title>';
@@ -223,41 +242,6 @@
             a.click();
             URL.revokeObjectURL(a.href);
         });
-    };
-
-    // Store results for the download report
-    var _origRunEstimator = window.runEstimatorTab;
-    window.runEstimatorTab = function(suffix) {
-        _origRunEstimator(suffix);
-        // Capture results for download
-        var allResults = (_lastData && _lastData.all_results) || [];
-        var targetTput = parseFloat(document.getElementById('est-tput-target' + suffix).value) || 100;
-        var ttftTarget = parseFloat(document.getElementById('est-ttft-target' + suffix).value) || 500;
-        var ttftPctl = document.getElementById('est-ttft-pctl' + suffix).value || 'p99';
-        var itlTarget = parseFloat(document.getElementById('est-itl-target' + suffix).value) || 20;
-        var itlPctl = document.getElementById('est-itl-pctl' + suffix).value || 'p90';
-        var valid = allResults.filter(function(r) { return r.quality !== 'discard' && r.gpus > 0 && (r.throughput_mean > 0 || r.throughput_p90 > 0); });
-        var bestByConfig = {};
-        valid.forEach(function(r) {
-            var tid = r.test_id || '';
-            if (tid.indexOf('step2-') === 0 || tid.indexOf('step3-') === 0) return;
-            var key = r.config_name || tid;
-            var tput = r.throughput_mean || r.throughput_p90 || 0;
-            if (!bestByConfig[key] || tput > (bestByConfig[key].throughput_mean || bestByConfig[key].throughput_p90 || 0)) bestByConfig[key] = r;
-        });
-        var results = [];
-        Object.keys(bestByConfig).forEach(function(key) {
-            var r = bestByConfig[key];
-            var tput = r.throughput_mean || r.throughput_p90 || 0;
-            if (tput <= 0) return;
-            results.push({ config_name: key, architecture: (r.architecture || 'UNKNOWN').toUpperCase(),
-                gpus_per_replica: r.gpus, replicas: Math.ceil(targetTput / tput), total_gpus: Math.ceil(targetTput / tput) * r.gpus,
-                measured_tput: tput, target_tput: targetTput,
-                ttft_val: r['ttft_' + ttftPctl], ttft_meets: r['ttft_' + ttftPctl] != null ? r['ttft_' + ttftPctl] <= ttftTarget : null, ttft_target: ttftTarget, ttft_pctl: ttftPctl,
-                itl_val: r['itl_' + itlPctl], itl_meets: r['itl_' + itlPctl] != null ? r['itl_' + itlPctl] <= itlTarget : null, itl_target: itlTarget, itl_pctl: itlPctl });
-        });
-        results.sort(function(a, b) { return a.total_gpus - b.total_gpus; });
-        window._lastEstResults = results;
     };
 
     ReportTabs.register({
