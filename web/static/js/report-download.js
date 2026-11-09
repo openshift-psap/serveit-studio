@@ -102,7 +102,7 @@ ${REPORT_CSS}
 </style>
 </head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;margin:0;padding:20px;">
-<div style="max-width:1400px;margin:0 auto;">
+<div style="max-width:1600px;margin:0 auto;">
 <div style="padding:12px 20px;background:linear-gradient(135deg,#b45309,#f59e0b);color:#fff;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:center;">
 <div><div style="font-size:1.3em;font-weight:700;">ServeIt Studio Report — Run #${runId}</div>
 <div style="font-size:0.9em;opacity:0.9;margin-top:4px;">${model} · ${goal} · ${date}</div></div>
@@ -207,6 +207,23 @@ ${scripts}
         }
     });
 
+    // Resize all Plotly charts to fill their containers — charts in
+    // hidden panes render at 0 width, so resize when tabs are shown
+    // and when the window resizes
+    function resizeAllCharts() {
+        document.querySelectorAll('[class*="js-plotly"]').forEach(function(p) {
+            if (window.Plotly) Plotly.Plots.resize(p);
+        });
+    }
+    window.addEventListener('resize', resizeAllCharts);
+    // Resize after initial render (lets layout settle)
+    setTimeout(resizeAllCharts, 100);
+    setTimeout(resizeAllCharts, 500);
+    // Also resize when any subtab becomes active
+    document.querySelectorAll('.report-subtab').forEach(function(el) {
+        el.addEventListener('click', function() { setTimeout(resizeAllCharts, 50); });
+    });
+
     // Sortable tables
     window.sortReportTable = function(tableId, colIdx, type) {
         var table = document.getElementById(tableId);
@@ -265,4 +282,6 @@ const REPORT_CSS = `
 .results-table tr:nth-child(even) td { background: #f8fafc; }
 .results-table tr:hover td { background: #eef2ff; }
 .charts-loading { text-align: center; padding: 60px 20px; color: #94a3b8; font-size: 1.1em; }
+.js-plotly-plot { width: 100% !important; }
+.report-subtab-pane.active .js-plotly-plot { width: 100% !important; }
 `;
