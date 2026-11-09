@@ -7,12 +7,13 @@
         (data.all_results || []).forEach(function(r) {
             var mj = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
             var loadTime = mj.model_load_time_s;
-            if (loadTime != null && loadTime > 0) {
-                out.push({
-                    name: r.config_name, load_s: loadTime, arch: r.architecture,
-                    pods: (r.prefill_pods || 0) + (r.decode_pods || 0) || r.replicas || 0
-                });
-            }
+            // Include ALL results — None means "pods reused" (0s load time), not "skip"
+            var load = (loadTime != null && loadTime > 0) ? loadTime : 0;
+            out.push({
+                name: r.config_name, load_s: load, arch: r.architecture,
+                pods: (r.prefill_pods || 0) + (r.decode_pods || 0) || r.replicas || 0,
+                reused: !(loadTime != null && loadTime > 0)
+            });
         });
         return out;
     }
@@ -46,8 +47,9 @@
         timings.slice().sort(function(a, b) { return a.load_s - b.load_s; }).forEach(function(d) {
             var mins = Math.floor(d.load_s / 60);
             var secs = d.load_s % 60;
-            var timeStr = mins > 0 ? mins + 'm ' + secs + 's' : secs + 's';
-            s += '<tr><td>' + d.name + '</td><td>' + d.arch + '</td><td>' + d.pods + '</td><td>' + timeStr + '</td></tr>';
+            var timeStr = d.reused ? 'reused' : (mins > 0 ? mins + 'm ' + secs + 's' : secs + 's');
+            var reusedStyle = d.reused ? ' style="color:#94a3b8;"' : '';
+            s += '<tr><td>' + d.name + '</td><td>' + d.arch + '</td><td>' + d.pods + '</td><td' + reusedStyle + '>' + timeStr + '</td></tr>';
         });
         s += '</table></div>';
         s += '</div>';
