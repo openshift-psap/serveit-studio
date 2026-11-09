@@ -1094,7 +1094,7 @@ class ReportAnalyzer:
             with_eff = sorted(
                 [(r.display_label, (r.throughput_mean or r.throughput_p90) / r.total_gpus, r.architecture, r.config_name) for r in core_successful],
                 key=lambda x: x[1], reverse=True
-            )[:15]
+            )[:200]
             eff_data['configs'] = [label for label, _, _, _ in with_eff]
             eff_data['values'] = [round(eff, 3) for _, eff, _, _ in with_eff]
             eff_data['colors'] = [arch_colors.get(arch, '#999') for _, _, arch, _ in with_eff]
@@ -1117,7 +1117,7 @@ class ReportAnalyzer:
                   r.architecture, r.config_name)
                  for r in core_successful if self._get_output_tps(r)],
                 key=lambda x: x[1], reverse=True
-            )[:15]
+            )[:200]
             per_user_data['configs'] = [label for label, _, _, _ in with_pu]
             per_user_data['values'] = [round(eff, 2) for _, eff, _, _ in with_pu]
             per_user_data['colors'] = [arch_colors.get(arch, '#999') for _, _, arch, _ in with_pu]
