@@ -95,6 +95,19 @@ curl -s -X POST $BASE_URL/api/start_optimization \
   -d '{"model": "google/gemma-4-26B-A4B", "isl": 2000, "osl": 100, "num_users": 100, "optimization_metric": "ttft", "max_gpus": 16, ...}'
 ```
 
+**Long-run (soak) runs** — set `optimization_metric: "long_run"` and add:
+
+| Field | Type | Description |
+|---|---|---|
+| `long_run_cycles` | int | Number of benchmark cycles (one deployment, pods reused) |
+| `single_test_architecture` | string | `aggregated` / `pd` / `ep` — the deployed shape |
+| `single_test_tp`, `single_test_replicas`, ... | int | Shape parameters |
+| `parallel_workloads` | array | Optional: N workload shapes run simultaneously per cycle. Each entry: `name`, `prefix_tokens`, `isl`, `isl_min`, `isl_max`, `osl`, `concurrency` |
+
+Long-run behavior: deterministic deploy key shared by all cycles, per-cycle test_ids (`<deploy_key>-cNNN`), 90s settle between cycles, per-cycle resource snapshots for leak trending, and two-pass profiling for tests ≥240s with `enable_pprof` (a short profiling load whose data is discarded, then the clean measurement load).
+
+**Flag pinning** — fields omitted from the payload fall back to the last-saved UI wizard state, which can change between runs. Always pin `advanced_vllm_custom_enabled` and `epp_custom_enabled` explicitly, and include the full `epp_config` (with `raw_yaml` for custom profiles) when EPP routing matters.
+
 #### `POST /api/resume_optimization`
 
 Resume a stopped optimization run. Poll `GET /api/status` to track.
@@ -104,6 +117,8 @@ curl -s -X POST $BASE_URL/api/resume_optimization \
   -H 'Content-Type: application/json' \
   -d '{"run_id": 42, "hf_token": "hf_xxx"}'
 ```
+
+Resume semantics: completed tests (per `run_id`, `status = completed`) are skipped and the run continues from the first incomplete test; the full configuration is restored from the run's stored `config_json` (cycle counts, parallel workloads, EPP profile, deploy shape); running inference pods are reused when healthy (probed via vLLM `/health`) — no model reload. For long-run soaks this means resuming continues the cycle sequence where it stopped.
 
 #### `POST /api/generate_test_plan`
 

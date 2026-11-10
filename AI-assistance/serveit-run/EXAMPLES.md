@@ -149,6 +149,42 @@ for r in runs[:3]:
 
 See `SKILL.md` for the full config JSON with advanced_vllm settings.
 
+## Long-Run Soak (50 cycles, parallel workloads, custom EPP)
+
+```bash
+cat > /tmp/soak-payload.json << 'EOF'
+{
+  "model_name": "RedHatAI/gemma-4-31B-it-FP8-dynamic",
+  "namespace": "<instance-namespace>",
+  "isl": 6000, "osl": 500, "qps": 6, "rate_type": "concurrent",
+  "total_gpus": 8, "test_duration": 300, "stop_mode": "duration",
+  "prefix_tokens": 4800, "prefix_cache_hit_pct": 50,
+  "prefix_cache_mode": "multi_group", "prefix_cache_groups": 20,
+  "workload_mode": "synthetic", "use_corpus": true,
+  "optimization_metric": "long_run", "long_run_cycles": 50,
+  "single_test_architecture": "aggregated", "single_test_tp": 1,
+  "single_test_replicas": 8, "single_test_pipeline_parallelism": 1,
+  "advanced_vllm_custom_enabled": false,
+  "epp_custom_enabled": true,
+  "epp_config": {
+    "preset": "custom",
+    "raw_yaml": "plugins:\n  - type: approx-prefix-cache-producer\n  - type: inflight-load-producer\n  - type: prefix-cache-affinity-filter\n  - type: token-load-scorer\nschedulingProfiles:\n  - name: default\n    plugins:\n      - pluginRef: prefix-cache-affinity-filter\n      - pluginRef: token-load-scorer"
+  },
+  "enable_pprof": true, "enable_epp_profile": true,
+  "parallel_workloads": [
+    {"name": "W1-big-prefix", "prefix_tokens": 4800, "isl": 6000, "isl_min": 4800, "isl_max": 7200, "osl": 500, "concurrency": 3},
+    {"name": "W2-mid", "prefix_tokens": 300, "isl": 4500, "isl_min": 3000, "isl_max": 6000, "osl": 200, "concurrency": 4},
+    {"name": "W3-burst", "prefix_tokens": 150, "isl": 4500, "isl_min": 3000, "isl_max": 6000, "osl": 100, "concurrency": 5}
+  ]
+}
+EOF
+
+curl -sk -b /tmp/sck -X POST "$URL/api/start_optimization" \
+  -H 'Content-Type: application/json' -d @/tmp/soak-payload.json
+```
+
+Flags `advanced_vllm_custom_enabled` / `epp_custom_enabled` are pinned deliberately — omitted payload fields fall back to the last-saved UI wizard state, which silently flipped both in past runs (broken speculative config, default EPP routing). Expect ~13-17 min per cycle (two-pass profiling). Resume with `POST /api/resume_optimization {"run_id": N}` — completed cycles are skipped and pods are reused.
+
 ---
 
 ## Why curl instead of run.py?

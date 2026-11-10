@@ -1136,6 +1136,30 @@ For `goal: "single_test"` — add the single test fields:
 {"goal": "single_test", "single_test_architecture": "ep", "single_test_tp": 2, "single_test_replicas": 4}
 ```
 
+For `goal: "long_run"` — soak testing (memory-leak / degradation detection). ONE deployment, N benchmark cycles of the SAME workload. Add:
+
+```json
+{"goal": "long_run", "long_run_cycles": 50, "single_test_architecture": "aggregated", "single_test_tp": 1, "single_test_replicas": 8}
+```
+
+Optional `parallel_workloads` — N workload shapes running simultaneously (one merged result per cycle). Each shape overrides the global ISL/OSL/concurrency for its own traffic:
+
+```json
+"parallel_workloads": [
+  {"name": "W1-big-prefix", "prefix_tokens": 4800, "isl": 6000, "isl_min": 4800, "isl_max": 7200, "osl": 500, "concurrency": 3},
+  {"name": "W2-mid", "prefix_tokens": 300, "isl": 4500, "isl_min": 3000, "isl_max": 6000, "osl": 200, "concurrency": 4},
+  {"name": "W3-burst", "prefix_tokens": 150, "isl": 4500, "isl_min": 3000, "isl_max": 6000, "osl": 100, "concurrency": 5}
+]
+```
+
+Long-run mechanics to know when reading consoles and reports:
+- All cycles share ONE deterministic deploy key (`longrun-<arch>-tp<N>-...`); each cycle gets its own test_id (`...-cNNN`). Pods deploy at cycle 1 and are reused by every later cycle — the reuse check probes each pod's vLLM `/health` (NOT a log-tail grep; the old check deleted healthy pods after ~18 cycles when the startup line scrolled away).
+- Between cycles: fixed 90s settle, per-cycle resource snapshots (RSS/smaps) for leak trending.
+- **Two-pass profiling** (tests ≥240s with pprof enabled): pass A runs a short 90s load WITH the torch profiler (its data discarded — the trace export freezes the fleet ~3 min); a gate waits for every pod's export (force-stopping stragglers the EPP starved of steps); profiles are collected; then pass B runs the full clean measurement. Pass B console lines are the real results. Expect ~13-17 min/cycle.
+- Resume (`POST /api/resume_optimization {"run_id": N}`) skips completed cycles, restores the full config from the run record, and reuses the running pods.
+
+**CRITICAL — session-state leak**: fields OMITTED from the start payload fall back to the last-saved UI wizard state (`ui_session_state`), which can silently change between runs. Observed casualties: `advanced_vllm_custom_enabled: true` leaked a broken speculative config (crashloop), `epp_custom_enabled: false` silently swapped runs to llm-d default EPP routing. **Always pin these explicitly in programmatic payloads**: `advanced_vllm_custom_enabled`, `epp_custom_enabled`, `epp_preset`, and include `epp_config.raw_yaml` when using a custom EPP profile (raw_yaml now wins over the flag, but pin anyway).
+
 **Quick reference — complete config examples by goal:**
 
 ```json
@@ -1218,6 +1242,30 @@ For `goal: "single_test"` — add the single test fields:
      {"flag": "--prefill-context-parallel-size", "value": null}
    ]
  }}
+
+// Long run (soak) — 50 cycles of a 3-shape parallel workload on 8xTP1,
+// custom EPP profile via raw_yaml, torch+EPP profiling on.
+// Note the explicitly pinned flags (session-state leak protection).
+{"goal": "long_run",
+ "model": "RedHatAI/gemma-4-31B-it-FP8-dynamic",
+ "isl": 6000, "osl": 500, "users": 100,
+ "max_gpus": 8, "duration": 300, "stop_mode": "duration",
+ "long_run_cycles": 50,
+ "single_test_architecture": "aggregated", "single_test_tp": 1, "single_test_replicas": 8,
+ "advanced_vllm_custom_enabled": false,
+ "epp_custom_enabled": true,
+ "epp_config": {
+   "preset": "custom",
+   "raw_yaml": "plugins:\n  - type: approx-prefix-cache-producer\n  - type: inflight-load-producer\n  - type: prefix-cache-affinity-filter\n  - type: token-load-scorer\nschedulingProfiles:\n  - name: default\n    plugins:\n      - pluginRef: prefix-cache-affinity-filter\n      - pluginRef: token-load-scorer"
+ },
+ "prefix_cache_hit_pct": 50, "prefix_cache_mode": "multi_group", "prefix_cache_groups": 20,
+ "use_corpus": true, "workload_mode": "synthetic",
+ "enable_pprof": true, "enable_epp_profile": true,
+ "parallel_workloads": [
+   {"name": "W1-big-prefix", "prefix_tokens": 4800, "isl": 6000, "isl_min": 4800, "isl_max": 7200, "osl": 500, "concurrency": 3},
+   {"name": "W2-mid", "prefix_tokens": 300, "isl": 4500, "isl_min": 3000, "isl_max": 6000, "osl": 200, "concurrency": 4},
+   {"name": "W3-burst", "prefix_tokens": 150, "isl": 4500, "isl_min": 3000, "isl_max": 6000, "osl": 100, "concurrency": 5}
+ ]}
 
 // run.py equivalent — why is run.py needed?
 // The API uses Socket.IO (WebSockets), not plain REST. run.py handles:
@@ -1492,6 +1540,12 @@ curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/set_state" \
 # Sync code updates
 git add -A && git commit -m "updates" && git push
 python3 deployment/deploy.py --sync-all -n serveit --mode launcher
+
+# Sync to a SPECIFIC launcher-created instance (per-instance labels don't match
+# the generic selectors — use --pod). Restarting the server kills any run in
+# flight: stop it first, sync, then resume or start fresh.
+python3 deployment/deploy.py --sync --pod <instance-pod-name> -n <instance-namespace>
+# e.g. python3 deployment/deploy.py --sync --pod serveit-admin-66lrw-psap-fire-athena-58b96bf86b-zsm25 -n inftune
 ```
 
 ---
@@ -1517,6 +1571,20 @@ Common issues and how to handle them:
 **FailedUpdate on Machine** — The VM was created but is stuck booting. Monitor events with `kubectl get events -A | grep "Update machine"`. If `FailedUpdate` persists for more than 15-20 minutes with no `Normal Update`, delete the machine and let the MachineSet recreate it.
 
 **NFS volume mount errors with local disk** — Template is generating NFS volume mounts despite `local_disk_path` being set. Ensure `per_node_storage: true` AND `local_disk_path` are both set in the config. The prereq manager skips NFS PVC creation when `local_disk_path` is set.
+
+**vLLM pods crashloop at startup with a tensor size mismatch (e.g. "tensor a (2816) must match tensor b (5376)")** — Speculative decoding is configured with a draft model whose hidden size differs from the target model's (MTP expects the target's own MTP head, not a different model). Check the pod's serve args for `--speculative-config`. Usually caused by `advanced_vllm` form settings leaking from the UI session state into an API-started run — pin `advanced_vllm_custom_enabled: false` (or fix the spec config) in the payload.
+
+**Healthy pods redeployed mid-soak (~every 18 cycles, 400s model reload)** — The old pod-reuse check grepped vLLM's one-time "Application startup complete" line in the log tail; busy pods scroll it away. Fixed (reuse now probes `/health` per pod), but if you see "🧹 Cleaning up leftover deployment (not all pods serving)" on a healthy fleet, suspect the check.
+
+**Long-run p99 spikes to 120-200s while p50/p90 stay normal** — Historical: the torch profiler's mid-test trace export froze the fleet ~3 min; affected requests were held by the guidellm client (`request_scheduled_latency` ≈ TTFT ≈ 200s, then completed in ~2s). The two-pass design prevents this. When diagnosing stuck requests, check `request_scheduled_latency` in the raw guidellm output: ≈ TTFT means client-held (a stall artifact), small means real server latency.
+
+**Phantom errors (6-11 per cycle, gateway 400s)** — guidellm warmup probes (bodiless POSTs). Filtered from `request_errored` via `warmup_probe_errors` computed in the merge step. If error counts look inflated, check the raw file's `requests.errored` for `request_args` without bodies.
+
+**EPP routing doesn't match the configured profile (ConfigMap shows queue-scorer/kv-cache/prefix scorers)** — The run fell back to llm-d defaults. `_build_epp_config` now honors an explicit `epp_config.raw_yaml` over the `epp_custom_enabled` flag, but API-started runs still inherit omitted flags from the wizard state — pin `epp_custom_enabled: true` and include the full `epp_config` in the payload. Verify with: `kubectl get configmap gaie-<arch>-epp -n <ns> -o jsonpath='{.data}'`.
+
+**"Pods not ready after 5 min" between guidellm retries** — Historical false alarm: the retry wait checked pods by the per-cycle test-id label while reused pods carry the deploy-key label. Harmless but wasted 5 min per retry.
+
+**Deployed EPP config changed → "EPP config changed — restarting"** — Expected one-time EPP pod restart when the configmap content changes (e.g., defaults → user profile). Subsequent cycles show "EPP config unchanged — skipping restart".
 
 ---
 
