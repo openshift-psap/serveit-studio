@@ -457,7 +457,7 @@ class ProfileCollector:
         _start_now()
         return results
 
-    def wait_for_torch_export(self, handle, timeout=900, log_callback=None):
+    def wait_for_torch_export(self, handle, timeout=900, log_callback=None, force_stop_after=300):
         """HARD BARRIER: wait until every started pod's torch trace export
         has fully completed before the measurement pass may run.
 
@@ -469,20 +469,45 @@ class ProfileCollector:
         consecutive polls (torch writes the file at completion; the
         stability check guards against a mid-write sighting).
 
-        The timeout (15 min ≈ 4x the worst observed export) is a
-        fail-safe against a wedged/never-completing export — pass B
-        proceeds past it with a CRITICAL log rather than hanging the
-        run forever; pass B's own retry logic handles a broken engine.
+        Straggler handling: pods the EPP gave little/no traffic under the
+        short profiling load may never reach their step budget, leaving
+        their profilers ARMED — abandoned, they would auto-stop and
+        export MID-MEASUREMENT once pass B makes their steps tick (the
+        exact bug this gate exists to prevent). After force_stop_after
+        seconds, stragglers get an explicit /stop_profile: it exports
+        whatever was recorded (possibly nothing, for idle pods) and
+        disarms them for good. A forced pod that produces no trace file
+        within 2 minutes recorded nothing (idle) — accepted and logged.
+
+        The timeout (15 min) is a fail-safe against a wedged export —
+        pass B proceeds past it with a CRITICAL log rather than hanging
+        the run forever; pass B's own retry logic handles a broken
+        engine.
         """
         started = [e for e in (handle.get("torch_procs") or []) if e.get("started")]
         if not started:
             return
-        pending = {e["pod"] for e in started}
-        sizes = {}  # pod -> total size of new trace files at last poll
+        entry_by_pod = {e["pod"]: e for e in started}
+        pending = set(entry_by_pod)
+        sizes = {}      # pod -> total size of new trace files at last poll
+        forced_at = {}  # pod -> time its profiler was force-stopped
         deadline = time.time() + timeout
+        force_at = time.time() + force_stop_after
         t0 = time.time()
         while pending and time.time() < deadline:
             time.sleep(15)
+            if pending and time.time() >= force_at:
+                for pod_name in sorted(pending - set(forced_at)):
+                    entry = entry_by_pod[pod_name]
+                    url = f"http://{entry.get('ip')}:{entry.get('port') or 8000}/stop_profile"
+                    if log_callback:
+                        log_callback(
+                            f"   \U0001f527 Force-stopping profiler on {pod_name} — "
+                            f"step budget not reached under the short load, exporting partial trace"
+                        )
+                    self._post_via_workload_pod(url, 150)
+                    forced_at[pod_name] = time.time()
+                force_at = float("inf")
             for pod_name in list(pending):
                 r = self._run_kubectl(
                     ["exec", pod_name, "-n", self.namespace, "-c", "vllm", "--",
@@ -494,6 +519,11 @@ class ProfileCollector:
                     continue
                 total = r.stdout.strip() or "0"
                 if total in ("", "0"):
+                    # Forced pod with no file after 2 min recorded nothing
+                    if pod_name in forced_at and time.time() - forced_at[pod_name] > 120:
+                        pending.discard(pod_name)
+                        if log_callback:
+                            log_callback(f"   \u2139\ufe0f  {pod_name}: no trace produced (idle during profiling load)")
                     continue  # no new file yet — export still running
                 prev = sizes.get(pod_name)
                 sizes[pod_name] = total
@@ -501,17 +531,17 @@ class ProfileCollector:
                     # file present AND size stable across polls — done
                     pending.discard(pod_name)
             if log_callback and pending and int(time.time() - t0) % 60 < 15:
-                log_callback(f"   ⏳ Trace export: {len(started) - len(pending)}/{len(started)} pods done "
+                log_callback(f"   \u23f3 Trace export: {len(started) - len(pending)}/{len(started)} pods done "
                              f"({int(time.time() - t0)}s elapsed)")
         if log_callback:
             if pending:
                 log_callback(
-                    f"   🚨 Trace export NOT complete on {len(pending)} pod(s) after {timeout}s "
+                    f"   \U0001f6a8 Trace export NOT complete on {len(pending)} pod(s) after {timeout}s "
                     f"({', '.join(sorted(pending))}) — proceeding to measurement as fail-safe; "
                     f"the engine may be wedged"
                 )
             else:
-                log_callback(f"   ✅ Trace export complete on all {len(started)} pod(s) "
+                log_callback(f"   \u2705 Trace export complete on all {len(started)} pod(s) "
                              f"({int(time.time() - t0)}s)")
 
     def collect_torch_profiles(self, results, log_callback=None, written=None, test_id=None):
