@@ -286,30 +286,15 @@ class ParserMixin:
             # guidellm sends bodiless warmup probes that the gateway 400s
             # (empty POST to /v1/completions). They carry no payload and no
             # signal — exclude them from the error count so they don't
-            # inflate error rates or trigger bogus retries.
-            try:
-                _real_errored = 0
-                for bm in data.get("benchmarks", []):
-                    for e in (bm.get("requests", {}) or {}).get("errored", []) or []:
-                        if not isinstance(e, dict):
-                            _real_errored += 1
-                            continue
-                        _args = e.get("request_args")
-                        _has_body = False
-                        if isinstance(_args, str) and len(_args) > 10:
-                            _has_body = True
-                        elif isinstance(_args, dict) and _args.get("body"):
-                            _has_body = True
-                        if _has_body:
-                            _real_errored += 1
-                if _real_errored < (result.request_errored or 0):
-                    logger.info(
-                        f"Excluding {(result.request_errored or 0) - _real_errored} bodiless "
-                        f"warmup-probe errors from the error count"
-                    )
-                    result.request_errored = _real_errored
-            except Exception:
-                pass
+            # inflate error rates or trigger bogus retries. The count is
+            # computed in the guidellm merge step (the merged metrics drop
+            # the per-request data the check needs).
+            _warmup_errs = bench.get("warmup_probe_errors") or 0
+            if _warmup_errs and (result.request_errored or 0) > _warmup_errs:
+                logger.info(
+                    f"Excluding {_warmup_errs} bodiless warmup-probe errors from the error count"
+                )
+                result.request_errored = (result.request_errored or 0) - _warmup_errs
 
             # --- Benchmark Timing ---
             result.benchmark_duration_s = bench.get("duration")

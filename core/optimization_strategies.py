@@ -15,7 +15,6 @@ testing, so that Step 8 comparisons require no additional tests.
 """
 
 import logging
-import random
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
@@ -1215,7 +1214,6 @@ class LongRunStrategy(OptimizationStrategy):
 
     def execute(self):
         import copy
-        import random as _random
         import time as _time
 
         cfg = self.opt.config

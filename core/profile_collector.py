@@ -660,7 +660,9 @@ class ProfileCollector:
     # ── resolve workload pod ────────────────────────────────────────────────
 
     def _resolve_workload_pod(self):
-        if self.workload_pod and "-" in self.workload_pod.strip("serveit-workload-"):
+        # Validate the cached pod name still exists (it may carry a
+        # per-instance suffix after the base "serveit-workload-").
+        if self.workload_pod and self.workload_pod.startswith("serveit-workload-"):
             r = self._run_kubectl(["get", "pod", self.workload_pod, "-n", self.namespace, "-o", "name"])
             if r.returncode == 0:
                 return

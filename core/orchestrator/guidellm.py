@@ -780,12 +780,13 @@ class GuidellmMixin:
             return False, None, None
 
     def _extract_guidellm_totals(self, output_path, kubectl, timeout=60):
-        """Pull total token count from a raw guidellm output on the workload pod.
+        """Pull totals from a raw guidellm output on the workload pod.
 
         parse_guidellm (baked into the workload image) flattens only the
         summary distributions — the window-exact tokens_per_second needs
-        total_token_count.total_sum, which the reconstituted benchmarks
-        would otherwise drop. Best-effort: None on any failure.
+        total_token_count.total_sum, and the warmup-probe filter needs the
+        per-request bodies — both dropped by the reconstituted benchmarks.
+        Best-effort: None on any failure.
         """
         try:
             cmd = (
@@ -794,10 +795,20 @@ class GuidellmMixin:
                 "tc=((m.get('total_token_count',{}) or {}).get('total',{}) or {}); "
                 "tt=((m.get('time_to_first_token_ms',{}) or {}).get('total',{}) or {}); "
                 "tp=tt.get('percentiles',{}) or {}; "
+                "errs=((b.get('requests',{}) or {}).get('errored',[]) or []); "
+                "t0=b.get('start_time') or 0; "
+                "bodiless=0\\n"
+                "for e in errs:\\n"
+                "    a=e.get('request_args') if isinstance(e,dict) else None\\n"
+                "    if (e.get('request_start_time') or 0) < t0:\\n"
+                "        continue\\n"
+                "    if not ((isinstance(a,str) and len(a)>10) or (isinstance(a,dict) and a.get('body'))):\\n"
+                "        bodiless+=1\\n"
                 "print(json.dumps({'tokens': tc.get('total_sum') or 0, "
                 "'ttft_total': {'mean': tt.get('mean'), 'count': tt.get('count'), "
                 "'p50': tp.get('p50'), 'p90': tp.get('p90'), "
-                "'p95': tp.get('p95'), 'p999': tp.get('p999')}}))\"" % output_path
+                "'p95': tp.get('p95'), 'p999': tp.get('p999')}, "
+                "'bodiless_errored': bodiless}))\"" % output_path
             )
             r = kubectl.run(
                 ["exec", self._guidellm_pod_name, "-n", self.namespace, "--", "bash", "-c", cmd],
@@ -1184,6 +1195,11 @@ class GuidellmMixin:
                         "workload_name": j["name"],
                         "duration": extracted.get("benchmark_duration_s"),
                         "warmup_duration": extracted.get("warmup_duration_s"),
+                        # Bodiless warmup-probe errors (gateway-400'd empty
+                        # POSTs) — the parser subtracts these from the error
+                        # count. Computed from the raw per-request data,
+                        # which the merged metrics drop.
+                        "warmup_probe_errors": (_totals or {}).get("bodiless_errored") or 0,
                         "start_time": extracted.get("start_time"),
                         "end_time": extracted.get("end_time"),
                         "metrics": {

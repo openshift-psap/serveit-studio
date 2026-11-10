@@ -504,7 +504,6 @@ def extract_resource_series(metrics_file: str, max_points: int = 40) -> Optional
        mem_mib: {pod: [...]}, cpu_mc: {pod: [...]}}
     """
     import json as _json
-    import math as _math
 
     try:
         with open(metrics_file) as f:

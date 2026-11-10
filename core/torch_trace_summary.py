@@ -20,7 +20,7 @@ Usage:
 import gzip
 import json
 import sys
-from collections import Counter, defaultdict
+from collections import Counter
 
 
 def iter_events(path, chunk_size=1 << 20):
