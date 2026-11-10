@@ -497,7 +497,12 @@ class ProfileCollector:
         while pending and time.time() < deadline:
             time.sleep(15)
             if pending and time.time() >= force_at:
-                for pod_name in sorted(pending - set(forced_at)):
+                # Fire all straggler stops in parallel — each call blocks
+                # through that pod's partial-trace export (1-2.5 min each),
+                # so sequential stops would stack into minutes of gate time
+                _stop_threads = []
+
+                def _force_stop(pod_name):
                     entry = entry_by_pod[pod_name]
                     url = f"http://{entry.get('ip')}:{entry.get('port') or 8000}/stop_profile"
                     if log_callback:
@@ -505,8 +510,15 @@ class ProfileCollector:
                             f"   \U0001f527 Force-stopping profiler on {pod_name} — "
                             f"step budget not reached under the short load, exporting partial trace"
                         )
-                    self._post_via_workload_pod(url, 150)
+                    self._post_via_workload_pod(url, 180)
                     forced_at[pod_name] = time.time()
+
+                for pod_name in sorted(pending - set(forced_at)):
+                    t = threading.Thread(target=_force_stop, args=(pod_name,), daemon=True)
+                    t.start()
+                    _stop_threads.append(t)
+                for t in _stop_threads:
+                    t.join()
                 force_at = float("inf")
             for pod_name in list(pending):
                 r = self._run_kubectl(
