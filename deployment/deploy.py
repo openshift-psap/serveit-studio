@@ -214,14 +214,17 @@ def stop_port_forward(quiet: bool = False):
 
 # ── Restart Server ───────────────────────────────────────────────────────────
 
-def restart_server(cmd: str, namespace: str, port: int):
-    # Find any serveit pod (optimizer or launcher)
-    r = kubectl_run(cmd, ['get', 'pod', '-n', namespace,
-                          '-l', 'app in (serveit-optimizer,serveit-launcher)',
-                          '-o', 'jsonpath={.items[0].metadata.name}'])
-    pod = r.stdout.strip()
+def restart_server(cmd: str, namespace: str, port: int, pod_name: str = None):
+    # Find any serveit pod (optimizer or launcher), or use an explicit pod name
+    if pod_name:
+        pod = pod_name
+    else:
+        r = kubectl_run(cmd, ['get', 'pod', '-n', namespace,
+                              '-l', 'app in (serveit-optimizer,serveit-launcher)',
+                              '-o', 'jsonpath={.items[0].metadata.name}'])
+        pod = r.stdout.strip()
     if not pod:
-        print("❌ No optimizer pod found", file=sys.stderr)
+        print("❌ No optimizer pod found (pass --pod <name> for launcher instances)", file=sys.stderr)
         return
 
     print(f"🔄 Restarting server in pod: {pod}", file=sys.stderr)
@@ -344,6 +347,7 @@ def main():
     dg.add_argument('--dev', action='store_true', help='Dev mode (auto-sync code, auto-restart)')
     dg.add_argument('--sync', action='store_true', help='Sync local code to running pod')
     dg.add_argument('--sync-all', action='store_true', help='Sync code to ALL serveit pods in the namespace')
+    dg.add_argument('--pod', help='Target a specific pod by name (for launcher-created instances whose labels do not match the serveit-optimizer/serveit-launcher selectors). Used with --sync and --restart-server.')
     dg.add_argument('--force-nad', action='store_true', help='Force NAD mode instead of DRA')
 
     pg = p.add_argument_group('Port Forward & Server')
@@ -370,7 +374,7 @@ def main():
         return
 
     if args.restart_server:
-        restart_server(cmd, args.namespace, args.local_port)
+        restart_server(cmd, args.namespace, args.local_port, pod_name=args.pod)
         return
 
     # ── Sync only ──
@@ -390,20 +394,23 @@ def main():
             return
 
         # --sync: single pod (launcher or optimizer)
-        # Try both serveit- and inftune- prefixed labels
-        if args.mode == 'launcher':
-            label_candidates = ['serveit-launcher', 'inftune-launcher']
+        # Explicit --pod wins; else try both serveit- and inftune- prefixed labels
+        if args.pod:
+            pod = args.pod
         else:
-            label_candidates = ['serveit-optimizer', 'inftune-optimizer']
-        pod = ''
-        for label in label_candidates:
-            r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace, '-l', f'app={label}',
-                                  '-o', 'jsonpath={.items[0].metadata.name}'])
-            pod = r.stdout.strip()
-            if pod:
-                break
+            if args.mode == 'launcher':
+                label_candidates = ['serveit-launcher', 'inftune-launcher']
+            else:
+                label_candidates = ['serveit-optimizer', 'inftune-optimizer']
+            pod = ''
+            for label in label_candidates:
+                r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace, '-l', f'app={label}',
+                                      '-o', 'jsonpath={.items[0].metadata.name}'])
+                pod = r.stdout.strip()
+                if pod:
+                    break
         if not pod:
-            print("❌ No ServeIt Studio pod found. Deploy first.", file=sys.stderr)
+            print("❌ No ServeIt Studio pod found. Deploy first, or pass --pod <name> for launcher instances.", file=sys.stderr)
             sys.exit(1)
         sync_code(cmd, args.namespace, pod)
         print("\n   Code synced. Server will auto-restart and pick up changes.", file=sys.stderr)
@@ -477,7 +484,7 @@ def main():
         if pod:
             sync_code(cmd, args.namespace, pod)
             if args.restart_server:
-                restart_server(cmd, args.namespace, args.local_port)
+                restart_server(cmd, args.namespace, args.local_port, pod_name=args.pod)
             else:
                 print("\n   Server will auto-start on crash.", file=sys.stderr)
 
