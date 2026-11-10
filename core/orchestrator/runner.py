@@ -1867,7 +1867,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         if log_callback:
                             log_callback("   ⏳ Waiting for trace export to complete...")
                         self.profile_collector.wait_for_torch_export(
-                            self._profile_handle, timeout=420, log_callback=log_callback
+                            self._profile_handle, timeout=900, log_callback=log_callback
                         )
                         # Collect profiles now, into the cycle's artifact dir
                         if log_callback:
