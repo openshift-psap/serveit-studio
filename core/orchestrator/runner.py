@@ -1616,14 +1616,35 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     pod_names = [p for p in r.stdout.strip().split() if p]
                     all_serving = len(pod_names) > 0
                     for pn in pod_names:
-                        log_r = subprocess.run(
-                            ["kubectl", "logs", pn, "-n", self.namespace, "-c", "vllm", "--tail=2000"],
+                        # Direct liveness probe: vLLM's /health returns 200
+                        # once the server is up. The previous check grepped
+                        # "Application startup complete" in the log tail
+                        # (--tail=2000) — that line is logged ONCE at
+                        # startup, so after ~18 cycles of serving a busy
+                        # pod scrolls it out of the window and the runner
+                        # wrongly deletes a healthy deployment mid-soak
+                        # (observed: 415s model reload at cycle 19 of 50).
+                        hc = subprocess.run(
+                            [
+                                "kubectl", "exec", pn, "-n", self.namespace, "-c", "vllm", "--",
+                                "python3", "-c",
+                                "import urllib.request\n"
+                                "ok = False\n"
+                                "for p in (8000, 8200):\n"
+                                "    try:\n"
+                                "        if urllib.request.urlopen(f'http://localhost:{p}/health', timeout=10).status == 200:\n"
+                                "            ok = True\n"
+                                "            break\n"
+                                "    except Exception:\n"
+                                "        pass\n"
+                                "raise SystemExit(0 if ok else 1)",
+                            ],
                             capture_output=True,
                             text=True,
-                            timeout=30,
+                            timeout=45,
                             check=False,
                         )
-                        if "Application startup complete" not in log_r.stdout:
+                        if hc.returncode != 0:
                             all_serving = False
                             break
 
