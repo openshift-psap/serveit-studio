@@ -429,11 +429,20 @@ class ProfileCollector:
                         started = True
                         started_port = port
                         break
+                if started:
+                    # Marker for wait_for_torch_export: the trace file this
+                    # profiler eventually writes will be newer than this
+                    # marker, distinguishing it from stale traces of
+                    # previous cycles (pods are reused across cycles).
+                    self._run_kubectl(
+                        ["exec", pod_name, "-n", self.namespace, "-c", "vllm",
+                         "--", "touch", "/tmp/.torch_prof_mark"],
+                        timeout=15)
                 results.append({"pod": pod_name, "started": started, "ip": pod_ip,
                                 "port": started_port or 8000})
             if log_callback and results:
                 n_started = sum(1 for r in results if r.get("started"))
-                suffix = f" (delayed {delay_s}s — steady-state slice)" if delay_s else ""
+                suffix = f" (delayed {delay_s}s)" if delay_s else ""
                 log_callback(f"   \U0001f52c Torch profiler started on {n_started}/{len(results)} pod(s){suffix}")
 
         if delay_s > 0:
@@ -447,6 +456,38 @@ class ProfileCollector:
             return results
         _start_now()
         return results
+
+    def wait_for_torch_export(self, handle, timeout=420, log_callback=None):
+        """Wait until every started pod's torch trace export has completed.
+
+        When the 500-step recording budget completes, torch exports the
+        trace SYNCHRONOUSLY ON THE ENGINE THREAD — the engine freezes for
+        the export duration (~3 min for a 370k-event trace). The export
+        is done when a trace file newer than the start marker appears in
+        the pod's /tmp/torch_traces (torch writes it at completion).
+        Pods that never started are ignored; pods that never produce a
+        trace give up at the timeout (logged, non-fatal).
+        """
+        started = [e for e in (handle.get("torch_procs") or []) if e.get("started")]
+        if not started:
+            return
+        pending = {e["pod"] for e in started}
+        deadline = time.time() + timeout
+        while pending and time.time() < deadline:
+            time.sleep(15)
+            for pod_name in list(pending):
+                r = self._run_kubectl(
+                    ["exec", pod_name, "-n", self.namespace, "-c", "vllm", "--",
+                     "bash", "-c",
+                     "find /tmp/torch_traces -type f -newer /tmp/.torch_prof_mark 2>/dev/null | wc -l"],
+                    timeout=30)
+                if r.returncode == 0 and r.stdout.strip().split()[-1] not in ("0", ""):
+                    pending.discard(pod_name)
+        if log_callback:
+            if pending:
+                log_callback(f"   \u26a0\ufe0f  Trace export still pending on {len(pending)} pod(s) after {timeout}s — proceeding")
+            else:
+                log_callback(f"   \u2705 Trace export complete on all {len(started)} pod(s)")
 
     def collect_torch_profiles(self, results, log_callback=None, written=None, test_id=None):
         """Stop torch profilers via /stop_profile and collect traces."""

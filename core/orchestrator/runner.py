@@ -4,6 +4,7 @@ import os
 import json
 import re
 import time
+import copy
 import socket
 import logging
 import subprocess
@@ -1827,6 +1828,64 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     log_callback("\n⏭️  Skipping guidellm workload and metrics collection (validation mode)")
 
             else:
+                # ── Profiling pass (two-run design) ─────────────────────────
+                # For long tests with torch profiling: run a SHORT load with
+                # the profiler attached, wait out the trace export, collect
+                # the profiles — then run the REAL measurement load clean.
+                # The trace export runs synchronously on the engine thread
+                # and freezes the fleet for ~3 minutes (370k-event trace);
+                # when it fired mid-measurement it poisoned p99 with ~200s
+                # TTFTs (verified: 8/8 stuck requests aligned with
+                # profiler_stop ±8s). The profiling pass absorbs the freeze
+                # — its latency data is discarded, its only job is to
+                # generate realistic load while the trace records.
+                _profiles_from_pass = None
+                _prof_pass_ran = False
+                _dur = getattr(config, "test_duration", 0) or 0
+                if getattr(config, "enable_pprof", False) and _dur >= 240:
+                    _prof_pass_ran = True
+                    try:
+                        if log_callback:
+                            log_callback(
+                                "\n🔬 PROFILING PASS — short load with torch profiler.\n"
+                                "   Its latency data is DISCARDED: the trace export freezes the\n"
+                                "   fleet (~3 min) and must never overlap the measurement pass."
+                            )
+                        prof_cfg = copy.deepcopy(config)
+                        prof_cfg.test_duration = 90  # ramp + recording window
+                        self._profile_handle = self.profile_collector.start_cpu_captures(
+                            prof_cfg, log_callback=log_callback, torch_delay_s=45
+                        )
+                        # Short load — output ignored, no retries, no metrics
+                        self._run_guidellm_job(
+                            endpoint, prof_cfg,
+                            log_callback=log_callback,
+                            stop_check=stop_check,
+                            collect_metrics=False,
+                        )
+                        # Wait for the export to finish before measuring
+                        if log_callback:
+                            log_callback("   ⏳ Waiting for trace export to complete...")
+                        self.profile_collector.wait_for_torch_export(
+                            self._profile_handle, timeout=420, log_callback=log_callback
+                        )
+                        # Collect profiles now, into the cycle's artifact dir
+                        if log_callback:
+                            log_callback("   🔬 Collecting pod profiles (from profiling pass)...")
+                        _profiles_from_pass = self.profile_collector.finish_captures(
+                            self._profile_handle, config, log_callback=log_callback
+                        )
+                        # Brief settle so the measurement starts quiesced
+                        if log_callback:
+                            log_callback("   ⏸️ Settle 15s before measurement pass...")
+                        time.sleep(15)
+                    except Exception as e:
+                        logger.warning(f"profiling pass failed (non-fatal): {e}")
+                        if log_callback:
+                            log_callback(f"   ⚠️ Profiling pass failed (non-fatal): {e}")
+                    finally:
+                        self._profile_handle = None
+
                 # Step 5: Run guidellm test (retry up to 3 times on 2-4% error rate)
                 max_guidellm_retries = 3
                 for guidellm_attempt in range(1, max_guidellm_retries + 1):
@@ -1859,18 +1918,15 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     result.test_start_time = datetime.now().isoformat()
 
                     # Start pod CPU profile captures on the first attempt so
-                    # the capture window covers the benchmark load.
-                    # Torch profiler start is deferred ~60s into the load for
-                    # long tests: starting before the load couples the
-                    # recording window to the cold-start prefill storm and
-                    # collapses the attempt (tracing overhead stretches the
-                    # step budget across the whole test). Steady-state
-                    # start = warm cache, fast steps, bounded window.
-                    if guidellm_attempt == 1:
+                    # the capture window covers the benchmark load. Skipped
+                    # when the profiling pass already collected everything
+                    # (two-run design) — the measurement pass must run with
+                    # NO profiler attached, and short tests (< 240s) keep
+                    # the simple pre-load start.
+                    if guidellm_attempt == 1 and not _prof_pass_ran:
                         try:
-                            _torch_delay = 90 if (getattr(config, "test_duration", 0) or 0) >= 240 else 0
                             self._profile_handle = self.profile_collector.start_cpu_captures(
-                                config, log_callback=log_callback, torch_delay_s=_torch_delay
+                                config, log_callback=log_callback
                             )
                         except Exception as e:
                             logger.warning(f"profile capture start failed: {e}")
@@ -1961,8 +2017,12 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     return result
 
                 # Finish pod profile collection: join CPU threads, snapshot
-                # heap/goroutines, write files, build the report summary
-                if getattr(self, "_profile_handle", None):
+                # heap/goroutines, write files, build the report summary.
+                # With the two-run design the profiles were already collected
+                # after the profiling pass — attach them here.
+                if _profiles_from_pass is not None:
+                    result.profiles = _profiles_from_pass
+                elif getattr(self, "_profile_handle", None):
                     try:
                         if log_callback:
                             log_callback("\n🔬 Collecting pod profiles...")
