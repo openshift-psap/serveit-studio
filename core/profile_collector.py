@@ -457,37 +457,62 @@ class ProfileCollector:
         _start_now()
         return results
 
-    def wait_for_torch_export(self, handle, timeout=420, log_callback=None):
-        """Wait until every started pod's torch trace export has completed.
+    def wait_for_torch_export(self, handle, timeout=900, log_callback=None):
+        """HARD BARRIER: wait until every started pod's torch trace export
+        has fully completed before the measurement pass may run.
 
         When the 500-step recording budget completes, torch exports the
         trace SYNCHRONOUSLY ON THE ENGINE THREAD — the engine freezes for
         the export duration (~3 min for a 370k-event trace). The export
-        is done when a trace file newer than the start marker appears in
-        the pod's /tmp/torch_traces (torch writes it at completion).
-        Pods that never started are ignored; pods that never produce a
-        trace give up at the timeout (logged, non-fatal).
+        is complete when a trace file newer than the start marker exists
+        in the pod's /tmp/torch_traces AND its size is stable across two
+        consecutive polls (torch writes the file at completion; the
+        stability check guards against a mid-write sighting).
+
+        The timeout (15 min ≈ 4x the worst observed export) is a
+        fail-safe against a wedged/never-completing export — pass B
+        proceeds past it with a CRITICAL log rather than hanging the
+        run forever; pass B's own retry logic handles a broken engine.
         """
         started = [e for e in (handle.get("torch_procs") or []) if e.get("started")]
         if not started:
             return
         pending = {e["pod"] for e in started}
+        sizes = {}  # pod -> total size of new trace files at last poll
         deadline = time.time() + timeout
+        t0 = time.time()
         while pending and time.time() < deadline:
             time.sleep(15)
             for pod_name in list(pending):
                 r = self._run_kubectl(
                     ["exec", pod_name, "-n", self.namespace, "-c", "vllm", "--",
                      "bash", "-c",
-                     "find /tmp/torch_traces -type f -newer /tmp/.torch_prof_mark 2>/dev/null | wc -l"],
+                     "find /tmp/torch_traces -type f -newer /tmp/.torch_prof_mark "
+                     "-exec stat -c %s {} + 2>/dev/null | awk '{s+=$1} END {print s+0}'"],
                     timeout=30)
-                if r.returncode == 0 and r.stdout.strip().split()[-1] not in ("0", ""):
+                if r.returncode != 0:
+                    continue
+                total = r.stdout.strip() or "0"
+                if total in ("", "0"):
+                    continue  # no new file yet — export still running
+                prev = sizes.get(pod_name)
+                sizes[pod_name] = total
+                if prev is not None and prev == total:
+                    # file present AND size stable across polls — done
                     pending.discard(pod_name)
+            if log_callback and pending and int(time.time() - t0) % 60 < 15:
+                log_callback(f"   ⏳ Trace export: {len(started) - len(pending)}/{len(started)} pods done "
+                             f"({int(time.time() - t0)}s elapsed)")
         if log_callback:
             if pending:
-                log_callback(f"   \u26a0\ufe0f  Trace export still pending on {len(pending)} pod(s) after {timeout}s — proceeding")
+                log_callback(
+                    f"   🚨 Trace export NOT complete on {len(pending)} pod(s) after {timeout}s "
+                    f"({', '.join(sorted(pending))}) — proceeding to measurement as fail-safe; "
+                    f"the engine may be wedged"
+                )
             else:
-                log_callback(f"   \u2705 Trace export complete on all {len(started)} pod(s)")
+                log_callback(f"   ✅ Trace export complete on all {len(started)} pod(s) "
+                             f"({int(time.time() - t0)}s)")
 
     def collect_torch_profiles(self, results, log_callback=None, written=None, test_id=None):
         """Stop torch profilers via /stop_profile and collect traces."""
