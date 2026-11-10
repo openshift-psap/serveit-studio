@@ -200,10 +200,19 @@
     }
 
     // --- Aggregated configurations chart (all percentiles in one chart) ---
-    if (coreResults.filter(r => r.architecture === 'AGGREGATED').length > 1) {
+    var aggForCard = coreResults.filter(r => r.architecture === 'AGGREGATED');
+    if (aggForCard.length > 1) {
+        // Soak runs repeat one config every cycle — grouped bars would pile
+        // every cycle onto the same x label. Detect and describe the trend
+        // (line) mode; the render side switches chart type on the same check.
+        var _aggLbls = aggForCard.map(r => _tagLabel(r.config_name, r.architecture));
+        var _uniq = {}; _aggLbls.forEach(l => { _uniq[l] = true; });
+        var _soakMode = Object.keys(_uniq).length < aggForCard.length / 2;
         s += chartCardLocal(
             'Aggregated Configurations — TTFT & Throughput (P90 / P95 / P99)',
-            'All aggregated configurations with <strong style="color:#3b82f6">TTFT</strong> (bars, lower is better) and <strong style="color:#f59e0b">Throughput Mean</strong> (line, right axis, higher is better) across percentiles.',
+            _soakMode
+                ? 'Long-run trend: <strong style="color:#3b82f6">TTFT</strong> percentiles (lines, lower is better) and <strong style="color:#f59e0b">Throughput Mean</strong> (right axis, higher is better) across cycles. Watch for upward TTFT drift or throughput decay.'
+                : 'All aggregated configurations with <strong style="color:#3b82f6">TTFT</strong> (bars, lower is better) and <strong style="color:#f59e0b">Throughput Mean</strong> (line, right axis, higher is better) across percentiles.',
             'chart-agg-ttft-all'
         );
     }
@@ -622,6 +631,68 @@
             var aggSorted = aggResults.slice().sort(function(a, b) { return (a.tp || 1) - (b.tp || 1); });
             var aggLabels = aggSorted.map(function(r) { return (r.replicas || Math.floor(r.gpus / (r.tp || 1))) + '×TP' + (r.tp || '?') + ((r.pp && r.pp > 1) ? ' PPx' + r.pp : ''); });
             var aggColors = { p90: '#3b82f6', p95: '#dc2626', p99: '#7c3aed' };
+
+            // Soak detection: repeated config labels (one config cycled N times).
+            // Grouped bars pile every cycle onto the same x — render a trend
+            // line chart with the cycle number on x instead.
+            var _uniqLbls = {}; aggLabels.forEach(function(l) { _uniqLbls[l] = true; });
+            var soakMode = Object.keys(_uniqLbls).length < aggSorted.length / 2;
+
+            if (soakMode) {
+                // x = cycle number (parsed from "· cycle N" in config_name, else sequential)
+                var cyc = aggSorted.map(function(r, i) {
+                    var m = (r.config_name || '').match(/cycle (\d+)/);
+                    return m ? parseInt(m[1], 10) : i + 1;
+                });
+                // ensure ascending x for lines
+                var order = cyc.map(function(c, i) { return [c, i]; }).sort(function(a, b) { return a[0] - b[0]; });
+                var xCyc = order.map(function(p) { return p[0]; });
+                var byIdx = function(f) { return order.map(function(p) { return f(aggSorted[p[1]]); }); };
+                var lineTraces = [];
+                ['p90', 'p95', 'p99'].forEach(function(p) {
+                    lineTraces.push({
+                        x: xCyc, y: byIdx(function(r) { return r['ttft_' + p]; }),
+                        name: 'TTFT ' + p.toUpperCase(), type: 'scatter', mode: 'lines+markers',
+                        line: { color: aggColors[p], width: 2 }, marker: { size: 5 },
+                        hovertemplate: 'Cycle %{x}<br>TTFT ' + p.toUpperCase() + ': %{y:.1f} ms<extra></extra>'
+                    });
+                });
+                lineTraces.push({
+                    x: xCyc, y: byIdx(function(r) { return r.throughput_mean || r.throughput_p90; }),
+                    name: 'Throughput Mean', type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
+                    line: { color: '#f59e0b', width: 3 }, marker: { color: '#f59e0b', size: 7, symbol: 'diamond' },
+                    hovertemplate: 'Cycle %{x}<br>Throughput: %{y:.3f} req/s<extra></extra>'
+                });
+                var hasAggItl = aggSorted.some(function(r) { return r.itl_p90 != null; });
+                if (hasAggItl) {
+                    var itlDash = { p90: 'solid', p95: 'dash', p99: 'dot' };
+                    ['p90', 'p95', 'p99'].forEach(function(p) {
+                        lineTraces.push({
+                            x: xCyc, y: byIdx(function(r) { return r['itl_' + p]; }),
+                            name: 'ITL ' + p.toUpperCase(), type: 'scatter', mode: 'lines', yaxis: 'y3',
+                            line: { color: '#ef4444', width: 1.5, dash: itlDash[p] },
+                            hovertemplate: 'Cycle %{x}<br>ITL ' + p.toUpperCase() + ': %{y:.2f} ms<extra></extra>',
+                            connectgaps: true
+                        });
+                    });
+                }
+                var lineLayout = {
+                    height: 850,
+                    margin: { t: 30, b: 60, l: 70, r: 90 },
+                    xaxis: { title: 'Cycle', dtick: Math.max(1, Math.round(xCyc.length / 25)) },
+                    yaxis: { title: 'TTFT (ms) — lower is better', side: 'left', tickformat: '.2s' },
+                    yaxis2: { title: 'Throughput Mean (req/s)', side: 'right', overlaying: 'y', titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
+                    showlegend: true,
+                    legend: { x: 0, y: 1.12, orientation: 'h' },
+                    hovermode: 'x unified',
+                    plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff'
+                };
+                if (hasAggItl) {
+                    lineLayout.yaxis3 = { title: 'ITL (ms)', side: 'right', overlaying: 'y', position: 0.97, titlefont: { color: '#ef4444', size: 11 }, tickfont: { color: '#ef4444', size: 10 } };
+                    lineLayout.yaxis2.position = 0.94;
+                }
+                Plotly.newPlot(aggEl, lineTraces, lineLayout, CONFIG);
+            } else {
             var aggTraces = [];
             ['p90', 'p95', 'p99'].forEach(function(p) {
                 aggTraces.push({
@@ -674,6 +745,7 @@
                 aggLayout.yaxis3 = { title: 'ITL (ms)', side: 'right', overlaying: 'y', anchor: 'free', position: 1, titlefont: { color: '#ef4444', size: 11 }, tickfont: { color: '#ef4444', size: 10 } };
             }
             Plotly.newPlot(aggEl, aggTraces, aggLayout, CONFIG);
+            }
         }
 
         // vLLM Engine Metrics (ported from charts.js, uses flat fields)
