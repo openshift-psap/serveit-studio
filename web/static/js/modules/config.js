@@ -1189,13 +1189,16 @@ function restoreConfigSummary() {
     // surface how many shapes run simultaneously so the summary isn't
     // mistaken for the whole workload.
     var wlShapes = document.getElementById('config-summary-wl-shapes');
+    var wlSingle = document.getElementById('config-summary-wl-single');
     var nShapes = (config.parallel_workloads || []).length;
     if (wlShapes) {
         if (nShapes > 1) {
             wlShapes.textContent = nShapes + ' parallel workload shapes';
-            wlShapes.style.display = 'inline-block';
+            wlShapes.style.display = 'inline';
+            if (wlSingle) wlSingle.style.display = 'none';
         } else {
             wlShapes.style.display = 'none';
+            if (wlSingle) wlSingle.style.display = 'inline';
         }
     }
     document.getElementById('config-summary-users').textContent = config.users;
