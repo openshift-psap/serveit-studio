@@ -498,6 +498,30 @@ function updateUIFromConfig() {
         var editor = document.getElementById('epp-custom-editor');
         if (editor) editor.style.display = config.epp_preset === 'custom' ? 'block' : 'none';
         if (typeof updateAutoEppPreview === 'function') updateAutoEppPreview();
+
+        // Restore custom editor fields from saved epp_config (affinity filter
+        // parameters + plugin checkboxes) so a reload doesn't reset them.
+        var _ec = config.epp_config || {};
+        var _plugs = _ec.plugins || _ec;
+        var _restore = {
+            'epp-plugin-prefix-cache-affinity': !!_ec.prefixCacheAffinityEnabled,
+            'epp-param-peak-prefill-throughput': _ec.peakPrefillThroughput || 9866,
+            'epp-param-max-ttft-penalty': _ec.maxTTFTPenaltyMs != null ? _ec.maxTTFTPenaltyMs : 18000,
+            'epp-param-exploration-probability': _ec.explorationProbability != null ? _ec.explorationProbability : 0,
+            'epp-param-affinity-threshold': _ec.affinityThreshold != null ? _ec.affinityThreshold : 0.8,
+        };
+        ['prefix_cache', 'kv_cache', 'queue', 'active_request', 'no_hit_lru', 'session_aware'].forEach(function(k) {
+            var _key = { prefix_cache: 'prefix-cache', kv_cache: 'kv-cache', queue: 'queue',
+                         active_request: 'active-request', no_hit_lru: 'no-hit-lru', session_aware: 'session-aware' }[k];
+            _restore['epp-plugin-' + _key] = !!(_plugs[k] && _plugs[k].enabled);
+            _restore['epp-weight-' + _key] = (_plugs[k] && _plugs[k].weight) || 2;
+        });
+        Object.keys(_restore).forEach(function(id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            if (el.type === 'checkbox') el.checked = !!_restore[id];
+            else el.value = _restore[id];
+        });
     }
     if (document.getElementById('epp-benchmark-enabled')) {
         var eppCb = document.getElementById('epp-benchmark-enabled');

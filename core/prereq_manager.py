@@ -444,6 +444,9 @@ class PrereqManager:
                 "non_cached_tokens": epp.get("nonCachedTokens", 16),
                 "prefix_cache_affinity_enabled": epp.get("prefixCacheAffinityEnabled", False),
                 "peak_prefill_throughput": epp.get("peakPrefillThroughput", 9866),
+                "epp_affinity_exploration": epp.get("explorationProbability", 0),
+                "epp_affinity_max_penalty": epp.get("maxTTFTPenaltyMs", 0),
+                "epp_affinity_threshold": epp.get("affinityThreshold", 0),
                 "prefix_cache_auto_tune": str(epp.get("prefixCacheAutoTune", False)).lower(),
                 "use_prefix_based_decider": epp.get("usePrefixBasedDecider", True),
             }

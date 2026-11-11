@@ -39,6 +39,15 @@ data:
       - type: prefix-cache-affinity-filter
         parameters:
           peakPrefillThroughput: {{ peak_prefill_throughput | default(9866) }}
+{% if epp_affinity_exploration is defined and epp_affinity_exploration > 0 %}
+          explorationProbability: {{ epp_affinity_exploration }}
+{% endif %}
+{% if epp_affinity_max_penalty is defined and epp_affinity_max_penalty > 0 %}
+          maxTTFTPenaltyMs: {{ epp_affinity_max_penalty }}
+{% endif %}
+{% if epp_affinity_threshold is defined and epp_affinity_threshold > 0 %}
+          affinityThreshold: {{ epp_affinity_threshold }}
+{% endif %}
 {% endif %}
 {% if kv_cache_enabled | default(false) %}
       - type: kv-cache-utilization-scorer

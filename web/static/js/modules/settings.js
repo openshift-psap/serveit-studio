@@ -862,6 +862,12 @@ function updateEppCustom() {
     if (affinityEl) {
         config.epp_config.prefixCacheAffinityEnabled = affinityEl.checked;
         config.epp_config.peakPrefillThroughput = parseInt(document.getElementById('epp-param-peak-prefill-throughput').value) || 9866;
+        var penaltyEl = document.getElementById('epp-param-max-ttft-penalty');
+        if (penaltyEl) config.epp_config.maxTTFTPenaltyMs = parseInt(penaltyEl.value) || 0;
+        var exploreEl = document.getElementById('epp-param-exploration-probability');
+        if (exploreEl) config.epp_config.explorationProbability = parseFloat(exploreEl.value) || 0;
+        var thresholdEl = document.getElementById('epp-param-affinity-threshold');
+        if (thresholdEl) config.epp_config.affinityThreshold = parseFloat(thresholdEl.value) || 0.8;
     }
     var lruEl = document.getElementById('epp-param-lru-capacity');
     var lruEnabled = document.getElementById('epp-param-lru-capacity-enabled');
