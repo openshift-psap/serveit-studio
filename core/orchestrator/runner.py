@@ -380,10 +380,32 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
         if not getattr(config, "epp_calibrate_affinity", False):
             return  # opt-in: only measure when the user enabled calibration
-        epp_cfg = getattr(config, "epp_config", None) or {}
-        raw_yaml = (epp_cfg.get("raw_yaml") or "").strip()
-        if "prefix-cache-affinity-filter" not in raw_yaml:
+
+        # Detect the affinity filter from the LIVE configmap — covers both
+        # config sources: custom raw_yaml AND the upstream-default templates
+        # (3.6 defaults contain the filter but carry no raw_yaml, so checking
+        # config.epp_config alone misses them).
+        gaie_name = f"gaie-{config.architecture}-epp"
+        kubectl = self.deployment_manager.kubectl
+        r = kubectl.run(
+            ["get", "configmap", gaie_name, "-n", self.namespace, "-o", "json"],
+            check=False, timeout=15,
+        )
+        if r.returncode != 0:
             return
+        import json as _json
+        try:
+            cm = _json.loads(r.stdout)
+        except Exception:
+            return
+        config_key = None
+        raw_yaml = None
+        for key, val in (cm.get("data") or {}).items():
+            if "prefix-cache-affinity-filter" in val:
+                config_key, raw_yaml = key, val
+                break
+        if not raw_yaml:
+            return  # no affinity filter in the deployed config
         if "peakPrefillThroughput" in raw_yaml:
             return  # explicit parameters — respect them
 
@@ -475,15 +497,18 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         new_yaml = inject_affinity_filter_params(raw_yaml, peak, penalty)
         if new_yaml == raw_yaml:
             return
-        epp_cfg["raw_yaml"] = new_yaml
-        try:
-            config.epp_config = epp_cfg
-        except Exception:
-            pass
+        # Custom raw_yaml configs: carry the parameters forward in the
+        # config object. Default-template configs: the stored calibration
+        # handles future renders via the pipeline hook.
+        epp_cfg = getattr(config, "epp_config", None) or {}
+        if (epp_cfg.get("raw_yaml") or "").strip():
+            epp_cfg["raw_yaml"] = new_yaml
+            try:
+                config.epp_config = epp_cfg
+            except Exception:
+                pass
 
-        kubectl = self.deployment_manager.kubectl
-        gaie_name = f"gaie-{config.architecture}-epp"
-        config_file = "aggregated-config.yaml"
+        config_file = config_key
         configmap = json.dumps({
             "apiVersion": "v1",
             "kind": "ConfigMap",

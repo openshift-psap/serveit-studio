@@ -15,6 +15,11 @@ data:
       - type: approx-prefix-cache-producer
       - type: inflight-load-producer
       - type: prefix-cache-affinity-filter
+{%- if epp_peak_prefill_throughput %}
+        parameters:
+          peakPrefillThroughput: {{ epp_peak_prefill_throughput }}
+          maxTTFTPenaltyMs: {{ epp_max_ttft_penalty_ms }}
+{%- endif %}
       - type: token-load-scorer
     schedulingProfiles:
       - name: default

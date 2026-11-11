@@ -353,10 +353,39 @@ class PrereqManager:
 
             # Template parameters
             data_parallel_size = getattr(optimizer_config, "data_parallelism", 1) if optimizer_config else 1
+
+            # Affinity-filter calibration for the 3.6 default template:
+            # stored measurement (or computed estimate) + workload-derived
+            # penalty, so renders match the runner's post-deploy patch and
+            # cycles don't spuriously restart the EPP.
+            epp_peak = epp_penalty = None
+            try:
+                from core.epp_calibration import (
+                    get_stored_calibration, derive_max_ttft_penalty_ms, estimate_peak_prefill,
+                )
+                _model = getattr(optimizer_config, "model_name", "") or ""
+                _gpu = (getattr(optimizer_config, "cluster_resources", None) or {}).get("gpu_model") or ""
+                _tp = getattr(optimizer_config, "tensor_parallelism", 1) or 1
+                _db = "/mnt/storage/serveit.db"
+                _stored = get_stored_calibration(_db, _model, _gpu, _tp)
+                if _stored:
+                    epp_peak = _stored["peak_prefill_throughput"]
+                elif not getattr(optimizer_config, "epp_calibrate_affinity", False):
+                    # Calibration disabled: computed estimate (the runner
+                    # measures and patches when enabled)
+                    epp_peak = estimate_peak_prefill(_gpu, _tp, {})
+                if epp_peak:
+                    _isl = getattr(optimizer_config, "isl", 0) or 0
+                    epp_penalty = derive_max_ttft_penalty_ms(_isl, epp_peak)
+            except Exception:
+                pass
+
             context = {
                 "namespace": self.namespace,
                 "architecture": architecture,
                 "data_parallel_size": data_parallel_size,
+                "epp_peak_prefill_throughput": epp_peak,
+                "epp_max_ttft_penalty_ms": epp_penalty,
                 "gaie_name": config["gaie_name"],
                 "gaie_pool_name": config["gaie_pool_name"],
                 "gaie_guide_label": config.get("gaie_guide_label", "serveit-aggregated"),
