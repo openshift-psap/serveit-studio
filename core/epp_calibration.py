@@ -236,7 +236,8 @@ def store_calibration(db_path: str, model_name: str, gpu_model: str, tp: int,
 # ── config injection ───────────────────────────────────────────────────────
 
 def inject_affinity_filter_params(raw_yaml: str, peak_prefill_throughput: int,
-                                  max_ttft_penalty_ms: int) -> str:
+                                  max_ttft_penalty_ms: int,
+                                  exploration_probability: float = 0) -> str:
     """Add parameters to the prefix-cache-affinity-filter in an EPP raw config.
 
     Works on the textual YAML (the raw config is passed through verbatim, so
@@ -276,6 +277,8 @@ def inject_affinity_filter_params(raw_yaml: str, peak_prefill_throughput: int,
                     out.append(" " * (filter_indent + 2) + "parameters:")
                     out.append(f"{pi}peakPrefillThroughput: {peak_prefill_throughput}")
                     out.append(f"{pi}maxTTFTPenaltyMs: {max_ttft_penalty_ms}")
+                    if exploration_probability and exploration_probability > 0:
+                        out.append(f"{pi}explorationProbability: {exploration_probability}")
                     injected = True
                 in_filter = False
             elif "peakPrefillThroughput:" in stripped or "maxTTFTPenaltyMs:" in stripped:
@@ -294,6 +297,8 @@ def inject_affinity_filter_params(raw_yaml: str, peak_prefill_throughput: int,
         out.append(" " * (filter_indent + 2) + "parameters:")
         out.append(f"{pi}peakPrefillThroughput: {peak_prefill_throughput}")
         out.append(f"{pi}maxTTFTPenaltyMs: {max_ttft_penalty_ms}")
+        if exploration_probability and exploration_probability > 0:
+            out.append(f"{pi}explorationProbability: {exploration_probability}")
 
     return "\n".join(out) + ("\n" if raw_yaml.endswith("\n") else "")
 

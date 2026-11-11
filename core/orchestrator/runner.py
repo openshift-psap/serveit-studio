@@ -494,7 +494,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         # Inject into the config so every subsequent render (this run's
         # cycles, future runs) carries the parameters — and patch the live
         # configmap + restart the EPP once.
-        new_yaml = inject_affinity_filter_params(raw_yaml, peak, penalty)
+        new_yaml = inject_affinity_filter_params(raw_yaml, peak, penalty, 0.10)
         if new_yaml == raw_yaml:
             return
         # Custom raw_yaml configs: carry the parameters forward in the

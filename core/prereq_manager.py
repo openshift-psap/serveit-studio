@@ -386,6 +386,7 @@ class PrereqManager:
                     "        parameters:\n"
                     f"          peakPrefillThroughput: {epp_peak}\n"
                     f"          maxTTFTPenaltyMs: {epp_penalty}\n"
+                    "          explorationProbability: 0.10\n"
                 )
             context = {
                 "namespace": self.namespace,
