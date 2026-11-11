@@ -235,7 +235,7 @@
         s += '<div style="margin:0 20px 6px; color:#475569; font-size:0.82em; line-height:1.5;">' +
             '<strong>How it\'s measured:</strong> <code>gpu_busy_pct = Σ(CUDA kernel durations) ÷ (trace window span)</code> — the duty cycle from the per-pod torch trace. ' +
             'Per instant "busy" is boolean (≥1 kernel executing); the metric is the <em>fraction of time</em> the GPU had work, not how much of the chip each kernel used ' +
-            '(same semantics as nvidia-smi GPU-UTIL — a batch-1 decode kernel and a batch-64 prefill kernel both count as busy). Good for routing/load-distribution analysis; not an SM-occupancy measure.' +
+            '(same semantics as nvidia-smi GPU-UTIL — a batch-1 decode kernel and a batch-64 prefill kernel both count as busy). Good for routing/load-distribution analysis; not an SM-occupancy measure. '+ 'Force-stopped straggler pods (little traffic — their 500-step budget never completed) are computed over the profiling-load window: their own trace window includes idle export-gate wait and would understate them ~30x.' +
             '</div>';
         s += '<div id="' + id + '-pods-activity" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
         s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee); font-size:0.9em; margin:14px 20px 0;">Work Distribution — % of fleet GPU work per pod</div>';
@@ -368,7 +368,14 @@
                 // (500 x ITL) produced numbers that contradicted the
                 // memory-bound decode physics, so no estimates.
                 function windowSec(t) {
-                    return (t && t.window_s) ? t.window_s : null;
+                    if (!t) return null;
+                    // Force-stopped straggler: its trace window includes
+                    // post-load idle time from the export gate (~300s of
+                    // waiting), diluting the duty cycle ~30x vs self-stopped
+                    // pods (~11s windows). Use the profiling-load window for
+                    // these pods so the heatmap stays comparable across pods.
+                    if (t.forced_stop && t.load_window_s) return t.load_window_s;
+                    return t.window_s || null;
                 }
                 var elU = document.getElementById(id + '-pods-activity');
                 if (elU) {

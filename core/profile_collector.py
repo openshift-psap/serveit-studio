@@ -512,6 +512,16 @@ class ProfileCollector:
                         )
                     self._post_via_workload_pod(url, 180)
                     forced_at[pod_name] = time.time()
+                    # Stamp on the handle so the trace summary can mark the
+                    # pod as force-stopped: its trace window includes post-load
+                    # idle time from the export gate, so its raw duty cycle
+                    # (cuda_ms / window_s) is diluted and NOT comparable to
+                    # self-stopped pods — the report computes its utilization
+                    # over the profiling-load window instead.
+                    try:
+                        handle.setdefault("_forced_pods", []).append(pod_name)
+                    except Exception:
+                        pass
 
                 for pod_name in sorted(pending - set(forced_at)):
                     t = threading.Thread(target=_force_stop, args=(pod_name,), daemon=True)
@@ -556,7 +566,7 @@ class ProfileCollector:
                 log_callback(f"   \u2705 Trace export complete on all {len(started)} pod(s) "
                              f"({int(time.time() - t0)}s)")
 
-    def collect_torch_profiles(self, results, log_callback=None, written=None, test_id=None):
+    def collect_torch_profiles(self, results, log_callback=None, written=None, test_id=None, handle=None):
         """Stop torch profilers via /stop_profile and collect traces."""
         if written is None:
             written = []
@@ -592,10 +602,18 @@ class ProfileCollector:
                     if trace_files:
                         break
             try:
+                _forced = bool(handle and handle.get("_forced_pods") and pod_name in handle["_forced_pods"])
+                _load_window = (handle or {}).get("window_s")
                 summary = {
                     "profiler": "torch",
                     "pod": pod_name,
                     "status": "stopped",
+                    # Force-stopped straggler: the trace window includes
+                    # post-load idle time from the export gate, so the raw
+                    # duty cycle is diluted. Reports compute utilization
+                    # over the profiling-load window instead.
+                    "forced_stop": _forced,
+                    "load_window_s": _load_window if _forced else None,
                     "trace_files": trace_files,
                     "operators": [],
                     "total_cpu_ms": 0,
@@ -755,7 +773,7 @@ class ProfileCollector:
         #    to torch_written (kept separate so the capture zip below stays aligned)
         torch_results = []
         if handle.get("torch_procs"):
-            torch_results = self.collect_torch_profiles(handle["torch_procs"], log_callback, None, test_id)
+            torch_results = self.collect_torch_profiles(handle["torch_procs"], log_callback, None, test_id, handle=handle)
 
         # 4. Heap + goroutine snapshots (post-load, point-in-time).
         # embed_budget is shared: snapshot blobs first, then CPU-capture blobs.
