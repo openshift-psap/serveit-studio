@@ -575,6 +575,23 @@ def get_run_config(run_id):
             # Prefer ui_config_json (exact UI state); fall back to config_json with field mapping
             if row['ui_config_json']:
                 ui = json.loads(row['ui_config_json'])
+                # Backfill core fields the UI snapshot may lack. API-started
+                # runs snapshot the wizard session state, which can be stale
+                # (observed: run 195's snapshot had no model and no goal —
+                # Apply Settings restored an empty Review screen and the
+                # goal-aware step hiding couldn't trigger). The recipe
+                # config is frozen at run creation and authoritative.
+                if row['config_json']:
+                    try:
+                        _rc = json.loads(row['config_json'])
+                        if not ui.get('model') and _rc.get('model_name'):
+                            ui['model'] = _rc['model_name']
+                        if not ui.get('goal'):
+                            _goal = _rc.get('objective') or _rc.get('goal')
+                            if _goal:
+                                ui['goal'] = _goal
+                    except Exception:
+                        pass
                 # The UI snapshot can go stale (written before workloads were
                 # configured, or overwritten by a later save_config). The
                 # recipe config is frozen at run creation and authoritative
