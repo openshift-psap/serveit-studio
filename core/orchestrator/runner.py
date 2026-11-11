@@ -434,7 +434,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             r = kubectl.run(
                 ["get", "pods", "-n", self.namespace, "-l",
                  f"llm-d.ai/test-id={config.deploy_selector_id}",
-                 "-o", "jsonpath={.items[0].metadata.name}{{\" \"}}{.items[0].status.podIP}"],
+                 "-o", 'jsonpath={.items[0].metadata.name}{" "}{.items[0].status.podIP}'],
                 check=False, timeout=15,
             )
             if r.returncode != 0 or not r.stdout.strip():
