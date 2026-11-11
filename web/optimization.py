@@ -767,7 +767,7 @@ def run_optimization_background(data):
             pvc_size = f"{int(pvc_size_str)}Gi" if pvc_size_str.isdigit() else str(pvc_size_raw)
         else:
             pvc_size = None
-        vllm_image = _get("image") or "vllm/vllm-openai:v0.26.0"
+        vllm_image = _get("image") or "vllm/vllm-openai:v0.31.0"
         # UI wins: the wizard's scheduler/sidecar inputs now adopt their
         # defaults into the config on load, so this fallback only fires for
         # API-driven runs without a UI session. Keep it aligned with the UI

@@ -842,7 +842,7 @@ def update_deployment_template():
             pipeline_parallelism=data.get('pipeline_parallelism', 1),
             max_model_len=data.get('max_model_len', 8192),
             gpu_memory_utilization=data.get('gpu_memory_utilization', 0.95),
-            image=data.get('image', 'vllm/vllm-openai:v0.26.0'),
+            image=data.get('image', 'vllm/vllm-openai:v0.31.0'),
             pvc_name=data.get('pvc_name', 'serveit-cache'),
             nccl_ib_hca=data.get('nccl_ib_hca', 'mlx'),
             isl=data.get('isl', 2000),

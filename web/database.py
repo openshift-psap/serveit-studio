@@ -568,7 +568,7 @@ def save_deployment_template(
     pipeline_parallelism: int = 1,
     max_model_len: int = 8192,
     gpu_memory_utilization: float = 0.95,
-    image: str = 'vllm/vllm-openai:v0.26.0',
+    image: str = 'vllm/vllm-openai:v0.31.0',
     pvc_name: str = 'serveit-cache',
     nccl_ib_hca: str = 'mlx',
     isl: int = 2000,

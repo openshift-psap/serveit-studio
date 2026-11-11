@@ -111,7 +111,7 @@ class TestConfig:
     cpu_limit: Optional[str] = None  # CPU limit (defaults to cpu_request if not set)
 
     # Infrastructure
-    image: str = "vllm/vllm-openai:v0.26.0"
+    image: str = "vllm/vllm-openai:v0.31.0"
     scheduler_image: str = "ghcr.io/llm-d/llm-d-router-endpoint-picker@sha256:873179822ab0895a37ea09f2112ca39a6ae50a26612561c8bfad7f9a8c5af6f5"
     pvc_name: str = "model-cache"
     nccl_ib_hca: str = "mlx"
