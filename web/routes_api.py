@@ -616,6 +616,8 @@ def get_run_config(run_id):
                             'rate_type': 'rate_type',
                             'max_gpus': 'max_gpus',
                             'image': 'image',
+                            'node_nfs_pvcs': 'node_nfs_pvcs',
+                            'per_node_storage': 'per_node_storage',
                         }
                         for _ui_key, _rc_key in _shape_map.items():
                             _rc_val = _rc.get(_rc_key)

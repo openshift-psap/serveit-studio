@@ -893,7 +893,19 @@ def _detect_node_nfs_classes(scanner, resources):
                         break
             if result:
                 return result
-            return [{'suffix': suffix, 'sc_name': sc_name, 'node': ''} for suffix, sc_name in nfs_classes.items()]
+            # No GPU node matches any nfs-<suffix> class — the class name is
+            # not a node descriptor (e.g. a shared 'nfs-rwx' class where
+            # 'rwx' is the access mode, not a node). Derive per-node entries
+            # from the GPU node names (same suffix logic as
+            # _ensure_per_node_pvcs) so PVC references are
+            # model-cache-<node-suffix>. Emitting the class suffix here
+            # produced references to non-existent PVCs (model-cache-rwx)
+            # and pods that Pending-fail forever.
+            _shared_sc = next(iter(nfs_classes.values()))
+            return [
+                {'suffix': n.split('.')[0].split('-')[-1], 'sc_name': _shared_sc, 'node': n}
+                for n in gpu_nodes
+            ]
 
         # Second: look for any distributed/RWX filesystem (CephFS, NFS provisioner, etc.)
         distributed_provisioners = ('cephfs', 'nfs', 'efs', 'azurefile', 'filestore')
