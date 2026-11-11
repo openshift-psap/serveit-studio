@@ -603,6 +603,7 @@ def handle_resume_optimization(data):
         saved_epp_custom_enabled = True
         saved_epp_preset = 'balanced'
         saved_epp_benchmark = False
+        saved_epp_calibrate = False
         saved_epp_max_evals = 12
         saved_epp_config = None
         saved_prefix_cache_mode = 'identical'
@@ -619,6 +620,7 @@ def handle_resume_optimization(data):
                 saved_epp_custom_enabled = saved_cfg.get('epp_custom_enabled', True)
                 saved_epp_preset = saved_cfg.get('epp_preset', 'balanced')
                 saved_epp_benchmark = saved_cfg.get('epp_benchmark', False)
+                saved_epp_calibrate = saved_cfg.get('epp_calibrate_affinity', False)
                 saved_epp_max_evals = saved_cfg.get('epp_max_evals', 12)
                 saved_epp_config = saved_cfg.get('epp_config')
                 saved_prefix_cache_mode = saved_cfg.get('prefix_cache_mode', 'identical')
@@ -667,6 +669,7 @@ def handle_resume_optimization(data):
             'epp_custom_enabled': saved_epp_custom_enabled,
             'epp_preset': saved_epp_preset,
             'epp_benchmark': saved_epp_benchmark,
+            'epp_calibrate_affinity': saved_epp_calibrate,
             'epp_max_evals': saved_epp_max_evals,
             'epp_config': saved_epp_config,
             'advanced_vllm': saved_advanced_vllm,

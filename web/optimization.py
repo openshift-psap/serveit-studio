@@ -1051,6 +1051,7 @@ data:
                 epp_preset=epp_preset,
                 epp_default_version=_get("epp_default_version", "auto") or "auto",
                 epp_benchmark=epp_benchmark,
+                epp_calibrate_affinity=bool(_get("epp_calibrate_affinity", False)),
                 epp_max_evals=epp_max_evals,
                 epp_config=epp_config,
                 thanos_url=thanos_url,

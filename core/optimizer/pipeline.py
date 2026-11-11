@@ -1719,6 +1719,47 @@ class RecipeOptimizer(
         # llm-d default EPP routing).
         user_epp_raw = (self.config.epp_config or {}).get("raw_yaml")
         if user_epp_raw:
+            # Inject stored affinity-filter calibration (measured on a prior
+            # run) so the config renders tuned from the start — the runner
+            # calibrates post-deploy only when nothing is stored.
+            if "prefix-cache-affinity-filter" in user_epp_raw and "peakPrefillThroughput" not in user_epp_raw:
+                try:
+                    from core.epp_calibration import (
+                        get_stored_calibration,
+                        derive_max_ttft_penalty_ms,
+                        inject_affinity_filter_params,
+                        estimate_peak_prefill,
+                    )
+                    _gpu = (getattr(self.config, "cluster_resources", None) or {}).get("gpu_model") or ""
+                    _stored = get_stored_calibration(
+                        "/mnt/storage/serveit.db",
+                        getattr(self.config, "model_name", "") or "",
+                        _gpu,
+                        getattr(self.config, "tensor_parallelism", 1) or 1,
+                    )
+                    _cal_on = bool(getattr(self.config, "epp_calibrate_affinity", False))
+                    if _stored:
+                        _peak = _stored["peak_prefill_throughput"]
+                    elif _cal_on:
+                        _peak = None  # runner measures post-deploy
+                    else:
+                        # Calibration disabled: compute an estimate from the
+                        # known model/GPU/TP instead of the Qwen32B/H100
+                        # upstream default.
+                        _peak = estimate_peak_prefill(
+                            gpu_model=_gpu,
+                            tensor_parallelism=getattr(self.config, "tensor_parallelism", 1) or 1,
+                            model_config=self._model_config or {},
+                        )
+                    if _peak:
+                        _penalty = derive_max_ttft_penalty_ms(
+                            getattr(self.config, "isl", 0) or 0,
+                            _peak,
+                        )
+                        user_epp_raw = inject_affinity_filter_params(
+                            user_epp_raw, _peak, _penalty)
+                except Exception:
+                    pass
             return {"preset": "custom", "raw_yaml": user_epp_raw}
         if not getattr(self.config, "epp_custom_enabled", True):
             return {"preset": "default"}

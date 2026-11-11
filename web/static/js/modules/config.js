@@ -502,6 +502,8 @@ function updateUIFromConfig() {
     if (document.getElementById('epp-benchmark-enabled')) {
         var eppCb = document.getElementById('epp-benchmark-enabled');
         eppCb.checked = !!config.epp_benchmark;
+        var calCb = document.getElementById('epp-calibrate-enabled');
+        if (calCb) calCb.checked = !!config.epp_calibrate_affinity;
         var eppInner = document.getElementById('epp-benchmark-inner');
         if (eppInner) eppInner.style.opacity = eppCb.checked ? '1' : '0.5';
         var eppBudget = document.getElementById('epp-max-evals');

@@ -618,6 +618,7 @@ def get_run_config(run_id):
                             'image': 'image',
                             'node_nfs_pvcs': 'node_nfs_pvcs',
                             'per_node_storage': 'per_node_storage',
+                            'epp_calibrate_affinity': 'epp_calibrate_affinity',
                         }
                         for _ui_key, _rc_key in _shape_map.items():
                             _rc_val = _rc.get(_rc_key)

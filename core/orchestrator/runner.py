@@ -356,6 +356,161 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 log_callback(f"❌ {error_msg}")
             return False
 
+    def _calibrate_epp_if_needed(self, config, log_callback=None):
+        """Calibrate the EPP prefix-cache-affinity-filter once per (model, gpu, tp).
+
+        Runs the peak-prefill measurement against one serving pod (fresh
+        random token-ID prompts, prefix cache always misses), persists it,
+        derives maxTTFTPenaltyMs from the workload's ISL (the re-prefill
+        crossover), injects both into the EPP config, and restarts the EPP
+        deployment once to load the tuned config. No-op when the config
+        doesn't use the affinity filter, already carries explicit
+        parameters, or a stored calibration applies.
+        """
+        try:
+            from core.epp_calibration import (
+                calibrate_peak_prefill,
+                derive_max_ttft_penalty_ms,
+                get_stored_calibration,
+                store_calibration,
+                inject_affinity_filter_params,
+            )
+        except ImportError:
+            return
+
+        if not getattr(config, "epp_calibrate_affinity", False):
+            return  # opt-in: only measure when the user enabled calibration
+        epp_cfg = getattr(config, "epp_config", None) or {}
+        raw_yaml = (epp_cfg.get("raw_yaml") or "").strip()
+        if "prefix-cache-affinity-filter" not in raw_yaml:
+            return
+        if "peakPrefillThroughput" in raw_yaml:
+            return  # explicit parameters — respect them
+
+        model = config.model_name
+        tp = getattr(config, "tensor_parallelism", 1) or 1
+        gpu_model = ""
+        try:
+            gpu_model = (getattr(self, "cluster_resources", None) or {}).get("gpu_model") or ""
+        except Exception:
+            pass
+        db_path = "/mnt/storage/serveit.db"
+
+        stored = get_stored_calibration(db_path, model, gpu_model, tp)
+        if stored:
+            peak = stored["peak_prefill_throughput"]
+            if log_callback:
+                log_callback(
+                    f"   📐 EPP affinity: using stored calibration "
+                    f"({peak} tok/s, {stored['calibrated_at'][:16]})"
+                )
+        else:
+            if log_callback:
+                log_callback("   📐 Calibrating EPP affinity filter (peak prefill throughput)...")
+            # Find one serving pod + the workload pod for the measurement
+            kubectl = self.deployment_manager.kubectl
+            r = kubectl.run(
+                ["get", "pods", "-n", self.namespace, "-l",
+                 f"llm-d.ai/test-id={config.deploy_selector_id}",
+                 "-o", "jsonpath={.items[0].metadata.name}{{\" \"}}{.items[0].status.podIP}"],
+                check=False, timeout=15,
+            )
+            if r.returncode != 0 or not r.stdout.strip():
+                if log_callback:
+                    log_callback("   ⚠️  EPP calibration skipped (no serving pod found)")
+                return
+            parts = r.stdout.strip().split()
+            pod_name, pod_ip = parts[0], parts[-1]
+
+            # max-num-batched-tokens on the running pod (CHUNK must match it)
+            chunk = 8192
+            r_args = kubectl.run(
+                ["get", "pod", pod_name, "-n", self.namespace, "-o",
+                 "jsonpath={.spec.containers[0].args}"],
+                check=False, timeout=15,
+            )
+            if r_args.returncode == 0:
+                import re as _re
+                m = _re.search(r"max-num-batched-tokens (\d+)", r_args.stdout)
+                if m:
+                    chunk = int(m.group(1))
+
+            # Workload pod executes the measurement
+            workload_pod = None
+            try:
+                pc = getattr(self, "profile_collector", None)
+                if pc:
+                    pc._resolve_workload_pod()
+                    workload_pod = pc.workload_pod
+            except Exception:
+                pass
+            if not workload_pod:
+                if log_callback:
+                    log_callback("   ⚠️  EPP calibration skipped (no workload pod)")
+                return
+
+            result_cal = calibrate_peak_prefill(
+                kubectl, self.namespace, workload_pod, pod_ip, model, chunk,
+                log=log_callback,
+            )
+            if not result_cal:
+                if log_callback:
+                    log_callback("   ⚠️  EPP calibration failed — keeping filter defaults")
+                return
+            peak = result_cal["r_peak"]
+            store_calibration(db_path, model, gpu_model, tp, peak,
+                              result_cal["median_ttft_s"], chunk)
+
+        # Workload-aware stickiness-break threshold: the re-prefill crossover
+        penalty = derive_max_ttft_penalty_ms(getattr(config, "isl", 0) or 0, peak)
+        if log_callback:
+            log_callback(
+                f"   📐 peakPrefillThroughput={peak}, maxTTFTPenaltyMs={penalty} "
+                f"(ISL {getattr(config, 'isl', '?')} re-prefill crossover)"
+            )
+
+        # Inject into the config so every subsequent render (this run's
+        # cycles, future runs) carries the parameters — and patch the live
+        # configmap + restart the EPP once.
+        new_yaml = inject_affinity_filter_params(raw_yaml, peak, penalty)
+        if new_yaml == raw_yaml:
+            return
+        epp_cfg["raw_yaml"] = new_yaml
+        try:
+            config.epp_config = epp_cfg
+        except Exception:
+            pass
+
+        kubectl = self.deployment_manager.kubectl
+        gaie_name = f"gaie-{config.architecture}-epp"
+        config_file = "aggregated-config.yaml"
+        configmap = json.dumps({
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": {
+                "name": gaie_name,
+                "namespace": self.namespace,
+                "labels": {
+                    "app.kubernetes.io/name": gaie_name,
+                    "component": "serveit-prereq",
+                    "architecture": config.architecture,
+                },
+            },
+            "data": {config_file: new_yaml},
+        })
+        r = kubectl.run(["apply", "-f", "-"], input_data=configmap.encode() if isinstance(configmap, str) else configmap,
+                        check=False, timeout=30)
+        if r.returncode == 0:
+            kubectl.run(["rollout", "restart", "deployment", gaie_name, "-n", self.namespace],
+                        check=False, timeout=60)
+            kubectl.run(["rollout", "status", "deployment", gaie_name, "-n", self.namespace,
+                         "--timeout=120s"], check=False, timeout=140)
+            if log_callback:
+                log_callback("   ✅ EPP config updated with calibrated parameters")
+        else:
+            if log_callback:
+                log_callback(f"   ⚠️  EPP configmap patch failed: {(r.stderr or b'')[:150]}")
+
     def _wait_for_model_loaded(
         self,
         test_id: str,
@@ -1728,6 +1883,17 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 gpu_vram = getattr(config, "gpu_vram_gb", None)
                 if gpu_vram:
                     self._profile_vllm_memory(config.test_id, gpu_mem_util, gpu_vram, result, log_callback=log_callback)
+
+                # EPP affinity-filter calibration. The filter estimates
+                # per-endpoint TTFT as inFlightTokens / peakPrefillThroughput
+                # and breaks stickiness above maxTTFTPenaltyMs — both defaults
+                # are calibrated for Qwen-32B on 2x H100 (15928 tok/s, 18000
+                # ms), wrong for any other stack, and the 18s penalty can
+                # never fire at modest concurrency — cache affinity
+                # concentrates load on few pods. We know the workload (ISL)
+                # and the hardware, so calibrate once per (model, gpu, tp),
+                # persist, and inject workload-aware parameters.
+                self._calibrate_epp_if_needed(config, log_callback=log_callback)
 
             # Step 4: Get service endpoint
 
