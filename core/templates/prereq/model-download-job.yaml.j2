@@ -88,7 +88,11 @@ spec:
               sys.stderr.reconfigure(line_buffering=True)
 
               model_id = '{{ model_name }}'
-              cache_dir = '/model-cache'
+              # Must match HF_HUB_CACHE/HF_HOME below and the vLLM pod
+              # templates — a mismatch leaves the model where the
+              # inference pods can't find it (LocalEntryNotFoundError
+              # with HF_HUB_OFFLINE=1).
+              cache_dir = '/model-cache/huggingface'
               token = os.getenv('HF_TOKEN')
 
               # Use None if token is empty or whitespace
