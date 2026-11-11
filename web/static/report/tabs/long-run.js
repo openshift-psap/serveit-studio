@@ -233,14 +233,13 @@
         // slowdowns.
         s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#2dd4bf); font-size:0.9em; margin:14px 20px 0;">GPU Utilization — % of the profile window each pod\'s GPU was busy (500 engine steps)</div>';
         s += '<div style="margin:0 20px 6px; color:#475569; font-size:0.82em; line-height:1.5;">' +
-            '<strong>How it\'s measured:</strong> <code>gpu_busy_pct = Σ(CUDA kernel durations) ÷ (trace window span)</code> — the duty cycle from the per-pod torch trace. ' +
-            'Per instant "busy" is boolean (≥1 kernel executing); the metric is the <em>fraction of time</em> the GPU had work, not how much of the chip each kernel used ' +
-            '(same semantics as nvidia-smi GPU-UTIL — a batch-1 decode kernel and a batch-64 prefill kernel both count as busy). Good for routing/load-distribution analysis; not an SM-occupancy measure. '+ 'Force-stopped straggler pods (little traffic — their 500-step budget never completed) are computed over the profiling-load window: their own trace window includes idle export-gate wait and would understate them ~30x.' +
+            '<strong>How it\'s measured:</strong> <code>Σ(CUDA kernel durations) ÷ (trace window span)</code> — the fraction of time each pod\'s GPU had work (same semantics as nvidia-smi GPU-UTIL, not SM occupancy). ' +
+            'Straggler pods (little traffic) are computed over the profiling-load window for comparability.' +
             '</div>';
         s += '<div id="' + id + '-pods-activity" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
         s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee); font-size:0.9em; margin:14px 20px 0;">Work Distribution — % of fleet GPU work per pod</div>';
         s += '<div style="margin:0 20px 6px; color:#475569; font-size:0.82em; line-height:1.5;">' +
-            '<strong>How it\'s measured:</strong> <code>pod_share = pod\'s Σ CUDA kernel time ÷ fleet Σ CUDA kernel time</code> — each pod\'s total kernel-execution milliseconds (from its torch trace) as a fraction of the sum across all profiled pods. Shares how the fleet\'s actual GPU work is split, independent of wall-clock idle time.' +
+            '<strong>How it\'s measured:</strong> <code>pod\'s kernel time ÷ fleet kernel time</code> — how the fleet\'s actual GPU work is split across pods.' +
             '</div>';
         s += '<div id="' + id + '-pods-share" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
 
