@@ -21,7 +21,7 @@
         s += '<div style="padding:12px 20px 4px;color:#1e293b;font-size:0.95em;">Multiple workload shapes ran simultaneously against one deployment. Combined percentiles are request-weighted; the per-workload rows show each shape own latency distribution.</div>';
 
         wlEntries.forEach(function(e) {
-            s += '<div style="margin:14px 0;"><strong style="color:#3730a3;">' + e.name + '</strong>';
+            s += '<div style="margin:14px 0;"><strong style="color:#3730a3;">' + (e.config_name || e.test_id || 'test') + '</strong>';
             s += '<table class="results-table" style="margin-top:8px;"><tr><th>Workload</th><th>ISL</th><th>OSL</th><th>Requests</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P99</th><th>E2E P90</th><th>E2E P99</th><th>Tput (req/s)</th></tr>';
             (e.workloads || []).forEach(function(w) {
                 var na = '—';
