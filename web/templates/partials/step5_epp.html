@@ -13,6 +13,17 @@
                             <div class="tgl-sw"></div>
                         </div>
 
+                        <!-- EPP Affinity Calibration toggle -->
+                        <div class="vllm-toggle" id="epp-calibrate-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');document.getElementById('epp-calibrate-enabled').checked=on;config.epp_calibrate_affinity=on;saveConfig();" style="margin-bottom:20px;">
+                            <div style="font-size:1.5em;flex-shrink:0;">📐</div>
+                            <div>
+                                <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Calibrate Affinity Filter</div>
+                                <div style="color:#64748b;font-size:0.82em;margin-top:2px;">Measure peak prefill throughput (~90s, once per model/GPU/TP) and set workload-aware stickiness parameters on the prefix-cache-affinity-filter. Without this, the filter uses defaults calibrated for Qwen-32B on 2&times;H100.</div>
+                            </div>
+                            <input type="checkbox" id="epp-calibrate-enabled">
+                            <div class="tgl-sw"></div>
+                        </div>
+
                         <!-- Upstream default version selector (visible when customization is OFF) -->
                         <div id="epp-default-version-section" style="display:none;border:2px solid #cbd5e1;border-radius:12px;padding:14px 18px;margin-bottom:20px;background:#f8fafc;">
                             <div style="font-weight:700;color:#1e293b;font-size:0.95em;margin-bottom:6px;">Upstream Default Version</div>
@@ -30,17 +41,6 @@
                                     <div style="font-weight:700;color:#1e293b;font-size:0.9em;">RHAIIS 3.5</div>
                                     <div style="font-size:0.75em;color:#64748b;margin-top:3px;">queue(2) + kv-cache(2) + prefix-cache(3)</div>
                                 </div>
-                            </div>
-                        </div>
-
-                        <!-- EPP Affinity Calibration (optional) -->
-                        <div style="border:2px solid #0d9488;border-radius:12px;overflow:hidden;margin-bottom:20px;">
-                            <div style="background:linear-gradient(135deg,#f0fdfa,#ccfbf1);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var cb=document.getElementById('epp-calibrate-enabled');cb.checked=!cb.checked;config.epp_calibrate_affinity=cb.checked;saveConfig();">
-                                <div>
-                                    <div style="font-weight:700;color:#134e4a;font-size:1.05em;">Calibrate Affinity Filter</div>
-                                    <div style="color:#0f766e;font-size:0.92em;margin-top:4px;">Measure your deployment's peak prefill throughput (~90s, once per model/GPU/TP) and set workload-aware stickiness parameters on the prefix-cache-affinity-filter. Without this, the filter uses upstream defaults calibrated for Qwen-32B on 2&times;H100 — the 18s stickiness-break threshold never fires at moderate concurrency, so cache affinity concentrates load on few pods.</div>
-                                </div>
-                                <input type="checkbox" id="epp-calibrate-enabled" style="width:20px;height:20px;cursor:pointer;" onclick="event.stopPropagation();config.epp_calibrate_affinity=this.checked;saveConfig();">
                             </div>
                         </div>
 

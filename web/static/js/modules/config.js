@@ -504,6 +504,8 @@ function updateUIFromConfig() {
         eppCb.checked = !!config.epp_benchmark;
         var calCb = document.getElementById('epp-calibrate-enabled');
         if (calCb) calCb.checked = !!config.epp_calibrate_affinity;
+        var calToggle = document.getElementById('epp-calibrate-toggle');
+        if (calToggle) { if (config.epp_calibrate_affinity) calToggle.classList.add('active'); else calToggle.classList.remove('active'); }
         var eppInner = document.getElementById('epp-benchmark-inner');
         if (eppInner) eppInner.style.opacity = eppCb.checked ? '1' : '0.5';
         var eppBudget = document.getElementById('epp-max-evals');
