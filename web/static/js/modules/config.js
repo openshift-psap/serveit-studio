@@ -1105,7 +1105,9 @@ function restoreConfigSummary() {
     const goalNames = {
         'throughput': 'Throughput Priority',
         'ttft': 'Response Time Priority',
-        'full_coverage': 'Full Coverage', 'balanced': 'Full Coverage'
+        'full_coverage': 'Full Coverage', 'balanced': 'Full Coverage',
+        'long_run': 'Soak Test',
+        'single_test': 'Single Test'
     };
 
     const storageClassSelect = document.getElementById('storage-class-select');

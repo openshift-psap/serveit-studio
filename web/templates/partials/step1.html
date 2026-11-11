@@ -96,10 +96,13 @@
                             </div>
 
                             <div class="arch-card" data-goal="long_run">
-                                <h4>Long Run (Soak Test)</h4>
+                                <h4>Soak Test</h4>
                                 <p>Deploy once and run the same workload N times — pods are
                                 never restarted. Catches memory leaks, CPU drift, and
-                                degradation over time.</p>
+                                degradation over time. Per-cycle GPU profiles (torch traces),
+                                EPP CPU/heap profiles, and pod resource snapshots track drift
+                                across cycles; long tests use two-pass profiling so trace
+                                exports never contaminate the measurement.</p>
                                 <div class="best-for">
                                     <strong>Best For:</strong> <span>Stability validation, leak detection, pre-release soak testing</span>
                                 </div>
