@@ -590,7 +590,6 @@ def get_run_config(run_id):
                             _goal = _rc.get('objective') or _rc.get('goal')
                             if _goal:
                                 ui['goal'] = _goal
-                    except Exception:
                         # Shape fields: the UI snapshot of API-started runs
                         # can predate the session-sync fix and carry stale
                         # wizard values (observed: applied run 195's TP1x8
@@ -622,6 +621,7 @@ def get_run_config(run_id):
                             _rc_val = _rc.get(_rc_key)
                             if _rc_val is not None:
                                 ui[_ui_key] = _rc_val
+                    except Exception:
                         pass
                 # The UI snapshot can go stale (written before workloads were
                 # configured, or overwritten by a later save_config). The
