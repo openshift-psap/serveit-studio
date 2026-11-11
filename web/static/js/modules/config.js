@@ -685,9 +685,46 @@ function loadConfig() {
 }
 
 // Restore Cluster Resources display
+// Launcher node pin: filter scan aggregates down to the pinned nodes so
+// the hardware table describes what tests can actually use. Without this
+// a pinned instance shows the whole cluster — misleading totals (GPUs,
+// VRAM, CPUs, NICs) for resources the instance cannot schedule on.
+// Mutates + returns data (cached scans stay consistent everywhere).
+window.filterResourcesToPinnedNodes = function (data) {
+    if (!data) return data;
+    var pinned = (data.preset_nodes && data.preset_nodes.length) ? data.preset_nodes : null;
+    if (!pinned || !data.nodes_detail || !data.nodes_detail.length) return data;
+    var subset = data.nodes_detail.filter(function (n) { return pinned.indexOf(n.name) !== -1; });
+    if (!subset.length || subset.length === data.nodes_detail.length) return data;
+    var gpus = subset.reduce(function (a, n) { return a + (n.gpus || 0); }, 0);
+    var effGpus = data.preset_max_gpus ? Math.min(gpus, data.preset_max_gpus) : gpus;
+    var nicCount = subset.reduce(function (a, n) {
+        return a + (n.nics || []).reduce(function (x, nic) { return x + (nic.count || 1); }, 0);
+    }, 0);
+    var maxPerNode = Math.max.apply(null, subset.map(function (n) { return n.gpus || 0; }));
+    Object.assign(data, {
+        total_gpus: effGpus,
+        gpu_node_count: subset.length,
+        total_gpu_memory_gb: Math.round(gpus * (data.gpu_memory_per_gpu_mb || 0) / 1024),
+        total_cpu_cores: subset.reduce(function (a, n) { return a + (n.cpu_cores || 0); }, 0),
+        total_memory_gb: Math.round(subset.reduce(function (a, n) { return a + (n.memory_gb || 0); }, 0)),
+        has_rdma: subset.some(function (n) { return n.has_rdma; }),
+        rdma_capable_nodes: subset.filter(function (n) { return n.has_rdma; }).length,
+        total_network_interfaces: nicCount,
+        max_gpus_per_node: maxPerNode,
+        tp_options: [1, 2, 4, 8, 16].filter(function (t) { return t <= maxPerNode; }),
+        nodes_detail: subset,
+        network_interfaces: subset.reduce(function (a, n) { return a.concat(n.nics || []); }, [])
+    });
+    return data;
+};
+
 function restoreClusterResources() {
     const data = config.cluster_resources;
     if (!data) return;
+
+    // Scope the displayed hardware to the launcher-pinned nodes
+    if (typeof filterResourcesToPinnedNodes === 'function') filterResourcesToPinnedNodes(data);
 
     // Apply GPU/node presets immediately from cached data
     applyGpuPresets(data);

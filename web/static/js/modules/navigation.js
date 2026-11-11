@@ -709,7 +709,8 @@ socket.on('cluster_scan_result', function(data) {
         }
     }
 
-    // Display hardware resources table
+    // Display hardware resources table — scoped to launcher-pinned nodes
+    if (typeof filterResourcesToPinnedNodes === 'function') filterResourcesToPinnedNodes(data);
     const resourcesDiv = document.getElementById('resources-summary');
     resourcesDiv.innerHTML = `
         <table style="width: 100%; border-collapse: collapse; border-top: 2px solid var(--rh-gray-400); border-bottom: 2px solid var(--rh-gray-400);">
