@@ -156,7 +156,45 @@
                                 </div>
 
                                 <!-- Step 2 -->
-                                <div class="step-card">
+                                
+                                <!-- Single Test flow (goal = single_test) -->
+                                <div class="step-card goal-single-test" style="display:none;">
+                                    <div class="step-header">
+                                        <div class="step-number">2</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>Deploy &amp; Test</h4>
+                                            <span class="step-badge badge-testing">Single Test</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p style="font-size: 14px; color: #4b5563;">
+                                            • Deploy the configured shape once (<span id="st-single-shape">aggregated</span>)<br>
+                                            • Run the benchmark at full user concurrency<br>
+                                            • Collect latency / throughput / profile results — no sweeps, no architecture search
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <!-- Long Run flow (goal = long_run) -->
+                                <div class="step-card goal-long-run" style="display:none;">
+                                    <div class="step-header">
+                                        <div class="step-number">2</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>Soak: Deploy Once + N Cycles</h4>
+                                            <span class="step-badge badge-testing">Long Run</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p style="font-size: 14px; color: #4b5563;">
+                                            • Deploy the configured shape once — pods are reused by every cycle<br>
+                                            • Run <span id="st-long-cycles">N</span> identical benchmark cycles with a settle pause between them<br>
+                                            • Per-cycle snapshots (RSS / KV / GPU profiles) for leak &amp; degradation trending<br>
+                                            • Two-pass profiling on long tests: a short profiling load (discarded) then a clean measurement pass
+                                        </p>
+                                    </div>
+                                </div>
+
+<div class="step-card sweep-only">
                                     <div class="step-header">
                                         <div class="step-number">2</div>
                                         <div class="step-title-wrapper">
@@ -173,7 +211,7 @@
                                 </div>
 
                                 <!-- Step 3 -->
-                                <div class="step-card">
+                                <div class="step-card sweep-only">
                                     <div class="step-header">
                                         <div class="step-number">3</div>
                                         <div class="step-title-wrapper">
@@ -190,7 +228,7 @@
                                 </div>
 
                                 <!-- Step 4 -->
-                                <div class="step-card">
+                                <div class="step-card sweep-only">
                                     <div class="step-header">
                                         <div class="step-number">4</div>
                                         <div class="step-title-wrapper">
@@ -209,7 +247,7 @@
                                 </div>
 
                                 <!-- Step 5 -->
-                                <div class="step-card">
+                                <div class="step-card sweep-only">
                                     <div class="step-header">
                                         <div class="step-number">5</div>
                                         <div class="step-title-wrapper">
@@ -242,7 +280,7 @@
                                 </div>
 
                                 <!-- Step 6 -->
-                                <div class="step-card">
+                                <div class="step-card sweep-only">
                                     <div class="step-header">
                                         <div class="step-number">6</div>
                                         <div class="step-title-wrapper">
@@ -259,7 +297,7 @@
                                 </div>
 
                                 <!-- Step 7 -->
-                                <div class="step-card">
+                                <div class="step-card sweep-only">
                                     <div class="step-header">
                                         <div class="step-number">7</div>
                                         <div class="step-title-wrapper">
@@ -277,7 +315,7 @@
                                 </div>
 
                                 <!-- Step 8 -->
-                                <div class="step-card">
+                                <div class="step-card sweep-only">
                                     <div class="step-header">
                                         <div class="step-number">8</div>
                                         <div class="step-title-wrapper">
@@ -294,7 +332,7 @@
                                 </div>
 
                                 <!-- Step 9 (Conditional) -->
-                                <div class="step-card">
+                                <div class="step-card sweep-only">
                                     <div class="step-header">
                                         <div class="step-number" style="background: linear-gradient(135deg, #7c3aed, #8b5cf6);">9</div>
                                         <div class="step-title-wrapper">
@@ -317,7 +355,7 @@
                                 </div>
 
                                 <!-- Step 10 (Conditional) -->
-                                <div class="step-card">
+                                <div class="step-card sweep-only">
                                     <div class="step-header">
                                         <div class="step-number" style="background: linear-gradient(135deg, #7c3aed, #a78bfa);">10</div>
                                         <div class="step-title-wrapper">
@@ -342,7 +380,7 @@
                                 </div>
 
                                 <!-- Step 11 (Conditional) -->
-                                <div class="step-card">
+                                <div class="step-card sweep-only">
                                     <div class="step-header">
                                         <div class="step-number" style="background: linear-gradient(135deg, #059669, #10b981);">11</div>
                                         <div class="step-title-wrapper">
@@ -359,7 +397,7 @@
                                 </div>
 
                                 <!-- Step 12 (Conditional) -->
-                                <div class="step-card">
+                                <div class="step-card sweep-only">
                                     <div class="step-header">
                                         <div class="step-number" style="background: linear-gradient(135deg, #ea580c, #f97316);">12</div>
                                         <div class="step-title-wrapper">
@@ -376,7 +414,7 @@
                                 </div>
 
                                 <!-- Step 13 (Conditional) -->
-                                <div class="step-card">
+                                <div class="step-card sweep-only">
                                     <div class="step-header">
                                         <div class="step-number" style="background: linear-gradient(135deg, #7c3aed, #a78bfa);">13</div>
                                         <div class="step-title-wrapper">

@@ -1112,6 +1112,34 @@ function restoreConfigSummary() {
 
     // Update configuration summary spans
     document.getElementById('config-summary-goal').textContent = goalNames[config.goal] || config.goal;
+
+    // Goal-aware "What Happens When You Click Start": single_test and
+    // long_run don't run the sweep pipeline — hide the 12 sweep step
+    // cards and show the goal-specific flow card instead.
+    const isSingle = config.goal === 'single_test';
+    const isLongRun = config.goal === 'long_run';
+    document.querySelectorAll('.step-card.sweep-only').forEach(el => {
+        el.style.display = (isSingle || isLongRun) ? 'none' : '';
+    });
+    document.querySelectorAll('.step-card.goal-single-test').forEach(el => {
+        el.style.display = isSingle ? '' : 'none';
+    });
+    document.querySelectorAll('.step-card.goal-long-run').forEach(el => {
+        el.style.display = isLongRun ? '' : 'none';
+    });
+    if (isSingle) {
+        const shape = document.getElementById('st-single-shape');
+        if (shape) {
+            const arch = config.single_test_architecture || 'aggregated';
+            const tp = config.single_test_tp || 1;
+            const reps = (config.single_test_replicas || 1);
+            shape.textContent = `${arch} · TP${tp} × ${reps}`;
+        }
+    }
+    if (isLongRun) {
+        const cyc = document.getElementById('st-long-cycles');
+        if (cyc) cyc.textContent = config.long_run_cycles || 10;
+    }
     document.getElementById('config-summary-model').textContent = config.model;
     document.getElementById('config-summary-isl').textContent = config.isl;
     document.getElementById('config-summary-osl').textContent = config.osl;
