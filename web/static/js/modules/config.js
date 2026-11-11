@@ -1185,6 +1185,19 @@ function restoreConfigSummary() {
     document.getElementById('config-summary-model').textContent = config.model;
     document.getElementById('config-summary-isl').textContent = config.isl;
     document.getElementById('config-summary-osl').textContent = config.osl;
+    // Parallel workload shapes: the ISL/OSL above are workload 1's shape —
+    // surface how many shapes run simultaneously so the summary isn't
+    // mistaken for the whole workload.
+    var wlShapes = document.getElementById('config-summary-wl-shapes');
+    var nShapes = (config.parallel_workloads || []).length;
+    if (wlShapes) {
+        if (nShapes > 1) {
+            wlShapes.textContent = nShapes + ' parallel workload shapes';
+            wlShapes.style.display = 'inline-block';
+        } else {
+            wlShapes.style.display = 'none';
+        }
+    }
     document.getElementById('config-summary-users').textContent = config.users;
     document.getElementById('config-summary-duration').textContent = config.stop_mode === 'max_requests' ? `${config.max_requests} requests` : `${config.duration}s duration`;
     document.getElementById('config-summary-qps-mode').textContent = config.use_achievable_qps ? 'Sustainable Concurrency (auto-scaled)' : 'User-defined Concurrent Users';
@@ -1242,7 +1255,28 @@ function restoreConfigSummary() {
     document.getElementById('recipe-osl-stdev').textContent = config.osl_stdev ? ` (σ=${config.osl_stdev})` : '';
     const turnsEl = document.getElementById('recipe-turns');
     if (turnsEl) turnsEl.textContent = config.turns > 1 ? ` × ${config.turns} turns` : '';
-    document.getElementById('recipe-users').textContent = config.users;
+    // Users: with parallel workload shapes, the wizard's users field holds
+    // workload 1's concurrency — show the total across shapes instead.
+    var _wlList = config.parallel_workloads || [];
+    var _totalUsers = _wlList.length > 1
+        ? _wlList.reduce(function(a, w) { return a + (w.concurrency || 0); }, 0)
+        : config.users;
+    document.getElementById('recipe-users').textContent = _totalUsers;
+    // Parallel workload shapes: list every shape that will run
+    // simultaneously — the global ISL/OSL line only shows workload 1.
+    var wlDetail = document.getElementById('recipe-wl-detail');
+    var wlList = _wlList;
+    if (wlDetail && wlList.length > 1) {
+        var lines = wlList.map(function(w) {
+            var isl = w.isl != null ? w.isl : (w.isl_min && w.isl_max ? w.isl_min + '–' + w.isl_max : '?');
+            return (w.name || 'workload') + ': ISL ' + isl + ', OSL ' + (w.osl != null ? w.osl : '?') + ', concurrency ' + (w.concurrency || '?');
+        });
+        wlDetail.innerHTML = '<strong>' + wlList.length + ' parallel workload shapes</strong> (running simultaneously):<br>' +
+            lines.map(function(l) { return '&nbsp;&nbsp;• ' + l; }).join('<br>');
+        wlDetail.style.display = 'block';
+    } else if (wlDetail) {
+        wlDetail.style.display = 'none';
+    }
     document.getElementById('recipe-duration').textContent = config.stop_mode === 'max_requests' ? `${config.max_requests} requests` : `${config.duration}s duration`;
     document.getElementById('recipe-gpus').textContent = config.max_gpus || config.cluster_resources?.total_gpus || 'Not set';
     document.getElementById('recipe-model').textContent = config.model;
