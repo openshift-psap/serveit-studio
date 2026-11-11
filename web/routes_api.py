@@ -591,6 +591,37 @@ def get_run_config(run_id):
                             if _goal:
                                 ui['goal'] = _goal
                     except Exception:
+                        # Shape fields: the UI snapshot of API-started runs
+                        # can predate the session-sync fix and carry stale
+                        # wizard values (observed: applied run 195's TP1x8
+                        # / 50 cycles and got TP2x8 / 10 cycles). Backfill
+                        # every run-shaping field from the frozen recipe
+                        # config.
+                        _shape_map = {
+                            'single_test_architecture': 'single_test_architecture',
+                            'single_test_tp': 'single_test_tp',
+                            'single_test_replicas': 'single_test_replicas',
+                            'single_test_pipeline_parallelism': 'single_test_pipeline_parallelism',
+                            'single_test_prefill_tp': 'single_test_prefill_tp',
+                            'single_test_decode_tp': 'single_test_decode_tp',
+                            'single_test_prefill_pods': 'single_test_prefill_pods',
+                            'single_test_decode_pods': 'single_test_decode_pods',
+                            'long_run_cycles': 'long_run_cycles',
+                            'duration': 'test_duration',
+                            'turns': 'turns',
+                            'prefix_cache_hit_pct': 'prefix_cache_hit_pct',
+                            'prefix_cache_mode': 'prefix_cache_mode',
+                            'prefix_cache_groups': 'prefix_cache_groups',
+                            'use_corpus': 'use_corpus',
+                            'workload_mode': 'workload_mode',
+                            'rate_type': 'rate_type',
+                            'max_gpus': 'max_gpus',
+                            'image': 'image',
+                        }
+                        for _ui_key, _rc_key in _shape_map.items():
+                            _rc_val = _rc.get(_rc_key)
+                            if _rc_val is not None:
+                                ui[_ui_key] = _rc_val
                         pass
                 # The UI snapshot can go stale (written before workloads were
                 # configured, or overwritten by a later save_config). The
