@@ -482,12 +482,32 @@ class PrereqManager:
                 ("ClusterRoleBinding", "prereq/gaie-clusterrolebinding.yaml.j2"),
             ]
             if epp_use_defaults:
-                # Detect version from scheduler image to pick correct defaults
+                # Pick the upstream default matching the EPP version.
+                # Numeric comparison — the old string compare misclassified
+                # v0.10/v0.11 ("v0.11.0" < "v0.9" is true lexicographically).
+                #   >= v0.11  → RHAIIS 3.6 defaults (dataproducer architecture:
+                #              approx-prefix-cache-producer, inflight-load-
+                #              producer, prefix-cache-affinity-filter,
+                #              token-load-scorer)
+                #   v0.9-v0.10 → RHAIIS 3.5 defaults (queue-scorer,
+                #              kv-cache-utilization-scorer, prefix-cache-
+                #              scorer, max-score-picker @ 2/2/3)
+                #   < v0.9    → legacy single-profile default
+                import re as _re
+
+                def _ver_key(tag):
+                    return tuple(int(x) for x in _re.findall(r"\d+", tag))
+
                 sched_img = self.scheduler_image or ""
                 sched_tag = sched_img.split(":")[-1] if ":" in sched_img else "v0.11.0"
-                is_34 = sched_tag < "v0.9"
-                suffix = ".3.4" if is_34 else ""
-                ver_label = sched_tag
+                _vk = _ver_key(sched_tag)
+                if _vk >= (0, 11):
+                    suffix, era = "-3.6", "RHAIIS 3.6"
+                elif _vk >= (0, 9):
+                    suffix, era = "-3.5", "RHAIIS 3.5"
+                else:
+                    suffix, era = "", "legacy"
+                ver_label = f"{sched_tag} ({era} defaults)"
                 if architecture == "pd":
                     resources.append(("ConfigMap", f"prereq/gaie-configmap-default-pd{suffix}.yaml.j2"))
                     log(f"   Using llm-d {ver_label} default PD EPP configuration")
