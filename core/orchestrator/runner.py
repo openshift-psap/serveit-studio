@@ -523,7 +523,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             },
             "data": {config_file: new_yaml},
         })
-        r = kubectl.run(["apply", "-f", "-"], input_data=configmap.encode() if isinstance(configmap, str) else configmap,
+        r = kubectl.run(["apply", "-f", "-"], input_data=configmap,
                         check=False, timeout=30)
         if r.returncode == 0:
             kubectl.run(["rollout", "restart", "deployment", gaie_name, "-n", self.namespace],
