@@ -415,6 +415,34 @@ def handle_start_optimization(data):
     if state['optimization_running'] or (_gl and not _gl.dead):
         _kill_existing_run()
 
+    # Sync the wizard state to the config this run actually uses. REST/API
+    # starts pass the full config in the payload; without this the UI's
+    # Review screen and wizard steps keep showing the last-saved browser
+    # state (stale defaults) while the run uses entirely different values.
+    # Merge payload over the saved state so omitted fields keep their
+    # current values; normalize model_name -> model; never persist tokens.
+    try:
+        with get_db() as conn:
+            row = conn.execute('SELECT config_json FROM ui_session_state WHERE id = 1').fetchone()
+            saved = json.loads(row['config_json']) if row and row['config_json'] else {}
+        _sync = {**saved, **{k: v for k, v in data.items() if k not in ('hf_token', 'run_id', 'resume_run_id')}}
+        if data.get('model') and not data.get('model_name'):
+            _sync['model'] = data['model']
+        elif data.get('model_name'):
+            _sync['model'] = data['model_name']
+        with get_db() as conn:
+            conn.execute('''
+                INSERT INTO ui_session_state (id, config_json, current_step, optimization_running, updated_at)
+                VALUES (1, ?, 6, 1, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    config_json = excluded.config_json,
+                    current_step = excluded.current_step,
+                    updated_at = excluded.updated_at
+            ''', (json.dumps(_sync), datetime.now().isoformat()))
+        socketio.emit('config_updated', {'config': _sync, 'current_step': 6})
+    except Exception as e:
+        print(f"Warning: session-state sync on start failed: {e}")
+
     # Guard: a run without a model silently skips the model download and
     # crash-loops at deploy with LocalEntryNotFoundError (vLLM is offline,
     # HF_HUB_OFFLINE=1). Fail fast with an actionable message.
