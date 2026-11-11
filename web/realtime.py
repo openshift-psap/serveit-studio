@@ -2601,7 +2601,7 @@ def handle_setup_storage(data):
             template_mgr = TemplateManager()
 
             # Determine if a draft model also needs downloading (e.g. DSpark)
-            _adv = saved.get('advanced_vllm', {})
+            _adv = saved.get('advanced_vllm') or {}
             _spec_model = (_adv.get('speculative_model') or {}).get('value') if isinstance(_adv.get('speculative_model'), dict) else _adv.get('speculative_model')
             _spec_method = _adv.get('speculative_method')
             _draft_model = _spec_model if _spec_model and _spec_model != model else None
@@ -2800,7 +2800,7 @@ def handle_setup_storage(data):
             log_to_ui(f'✅ PVC {pvc_name} already exists (reusing)', 'success')
 
         # Determine if a draft model also needs downloading (e.g. DSpark)
-        _adv = saved.get('advanced_vllm', {})
+        _adv = saved.get('advanced_vllm') or {}
         _spec_model = (_adv.get('speculative_model') or {}).get('value') if isinstance(_adv.get('speculative_model'), dict) else _adv.get('speculative_model')
         _draft_model = _spec_model if _spec_model and _spec_model != model else None
 
