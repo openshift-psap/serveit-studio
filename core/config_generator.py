@@ -267,6 +267,7 @@ class TestConfig:
         return self.deploy_key or self.test_id
 
     # EPP configuration (passed to prereq_manager for configmap generation)
+    epp_calibrate_affinity: bool = False
     epp_config: Optional[Dict] = None
 
 

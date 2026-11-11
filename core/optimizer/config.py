@@ -107,7 +107,6 @@ class RecipeOptimizerConfig:
     epp_default_version: str = "auto"  # upstream default era when preset is default: auto (match EPP image), 3.5, 3.6
     epp_calibrate_affinity: bool = False  # measure peakPrefillThroughput + set workload-aware maxTTFTPenaltyMs
     epp_benchmark: bool = False  # Benchmark multiple EPP strategies
-    epp_calibrate_affinity: bool = False  # measure peakPrefillThroughput post-deploy
     epp_config: Optional[Dict] = None  # Custom plugin weights and parameters
     epp_max_evals: int = 12  # EPP search budget: benchmark evals per architecture
     epp_screen_seconds: int = 0  # Screening run duration (0 = auto: min(150, duration/2))
