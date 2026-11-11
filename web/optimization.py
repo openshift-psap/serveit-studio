@@ -1049,6 +1049,7 @@ data:
                 advanced_vllm_custom_enabled=advanced_vllm_custom_enabled,
                 epp_custom_enabled=epp_custom_enabled,
                 epp_preset=epp_preset,
+                epp_default_version=_get("epp_default_version", "auto") or "auto",
                 epp_benchmark=epp_benchmark,
                 epp_max_evals=epp_max_evals,
                 epp_config=epp_config,

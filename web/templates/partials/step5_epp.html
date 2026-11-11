@@ -7,10 +7,30 @@
                             <div style="font-size:1.5em;flex-shrink:0;">🔧</div>
                             <div>
                                 <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Customize EPP Routing</div>
-                                <div style="color:#64748b;font-size:0.82em;margin-top:2px;">When disabled, uses llm-d upstream defaults — single profile with prefix-cache:3, queue:2, kv-cache:2 (no custom parameters)</div>
+                                <div style="color:#64748b;font-size:0.82em;margin-top:2px;">When disabled, uses llm-d upstream defaults matching the EPP version (or your selection below)</div>
                             </div>
                             <input type="checkbox" id="epp-custom-enabled">
                             <div class="tgl-sw"></div>
+                        </div>
+
+                        <!-- Upstream default version selector (visible when customization is OFF) -->
+                        <div id="epp-default-version-section" style="display:none;border:2px solid #cbd5e1;border-radius:12px;padding:14px 18px;margin-bottom:20px;background:#f8fafc;">
+                            <div style="font-weight:700;color:#1e293b;font-size:0.95em;margin-bottom:6px;">Upstream Default Version</div>
+                            <div style="color:#64748b;font-size:0.82em;margin-bottom:10px;">Which llm-d release's default EPP configuration to deploy when customization is off.</div>
+                            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+                                <div class="arch-card" data-epp-default="auto" onclick="setEppDefaultVersion('auto')" style="border:2px solid #7c3aed;background:linear-gradient(135deg,#faf5ff,#f3e8ff);padding:12px;border-radius:8px;cursor:pointer;text-align:center;">
+                                    <div style="font-weight:700;color:#1e293b;font-size:0.9em;">🤖 Auto (match EPP image)</div>
+                                    <div style="font-size:0.75em;color:#64748b;margin-top:3px;">v0.11+ → 3.6 · v0.9-v0.10 → 3.5 · older → legacy</div>
+                                </div>
+                                <div class="arch-card" data-epp-default="3.6" onclick="setEppDefaultVersion('3.6')" style="border:2px solid #cbd5e1;background:#fafafa;padding:12px;border-radius:8px;cursor:pointer;text-align:center;">
+                                    <div style="font-weight:700;color:#1e293b;font-size:0.9em;">RHAIIS 3.6</div>
+                                    <div style="font-size:0.75em;color:#64748b;margin-top:3px;">prefix-cache-affinity-filter + token-load-scorer</div>
+                                </div>
+                                <div class="arch-card" data-epp-default="3.5" onclick="setEppDefaultVersion('3.5')" style="border:2px solid #cbd5e1;background:#fafafa;padding:12px;border-radius:8px;cursor:pointer;text-align:center;">
+                                    <div style="font-weight:700;color:#1e293b;font-size:0.9em;">RHAIIS 3.5</div>
+                                    <div style="font-size:0.75em;color:#64748b;margin-top:3px;">queue(2) + kv-cache(2) + prefix-cache(3)</div>
+                                </div>
+                            </div>
                         </div>
 
                         <div id="epp-custom-section" style="display:none;">

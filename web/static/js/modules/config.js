@@ -474,6 +474,9 @@ function updateUIFromConfig() {
         if (eppToggle) { if (eppCustom) eppToggle.classList.add('active'); else eppToggle.classList.remove('active'); }
         var eppSection = document.getElementById('epp-custom-section');
         if (eppSection) eppSection.style.display = eppCustom ? 'block' : 'none';
+        var defSection = document.getElementById('epp-default-version-section');
+        if (defSection) defSection.style.display = eppCustom ? 'none' : 'block';
+        if (typeof restoreEppDefaultVersion === 'function') restoreEppDefaultVersion();
     }
 
     // Restore EPP settings (update UI without re-saving)
@@ -1204,7 +1207,7 @@ function restoreConfigSummary() {
     const eppEl = document.getElementById('config-summary-epp');
     if (eppEl) {
         const presetNames = { auto: 'Auto (Workload-Aware)', balanced: 'Balanced (3:2:2)', cache_optimized: 'Cache Optimized (5:1:2)', queue_balanced: 'Queue Balanced (2:2:3)', custom: 'Custom' };
-        eppEl.textContent = config.epp_custom_enabled ? (presetNames[config.epp_preset] || config.epp_preset) : 'Upstream Default';
+        eppEl.textContent = config.epp_custom_enabled ? (presetNames[config.epp_preset] || config.epp_preset) : ('Upstream Default' + (config.epp_default_version && config.epp_default_version !== 'auto' ? ' (RHAIIS ' + config.epp_default_version + ')' : ''));
     }
     const eppSmartEl = document.getElementById('config-summary-epp-smart');
     if (eppSmartEl) eppSmartEl.textContent = config.epp_benchmark ? 'Enabled' : 'Upstream Default';

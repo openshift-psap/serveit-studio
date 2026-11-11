@@ -500,8 +500,15 @@ class PrereqManager:
 
                 sched_img = self.scheduler_image or ""
                 sched_tag = sched_img.split(":")[-1] if ":" in sched_img else "v0.11.0"
+                # User-selected era overrides the image-derived choice
+                # ('auto' / None → match the EPP image version)
+                _requested = (getattr(optimizer_config, "epp_default_version", None) or "auto").strip().lstrip("v")
                 _vk = _ver_key(sched_tag)
-                if _vk >= (0, 11):
+                if _requested in ("3.6",):
+                    suffix, era = "-3.6", "RHAIIS 3.6 (user-selected)"
+                elif _requested in ("3.5",):
+                    suffix, era = "-3.5", "RHAIIS 3.5 (user-selected)"
+                elif _vk >= (0, 11):
                     suffix, era = "-3.6", "RHAIIS 3.6"
                 elif _vk >= (0, 9):
                     suffix, era = "-3.5", "RHAIIS 3.5"

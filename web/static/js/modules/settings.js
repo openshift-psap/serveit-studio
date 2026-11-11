@@ -645,7 +645,23 @@ function toggleEppCustomMode(enabled) {
     config.epp_custom_enabled = enabled;
     var section = document.getElementById('epp-custom-section');
     if (section) section.style.display = enabled ? 'block' : 'none';
+    var defSection = document.getElementById('epp-default-version-section');
+    if (defSection) defSection.style.display = enabled ? 'none' : 'block';
     saveConfig();
+}
+
+function setEppDefaultVersion(ver) {
+    config.epp_default_version = ver;
+    document.querySelectorAll('[data-epp-default]').forEach(el => {
+        var on = el.dataset.eppDefault === ver;
+        el.style.borderColor = on ? '#7c3aed' : '#cbd5e1';
+        el.style.background = on ? 'linear-gradient(135deg,#faf5ff,#f3e8ff)' : '#fafafa';
+    });
+    saveConfig();
+}
+
+function restoreEppDefaultVersion() {
+    setEppDefaultVersion(config.epp_default_version || 'auto');
 }
 
 function setEppPreset(preset) {
