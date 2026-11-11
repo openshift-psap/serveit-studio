@@ -380,12 +380,18 @@ class PrereqManager:
             except Exception:
                 pass
 
+            epp_affinity_params = ""
+            if epp_peak and epp_penalty:
+                epp_affinity_params = (
+                    "        parameters:\n"
+                    f"          peakPrefillThroughput: {epp_peak}\n"
+                    f"          maxTTFTPenaltyMs: {epp_penalty}\n"
+                )
             context = {
                 "namespace": self.namespace,
                 "architecture": architecture,
                 "data_parallel_size": data_parallel_size,
-                "epp_peak_prefill_throughput": epp_peak,
-                "epp_max_ttft_penalty_ms": epp_penalty,
+                "epp_affinity_params": epp_affinity_params,
                 "gaie_name": config["gaie_name"],
                 "gaie_pool_name": config["gaie_pool_name"],
                 "gaie_guide_label": config.get("gaie_guide_label", "serveit-aggregated"),
