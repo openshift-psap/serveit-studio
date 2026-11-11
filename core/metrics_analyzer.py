@@ -562,6 +562,21 @@ class MetricsAnalyzer:
             "DCGM_FI_DEV_MEM_COPY_UTIL": "gpu_mem_copy_util",
             "DCGM_FI_DEV_FB_USED": "gpu_fb_used_mb",
             "DCGM_FI_DEV_POWER_USAGE": "gpu_power_watts",
+            # GPU (DCGM PROF) — compute intensity & data movement.
+            # Availability varies by exporter config; absent metrics
+            # surface as None.
+            "DCGM_FI_PROF_SM_ACTIVE": "gpu_sm_active",
+            "DCGM_FI_PROF_SM_OCCUPANCY": "gpu_sm_occupancy",
+            "DCGM_FI_PROF_PIPE_TENSOR_ACTIVE": "gpu_tensor_active",
+            "DCGM_FI_PROF_PIPE_FP16_ACTIVE": "gpu_fp16_active",
+            "DCGM_FI_PROF_PIPE_FP32_ACTIVE": "gpu_fp32_active",
+            "DCGM_FI_PROF_PIPE_FP64_ACTIVE": "gpu_fp64_active",
+            "DCGM_FI_PROF_GR_ENGINE_ACTIVE": "gpu_gr_engine_active",
+            "DCGM_FI_PROF_DRAM_ACTIVE": "gpu_dram_active",
+            "DCGM_FI_PROF_NVLINK_TX_DATA": "gpu_nvlink_tx",
+            "DCGM_FI_PROF_NVLINK_RX_DATA": "gpu_nvlink_rx",
+            "DCGM_FI_PROF_PCIE_TX_DATA": "gpu_pcie_tx",
+            "DCGM_FI_PROF_PCIE_RX_DATA": "gpu_pcie_rx",
             # Pod resources
             "container_cpu_usage_seconds_total": "pod_cpu_rate",
             "container_memory_working_set_bytes": "pod_memory_bytes",

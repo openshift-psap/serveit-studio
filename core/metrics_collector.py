@@ -6,8 +6,9 @@ Collects metrics from Prometheus/Thanos for LLM inference optimization.
 import os
 import json
 import logging
+import subprocess
 from datetime import datetime
-from typing import Dict, Optional, Any
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 import requests
 from urllib.parse import quote
@@ -151,25 +152,108 @@ class MetricsCollector:
         logger.info(f"Benchmark duration: {duration}s, using rate window: {rate_window}s")
         return f"{rate_window}s"
 
+    def _discover_pod_gpu_uuids(self) -> List[str]:
+        """GPU UUIDs allocated to the inference pods.
+
+        DRA-allocated GPUs carry no exported_pod label on DCGM series —
+        the dcgm-exporter's pod mapping only sees device-plugin
+        allocations (verified: our pods' GPUs were unattributed while a
+        device-plugin workload's were labeled). The allocated GPU is
+        found per pod via nvidia-smi compute-apps (the GPU with an
+        attached process), attributed to the pod by matching the
+        process's cgroup against the exec'd shell's own cgroup — the
+        privileged pods share the host PID namespace, so pids alone
+        can't distinguish pods on the same node. Best-effort: pods
+        that fail to answer are skipped.
+        """
+        uuids: List[str] = []
+        script = (
+            "CG=$(cat /proc/self/cgroup); "
+            "nvidia-smi --query-compute-apps=gpu_uuid,pid --format=csv,noheader 2>/dev/null | "
+            "while IFS=',' read uuid pid _; do "
+            "pid=$(echo $pid | tr -d ' '); "
+            "if [ -r /proc/$pid/cgroup ] && grep -qF \"$CG\" /proc/$pid/cgroup 2>/dev/null; then "
+            "echo \"$uuid\" | tr -d ' '; fi; done"
+        )
+        try:
+            r = subprocess.run(
+                ["kubectl", "get", "pods", "-n", self.config.namespace,
+                 "-o", "jsonpath={range .items[*]}{.metadata.name}{'\\n'}{end}"],
+                capture_output=True, text=True, timeout=15, check=False,
+            )
+            if r.returncode != 0:
+                return uuids
+            pods = [p for p in r.stdout.strip().splitlines()
+                    if p.startswith(self.config.pod_name_pattern)]
+            for pod in pods:
+                try:
+                    u = subprocess.run(
+                        ["kubectl", "exec", pod, "-n", self.config.namespace,
+                         "-c", "vllm", "--", "bash", "-c", script],
+                        capture_output=True, text=True, timeout=30, check=False,
+                    )
+                    if u.returncode == 0:
+                        for line in u.stdout.strip().splitlines():
+                            line = line.strip()
+                            if line.startswith("GPU-"):
+                                uuids.append(line)
+                except Exception:
+                    continue
+        except Exception as e:
+            logger.warning(f"GPU UUID discovery failed: {e}")
+        return list(dict.fromkeys(uuids))  # dedupe, keep order
+
     def collect_gpu_metrics(self, start_time: int, end_time: int) -> Dict[str, Any]:
-        """Collect DCGM GPU metrics."""
+        """Collect DCGM GPU metrics.
+
+        Scoped to the inference pods' GPU UUIDs (DRA-proof). Falls back
+        to the legacy exported_pod label selector when no UUIDs can be
+        discovered (device-plugin clusters where the exporter's pod
+        mapping works). Metrics the cluster's exporter does not expose
+        return empty and surface as None downstream.
+
+        The full DCGM set is queried — basic device metrics plus the
+        PROF grade (SM activity/occupancy, tensor/FP pipes, DRAM,
+        NVLink, PCIe) — because availability differs per cluster and
+        absent metrics cost nothing.
+        """
         logger.info("--- Collecting DCGM GPU metrics ---")
 
         metrics = {}
         gpu_metric_names = [
+            # Basic device metrics
             "DCGM_FI_DEV_GPU_UTIL",
             "DCGM_FI_DEV_MEM_COPY_UTIL",
             "DCGM_FI_DEV_FB_USED",
             "DCGM_FI_DEV_POWER_USAGE",
+            # PROF grade — compute intensity & data movement
+            "DCGM_FI_PROF_SM_ACTIVE",
+            "DCGM_FI_PROF_SM_OCCUPANCY",
+            "DCGM_FI_PROF_PIPE_TENSOR_ACTIVE",
+            "DCGM_FI_PROF_PIPE_FP16_ACTIVE",
+            "DCGM_FI_PROF_PIPE_FP32_ACTIVE",
+            "DCGM_FI_PROF_PIPE_FP64_ACTIVE",
+            "DCGM_FI_PROF_GR_ENGINE_ACTIVE",
+            "DCGM_FI_PROF_DRAM_ACTIVE",
+            "DCGM_FI_PROF_NVLINK_TX_DATA",
+            "DCGM_FI_PROF_NVLINK_RX_DATA",
+            "DCGM_FI_PROF_PCIE_TX_DATA",
+            "DCGM_FI_PROF_PCIE_RX_DATA",
         ]
 
-        for metric_name in gpu_metric_names:
-            query = (
-                f"{metric_name}{{"
+        uuids = self._discover_pod_gpu_uuids()
+        if uuids:
+            selector = f'UUID=~"{ "|".join(uuids) }"'
+            logger.info(f"DCGM scoped to {len(uuids)} inference GPU UUID(s)")
+        else:
+            selector = (
                 f'exported_namespace="{self.config.namespace}", '
                 f'exported_pod=~"{self.config.pod_name_pattern}.*"'
-                f"}}"
             )
+            logger.info("DCGM using legacy exported_pod selector (no UUIDs discovered)")
+
+        for metric_name in gpu_metric_names:
+            query = f"{metric_name}{{{selector}}}"
             result = self._query_prometheus(query, start_time, end_time)
             metrics[query] = result
 
