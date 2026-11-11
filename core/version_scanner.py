@@ -104,50 +104,50 @@ def scan_versions(kubectl: KubectlRunner) -> Dict[str, Optional[str]]:
         if r.returncode == 0 and r.stdout.strip():
             versions['openshift'] = r.stdout.strip()
 
-    # EPP / Inference Scheduler version
-    for ns_label in [
-        ('gaie-aggregated-epp', None),
-        ('gaie-pd-epp', None),
-    ]:
-        deploy_name = ns_label[0]
-        r = kubectl.run(
-            ['get', 'deploy', '-A', '-l', f'app.kubernetes.io/name={deploy_name}',
-             '-o', 'jsonpath={.items[0].spec.template.spec.containers[0].image}'],
-            check=False)
-        if r.returncode != 0 or not r.stdout.strip():
-            r = kubectl.run(
-                ['get', 'deploy', '-A',
-                 '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\\t"}{.spec.template.spec.containers[0].image}{"\\n"}{end}'],
-                check=False)
-            if r.returncode == 0:
-                for line in r.stdout.strip().splitlines():
-                    parts = line.split('\t')
-                    if len(parts) == 2 and 'epp' in parts[0].lower() and 'scheduler' in parts[1].lower():
-                        tag = parts[1].split(':')[-1] if ':' in parts[1] else ''
-                        if tag:
-                            versions['epp'] = tag
-                        break
-        else:
-            img = r.stdout.strip()
-            tag = img.split(':')[-1] if ':' in img else ''
-            if tag:
-                versions['epp'] = tag
-        if 'epp' in versions:
-            break
+    # EPP / Inference Scheduler version. Prefer ServeIt's gaie-* EPP
+    # deployments; fall back to the NEWEST llm-d-router-endpoint-picker
+    # image cluster-wide. The old fallback matched any image containing
+    # 'scheduler'/'epp' — it grabbed other teams' stale EPPs (observed:
+    # forge-nemotron-bench's v0.9.0 reported while the actual EPP ran
+    # v0.11.0) and even accepted sha256 digests as versions.
+    def _image_tag(img):
+        img = img.strip()
+        if not img or "@sha256" in img or ":" not in img:
+            return None
+        tag = img.rsplit(":", 1)[-1].strip()
+        if not tag or tag == "latest" or tag.startswith("sha256"):
+            return None
+        return tag
 
-    # EPP fallback — search by image name
-    if 'epp' not in versions:
+    def _version_key(tag):
+        import re
+        nums = [int(x) for x in re.findall(r"\d+", tag)]
+        return tuple(nums) if nums else (0,)
+
+    epp_candidates = []
+    for deploy_name in ("gaie-aggregated-epp", "gaie-pd-epp", "gaie-ep-epp"):
         r = kubectl.run(
-            ['get', 'deploy', '-A',
-             '-o', 'jsonpath={range .items[*]}{.spec.template.spec.containers[0].image}{"\\n"}{end}'],
+            ["get", "deploy", "-A", "-l", f"app.kubernetes.io/name={deploy_name}",
+             "-o", "jsonpath={.items[*].spec.template.spec.containers[0].image}"],
             check=False)
         if r.returncode == 0:
-            for line in r.stdout.strip().splitlines():
-                if 'scheduler' in line.lower() or 'epp' in line.lower() or 'endpoint-picker' in line.lower():
-                    tag = line.split(':')[-1] if ':' in line else ''
-                    if tag and tag != 'latest':
-                        versions['epp'] = tag
-                        break
+            for img in r.stdout.split():
+                tag = _image_tag(img)
+                if tag:
+                    epp_candidates.append(tag)
+    if not epp_candidates:
+        r = kubectl.run(
+            ["get", "deploy", "-A",
+             "-o", "jsonpath={range .items[*]}{.spec.template.spec.containers[0].image}{'\\n'}{end}"],
+            check=False)
+        if r.returncode == 0:
+            for img in r.stdout.strip().splitlines():
+                if "endpoint-picker" in img:
+                    tag = _image_tag(img)
+                    if tag:
+                        epp_candidates.append(tag)
+    if epp_candidates:
+        versions["epp"] = max(epp_candidates, key=_version_key)
 
     # LWS version
     r = kubectl.run(
