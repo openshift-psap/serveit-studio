@@ -136,6 +136,20 @@ class GuidellmMixin:
 
         from core.template_manager import TemplateManager
 
+        # The workload pod mounts the per-node model-cache PVCs whenever the
+        # config lists them (populated by cluster-capability discovery even
+        # when per_node_storage is off). On a fresh namespace those PVCs are
+        # created only during a test's prereq deploy — which runs AFTER this
+        # pod is needed — so the pod Pending-fails forever ("PVC not found")
+        # and the run deadlocks at "Guidellm pod did not start". Ensure they
+        # exist before applying the deployment.
+        _node_pvcs = getattr(config, "node_nfs_pvcs", None) or []
+        if _node_pvcs:
+            from core.prereq_manager import PrereqManager
+
+            pm = PrereqManager(namespace=self.namespace, kubectl_runner=kubectl)
+            pm._ensure_per_node_pvcs(config, log_callback or (lambda m: None))
+
         tmgr = TemplateManager()
         deploy_yaml = tmgr.render_template(
             "benchmark/guidellm-pod.yaml.j2",

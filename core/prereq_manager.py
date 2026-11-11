@@ -453,11 +453,19 @@ class PrereqManager:
             if optimizer_config:
                 self._ensure_network_resources(optimizer_config, log)
 
-            # Create per-node NFS PVCs if per-node storage is enabled (skip for hostPath/local disk)
+            # Create per-node NFS PVCs (skip for hostPath/local disk). Runs
+            # when per-node storage is chosen OR when node_nfs_pvcs is
+            # already populated (cluster-capability discovery fills it even
+            # when per_node_storage is off) — the inference and workload
+            # pods mount these PVCs unconditionally once listed, and on a
+            # fresh namespace they'd Pending-fail forever if not created.
             if (
                 optimizer_config
-                and getattr(optimizer_config, "per_node_storage", False)
                 and not getattr(optimizer_config, "local_disk_path", None)
+                and (
+                    getattr(optimizer_config, "per_node_storage", False)
+                    or getattr(optimizer_config, "node_nfs_pvcs", None)
+                )
             ):
                 node_nfs_pvcs = self._ensure_per_node_pvcs(optimizer_config, log)
                 if node_nfs_pvcs:
