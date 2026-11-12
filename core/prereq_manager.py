@@ -386,8 +386,9 @@ class PrereqManager:
                     "        parameters:\n"
                     f"          peakPrefillThroughput: {epp_peak}\n"
                     f"          maxTTFTPenaltyMs: {epp_penalty}\n"
-                    "          explorationProbability: 0.10\n"
                 )
+                if getattr(optimizer_config, "epp_calibrate_affinity", False):
+                    epp_affinity_params += "          explorationProbability: 0.10\n"
             context = {
                 "namespace": self.namespace,
                 "architecture": architecture,
