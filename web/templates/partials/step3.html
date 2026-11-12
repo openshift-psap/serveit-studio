@@ -303,7 +303,7 @@
                                                 <div id="globals-continuous">
                                                 <!-- Corpus Dataset toggle -->
                                                 <div style="border-top:1px solid #dcfce7;margin-top:16px;">
-                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('use-corpus-enabled').checked;document.getElementById('use-corpus-enabled').checked=on;config.use_corpus=on;var sw=document.getElementById('use-corpus-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';document.querySelectorAll('#structured-prefix-wrapper').forEach(el => el.style.display=on?'none':'flex');saveConfig();">
+                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('use-corpus-enabled').checked;document.getElementById('use-corpus-enabled').checked=on;config.use_corpus=on;var sw=document.getElementById('use-corpus-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';document.querySelectorAll('#structured-prefix-wrapper').forEach(el => el.style.display=on?'none':'flex');document.getElementById('corpus-source-section').style.display=on?'block':'none';saveConfig();">
                                                         <div style="display:flex;align-items:center;gap:10px;padding:12px 20px;">
                                                             <div style="font-size:1.3em;flex-shrink:0;">📖</div>
                                                             <div>
@@ -315,6 +315,20 @@
                                                         <div id="use-corpus-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-right:20px;">
                                                             <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
                                                         </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Corpus Source selector -->
+                                                <div id="corpus-source-section" style="display:none;border-top:1px solid #dcfce7;padding:10px 20px;">
+                                                    <label style="font-weight:600;color:#15803d;font-size:0.88em;display:block;margin-bottom:6px;">Corpus Source:</label>
+                                                    <select id="corpus-source-select" onchange="config.dataset_source_mode=this.value;document.getElementById('wekatrace-options').style.display=(this.value==='wekatrace')?'block':'none';saveConfig();" style="width:100%;padding:8px 12px;border:1.5px solid #86efac;border-radius:8px;font-size:0.9em;background:#f0fdf4;color:#166534;cursor:pointer;">
+                                                        <option value="corpus">wikitext-103 — English prose for speculative decoding</option>
+                                                        <option value="wekatrace">Agentic Traces (WekaTrace) — real Claude Code sessions with multi-turn ISL growth + hash-block cache sharing</option>
+                                                    </select>
+                                                    <div id="wekatrace-options" style="display:none;margin-top:10px;">
+                                                        <label style="font-weight:600;color:#15803d;font-size:0.85em;display:block;margin-bottom:4px;">Max traces to replay:</label>
+                                                        <input type="number" id="wekatrace-max-traces" value="10" min="1" max="393" style="width:80px;padding:6px 10px;border:1.5px solid #86efac;border-radius:8px;font-size:0.9em;" onchange="config.wekatrace_max_traces=parseInt(this.value)||10;saveConfig();">
+                                                        <span style="color:#166534;font-size:0.8em;margin-left:8px;">each trace = 1 full agentic session (23-466 requests, ISL 7k-680k)</span>
                                                     </div>
                                                 </div>
 

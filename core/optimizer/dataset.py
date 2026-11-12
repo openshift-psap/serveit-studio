@@ -45,6 +45,8 @@ class DatasetMixin:
 
     def _dataset_mode(self):
         """Return the dataset generation mode based on config."""
+        if getattr(self.config, 'dataset_source_mode', None) == 'wekatrace':
+            return 'wekatrace'
         return 'corpus' if getattr(self.config, 'use_corpus', False) else 'random'
 
     def _compute_dataset_seed(self, **overrides):
@@ -126,18 +128,31 @@ class DatasetMixin:
         else:
             corpus_note = ' (real text corpus)' if mode == 'corpus' else ''
             self.log(f"Generating {mode} dataset on workload pod: {pool_size} rows, ISL={isl}, OSL={osl}{corpus_note}", 'info')
-            cmd = (
-                f'generate_dataset'
-                f' --model "{self.config.model_name}"'
-                f' --isl {isl} --osl {osl}'
-                f' --seed {seed} --rows {pool_size}'
-                f' --output {dataset_path}'
-                f' --mode {mode}'
-            )
-            if isl_stdev > 0:
-                cmd += f' --isl-stdev {isl_stdev}'
-            if osl_stdev > 0:
-                cmd += f' --osl-stdev {osl_stdev}'
+            if mode == 'wekatrace':
+                traces_path = getattr(self.config, 'wekatrace_source', '/mnt/storage/tmp/cc-traces-weka.jsonl')
+                max_traces = int(getattr(self.config, 'wekatrace_max_traces', 10) or 10)
+                cmd = (
+                    f'generate_wekatrace_dataset'
+                    f' --traces "{traces_path}"'
+                    f' --model "{self.config.model_name}"'
+                    f' --output {dataset_path}'
+                    f' --max-traces {max_traces}'
+                    f' --block-content corpus'
+                    f' --seed {seed}'
+                )
+            else:
+                cmd = (
+                    f'generate_dataset'
+                    f' --model "{self.config.model_name}"'
+                    f' --isl {isl} --osl {osl}'
+                    f' --seed {seed} --rows {pool_size}'
+                    f' --output {dataset_path}'
+                    f' --mode {mode}'
+                )
+                if isl_stdev > 0:
+                    cmd += f' --isl-stdev {isl_stdev}'
+                if osl_stdev > 0:
+                    cmd += f' --osl-stdev {osl_stdev}'
 
             result = kubectl.run(
                 ['exec', pod_name, '-n', self.config.namespace, '--', 'bash', '-c', cmd],

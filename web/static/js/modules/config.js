@@ -480,6 +480,20 @@ function updateUIFromConfig() {
     }
 
     // Restore EPP settings (update UI without re-saving)
+    // Restore corpus source selector
+    var corpusSection = document.getElementById('corpus-source-section');
+    if (corpusSection) {
+        corpusSection.style.display = config.use_corpus ? 'block' : 'none';
+    }
+    var corpusSelect = document.getElementById('corpus-source-select');
+    if (corpusSelect) {
+        corpusSelect.value = config.dataset_source_mode || 'corpus';
+        var wekaOpts = document.getElementById('wekatrace-options');
+        if (wekaOpts) wekaOpts.style.display = (corpusSelect.value === 'wekatrace') ? 'block' : 'none';
+    }
+    var wekaMax = document.getElementById('wekatrace-max-traces');
+    if (wekaMax && config.wekatrace_max_traces) wekaMax.value = config.wekatrace_max_traces;
+
     if (config.epp_preset && document.querySelector('[data-epp]')) {
         document.querySelectorAll('[data-epp]').forEach(function(el) {
             if (el.dataset.epp === config.epp_preset) {
