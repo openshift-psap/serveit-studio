@@ -248,7 +248,7 @@
         s += '<table class="results-table" id="' + tblId + '" style="font-size:0.82em; margin:8px 20px; width:calc(100% - 40px);">' +
             (function() {
                 var cols = [['Cycle', 'num'], ['ISL', 'num'], ['OSL', 'num'], ['Users', 'num'],
-                            ['Hit %', 'num'], ['TTFT p90', 'num'], ['ITL p90', 'num'], ['Tokens/s', 'num'],
+                            ['Hit %', 'num'], ['TTFT p90', 'num'], ['TTFT p95', 'num'], ['TTFT p99', 'num'], ['ITL p90', 'num'], ['Tokens/s', 'num'],
                             ['Pod RSS', 'num'], ['Anon', 'num'], ['EPP Heap', 'num'], ['Pod CPU', 'num'],
                             ['Pods', 'num'], ['Status', 'str']];
                 var h = '<tr>';
@@ -269,6 +269,8 @@
                 '<td data-val="' + (c.num_users || 0) + '">' + (c.num_users != null ? c.num_users : '—') + '</td>' +
                 '<td data-val="' + (c.prefix_cache_hit_pct || 0) + '">' + (c.prefix_cache_hit_pct != null ? c.prefix_cache_hit_pct : '—') + '</td>' +
                 '<td data-val="' + (r.ttft_p90 || 0) + '">' + (r.ttft_p90 != null ? fmt(r.ttft_p90, 0) + 'ms' : '—') + '</td>' +
+                '<td data-val="' + (r.ttft_p95 || 0) + '">' + (r.ttft_p95 != null ? fmt(r.ttft_p95, 0) + 'ms' : '—') + '</td>' +
+                '<td data-val="' + (r.ttft_p99 || 0) + '">' + (r.ttft_p99 != null ? fmt(r.ttft_p99, 0) + 'ms' : '—') + '</td>' +
                 '<td data-val="' + (r.itl_p90 || 0) + '">' + (r.itl_p90 != null ? fmt(r.itl_p90, 1) + 'ms' : '—') + '</td>' +
                 '<td data-val="' + (tokPerSec(r) || 0) + '">' + (tokPerSec(r) != null ? fmt(tokPerSec(r), 0) : '—') + '</td>' +
                 '<td data-val="' + (rss || 0) + '">' + (rss != null ? (rss / 1024).toFixed(1) + ' GiB' : '—') + '</td>' +
@@ -312,6 +314,10 @@
 
             line(id + '-ttft', rs.map(function(r) { return r.ttft_p90 || null; }),
                  'TTFT p90 (ms) — drift check', '#2563eb', 'ms');
+            line(id + '-ttft-p95', rs.map(function(r) { return r.ttft_p95 || null; }),
+                 'TTFT p95 (ms) — exploration cost', '#7c3aed', 'ms');
+            line(id + '-ttft-p99', rs.map(function(r) { return r.ttft_p99 || null; }),
+                 'TTFT p99 (ms) — tail check', '#dc2626', 'ms');
             line(id + '-tps', rs.map(function(r) { return tokPerSec(r); }),
                  'Token Throughput (tok/s)', '#059669', 'tok/s');
             line(id + '-rss', rs.map(function(r) { return rssTotal(r); }),
