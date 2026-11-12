@@ -66,6 +66,10 @@ RUN chmod +x /usr/local/bin/generate_dataset
 COPY docker/scripts/generate_turn_dataset.py /usr/local/bin/generate_turn_dataset
 RUN chmod +x /usr/local/bin/generate_turn_dataset
 
+# Add WekaTrace (agentic traces) dataset converter
+COPY docker/scripts/generate_wekatrace_dataset.py /usr/local/bin/generate_wekatrace_dataset
+RUN chmod +x /usr/local/bin/generate_wekatrace_dataset
+
 
 # Keep alive — the server does kubectl exec to run guidellm commands
 CMD ["sleep", "infinity"]
