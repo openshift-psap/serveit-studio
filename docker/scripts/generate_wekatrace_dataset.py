@@ -140,6 +140,8 @@ def main():
     parser.add_argument('--max-traces', type=int, default=10, help='Max traces to convert')
     parser.add_argument('--max-is-blocks', type=int, default=16000,
                         help='Skip requests above this block count (16000*64=1M tokens)')
+    parser.add_argument('--max-is-tokens', type=int, default=None,
+                        help='Skip requests above this input token count (model context budget)')
     parser.add_argument('--include-subagents', action='store_true',
                         help='Include subagent inner requests')
     parser.add_argument('--seed', type=int, default=42)
@@ -211,6 +213,7 @@ def main():
     # Generate output
     total_requests = 0
     total_isl = 0
+    skipped_tokens = 0
     cache_shares = []
 
     with open(args.output, 'w') as out:
@@ -226,6 +229,12 @@ def main():
 
                 # Skip requests above block limit
                 if len(hash_ids) > args.max_is_blocks:
+                    continue
+
+                # Skip requests above the model's context budget
+                req_isl = len(hash_ids) * BLOCK_SIZE
+                if args.max_is_tokens and req_isl > args.max_is_tokens:
+                    skipped_tokens += 1
                     continue
 
                 # Build the prompt from blocks
@@ -260,6 +269,9 @@ def main():
 
     # Summary
     print(f'\nDataset generated: {total_requests} requests', file=sys.stderr)
+    if skipped_tokens:
+        print(f'Skipped {skipped_tokens} requests over token limit '
+              f'(max_is_tokens={args.max_is_tokens})', file=sys.stderr)
     print(f'Total input tokens: {total_isl:,}', file=sys.stderr)
     print(f'Mean ISL: {total_isl // max(total_requests, 1):,}', file=sys.stderr)
     if cache_shares:

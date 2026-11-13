@@ -2508,7 +2508,10 @@ spec:
         )
         pd_mode = "Smart (~3/pair)" if self.config.pd_search_mode == "smart" else "Exhaustive (all splits)"
         self.log(f"PD search: {pd_mode}", "info")
-        if getattr(self.config, "use_corpus", False):
+        _ds_mode = self._dataset_mode()
+        if _ds_mode == "wekatrace":
+            self.log("Dataset: Agentic traces (WekaTrace)", "info")
+        elif _ds_mode == "corpus":
             self.log("Dataset: Real text corpus (wikitext-103)", "info")
         if getattr(self.config, "speculative_config_method", None) or (
             getattr(self.config, "advanced_vllm", None) or {}
@@ -2555,11 +2558,28 @@ spec:
             # synthetic data in the runner — corpus/random dataset
             # generation is wasted time and can switch the global mode.
             _has_shaped_workloads = bool(getattr(self.config, "parallel_workloads", None))
-            if _has_shaped_workloads:
+            _ds_mode = self._dataset_mode()
+            if _ds_mode == "wekatrace":
+                # WekaTrace: traces carry their own natural prefix structure.
+                # Synthetic parallel shapes and prefix-cache simulation don't
+                # apply — force a single trace-derived dataset workload.
+                if _has_shaped_workloads:
+                    self.log(
+                        f"   WekaTrace mode: ignoring {len(self.config.parallel_workloads)} "
+                        f"synthetic parallel workload shape(s) — using trace data instead", "info"
+                    )
+                    self.config.parallel_workloads = None
+                self._generate_random_dataset()
+                self.config.workload_mode = "dataset"
+                self.config.dataset_source = self.random_dataset_path
+                self.config.dataset_column = "prompt"
+                self.config.dataset_max_output = self.config.osl
+                self.log("   Workload switched to WekaTrace dataset mode", "info")
+            elif _has_shaped_workloads:
                 pass  # shaped workloads: no dataset generation needed
             elif self.config.prefix_cache_hit_pct > 0 and self.config.workload_mode == "synthetic":
                 self._generate_prefix_cache_dataset()
-            elif self.config.workload_mode == "synthetic" and not is_multi_turn:
+            elif (self.config.workload_mode == "synthetic" or _ds_mode == "corpus") and not is_multi_turn and not getattr(self.config, "dataset_source", None):
                 self._generate_random_dataset()
                 self.config.workload_mode = "dataset"
                 self.config.dataset_source = self.random_dataset_path

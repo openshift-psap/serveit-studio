@@ -140,6 +140,12 @@ class DatasetMixin:
                     f' --block-content corpus'
                     f' --seed {seed}'
                 )
+                # Cap request ISL at the model's context budget so trace
+                # requests beyond max_model_len don't 400 on context length.
+                mml = getattr(self.config, 'max_model_len', None)
+                if mml:
+                    osl = int(getattr(self.config, 'osl', 512) or 512)
+                    cmd += f' --max-is-tokens {int(mml) - osl - 512}'
             else:
                 cmd = (
                     f'generate_dataset'
