@@ -108,7 +108,17 @@ class DatasetMixin:
         max_reqs = getattr(self.config, 'max_requests', None) or int(getattr(self.config, 'qps', 100) * getattr(self.config, 'test_duration', 300))
         pool_size = max(max_reqs * 3, 100)  # 3× max_requests for cache churn
 
-        dataset_path = f'/mnt/storage/prefix-cache-datasets/{mode}-workload-{isl}-{osl}-{seed}.jsonl'
+        # WekaTrace: the converter's per-request token cap changes dataset
+        # content — bake it into the path so a cap change busts the cache
+        # instead of reusing a dataset generated under the old limit.
+        _wt_cap = ''
+        if mode == 'wekatrace':
+            mml = getattr(self.config, 'max_model_len', None)
+            if mml:
+                _osl_cap = int(getattr(self.config, 'osl', 512) or 512)
+                _wt_cap = f'-cap{int(mml) - _osl_cap - 512}'
+
+        dataset_path = f'/mnt/storage/prefix-cache-datasets/{mode}-workload-{isl}-{osl}-{seed}{_wt_cap}.jsonl'
 
         # Ensure workload pod is running
         self.orchestrator.ensure_guidellm_pod(self.config, log_callback=lambda msg: self.log(msg, 'info'))
@@ -142,10 +152,8 @@ class DatasetMixin:
                 )
                 # Cap request ISL at the model's context budget so trace
                 # requests beyond max_model_len don't 400 on context length.
-                mml = getattr(self.config, 'max_model_len', None)
-                if mml:
-                    osl = int(getattr(self.config, 'osl', 512) or 512)
-                    cmd += f' --max-is-tokens {int(mml) - osl - 512}'
+                if _wt_cap:
+                    cmd += f' --max-is-tokens {_wt_cap[4:]}'
             else:
                 cmd = (
                     f'generate_dataset'
