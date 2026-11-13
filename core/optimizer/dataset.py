@@ -129,7 +129,7 @@ class DatasetMixin:
             corpus_note = ' (real text corpus)' if mode == 'corpus' else ''
             self.log(f"Generating {mode} dataset on workload pod: {pool_size} rows, ISL={isl}, OSL={osl}{corpus_note}", 'info')
             if mode == 'wekatrace':
-                traces_path = getattr(self.config, 'wekatrace_source', '/mnt/storage/tmp/cc-traces-weka.jsonl')
+                traces_path = getattr(self.config, 'wekatrace_source', '/app/traces/cc-traces-weka.jsonl')
                 max_traces = int(getattr(self.config, 'wekatrace_max_traces', 10) or 10)
                 cmd = (
                     f'generate_wekatrace_dataset'
