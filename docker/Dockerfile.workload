@@ -66,9 +66,14 @@ RUN chmod +x /usr/local/bin/generate_dataset
 COPY docker/scripts/generate_turn_dataset.py /usr/local/bin/generate_turn_dataset
 RUN chmod +x /usr/local/bin/generate_turn_dataset
 
-# Add WekaTrace (agentic traces) dataset converter
+# Add WekaTrace (agentic traces) dataset converter + bundled traces
 COPY docker/scripts/generate_wekatrace_dataset.py /usr/local/bin/generate_wekatrace_dataset
 RUN chmod +x /usr/local/bin/generate_wekatrace_dataset
+
+# Bundle the WekaTrace agentic traces (10 curated Claude Code sessions,
+# ~430 requests, ISL 448-500k, 97-99% hash-block prefix sharing).
+# These are REAL production agentic sessions from SemiAnalysis traces.
+COPY docker/data/cc-traces-subset.jsonl /app/traces/cc-traces-weka.jsonl
 
 
 # Keep alive — the server does kubectl exec to run guidellm commands
