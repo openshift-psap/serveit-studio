@@ -2563,6 +2563,21 @@ spec:
                 # WekaTrace: traces carry their own natural prefix structure.
                 # Synthetic parallel shapes and prefix-cache simulation don't
                 # apply — force a single trace-derived dataset workload.
+                #
+                # Trace ISLs dwarf the synthetic target (agentic sessions run
+                # 100k+ tokens vs a 6k synthetic ISL budget). Raise max_model_len
+                # toward the model's real context limit so the converter's token
+                # filter keeps the bulk of trace requests instead of ~97% of
+                # them. Capped at 128k: half the typical model limit keeps the
+                # KV cache for one max-length sequence within H200 budget.
+                model_max = (getattr(self, "_model_config", None) or {}).get("max_position_embeddings")
+                wekatrace_cap = min(int(model_max), 131072) if model_max else 131072
+                if self.config.max_model_len < wekatrace_cap:
+                    self.log(
+                        f"   WekaTrace: max_model_len {self.config.max_model_len:,} -> "
+                        f"{wekatrace_cap:,} (trace-scale context)", "info"
+                    )
+                    self.config.max_model_len = wekatrace_cap
                 if _has_shaped_workloads:
                     self.log(
                         f"   WekaTrace mode: ignoring {len(self.config.parallel_workloads)} "
