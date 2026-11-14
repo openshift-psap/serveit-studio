@@ -1821,22 +1821,30 @@ class RecipeOptimizer(
         # shapes go through blis run. Same definition guidellm would run.
         sim = None
         if getattr(self.config, "dataset_source_mode", "") == "wekatrace":
-            traces = getattr(self.config, "wekatrace_source",
-                             "/app/traces/cc-traces-weka.jsonl")
+            traces = runner.fetch_traces(getattr(
+                self.config, "wekatrace_source",
+                "/app/traces/cc-traces-weka.jsonl"))
             max_traces = int(getattr(self.config, "wekatrace_max_traces", 10) or 10)
             duration = int(getattr(self.config, "test_duration", 300) or 300)
+            # requests over the model's context budget are unservable in
+            # the simulator exactly as they would 400 on a real deployment
+            mml = int(getattr(self.config, "max_model_len", 0) or 0)
+            osl_budget = int(getattr(self.config, "osl", 512) or 512)
+            max_input = (mml - osl_budget - 512) if mml > (osl_budget + 512) else None
             # cache the conversion — cycles share the same trace files
-            trace_tag = f"wekatrace-{max_traces}-{duration}"
+            trace_tag = f"wekatrace-{max_traces}-{duration}-{max_input or 0}"
             th = os.path.join(run_dir, f"{trace_tag}.trace-header.yaml")
             td = os.path.join(run_dir, f"{trace_tag}.trace-data.csv")
-            if not (os.path.isfile(th) and os.path.isfile(td)):
+            if traces and not (os.path.isfile(th) and os.path.isfile(td)):
                 th, td = BlisRunner.convert_wekatrace(
                     traces, run_dir, trace_tag, max_traces=max_traces,
                     duration_s=duration,
-                    model_name=self.config.model_name)
+                    model_name=self.config.model_name,
+                    max_input_tokens=max_input)
             if th and td:
                 self.log(f"   BLIS: replaying WekaTrace sessions "
-                         f"(max {max_traces}, compressed to {duration}s)", "info")
+                         f"(max {max_traces}, compressed to {duration}s"
+                         f"{f', input budget {max_input}' if max_input else ''})", "info")
                 sim = runner.run_replay(scenario, name, th, td)
             else:
                 self.log("   BLIS: WekaTrace conversion failed — falling back "

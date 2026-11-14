@@ -106,8 +106,23 @@ class BlisRunner:
 
     # in-image binary (workload-v4+); the pod's /mnt/storage is node-local,
     # so the server-side shared-storage copy is NOT visible there
+    # in-image binary (workload-v4+); the pod's /mnt/storage is node-local,
+    # so the server-side shared-storage copy is NOT visible there
     REMOTE_BINARY_FALLBACK = "/usr/local/bin/blis"
-    OVERLAY_DIR = os.path.join(BLIS_HOME, "catalog-overlay")
+
+    # Catalog overlays: the repo ships entries the embedded catalog lacks
+    # (deployed with the code — no manual staging); the shared-storage dir
+    # extends/overrides for models added ad hoc on an install.
+    REPO_OVERLAY_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "blis-overlay")
+    STORAGE_OVERLAY_DIR = os.path.join(BLIS_HOME, "catalog-overlay")
+
+    @property
+    def OVERLAY_DIR(self):  # noqa: N802 — kept for call-site compatibility
+        if os.path.isdir(os.path.join(self.STORAGE_OVERLAY_DIR, "models")):
+            return self.STORAGE_OVERLAY_DIR
+        if os.path.isdir(os.path.join(self.REPO_OVERLAY_DIR, "models")):
+            return self.REPO_OVERLAY_DIR
+        return None
 
     def __init__(self, log=None, blis_home=None, kubectl=None, namespace=None, pod_name=None):
         self.home = blis_home or BLIS_HOME
@@ -179,8 +194,8 @@ class BlisRunner:
         seen = set()
         # Local catalog overlay first: models added on this install
         # (resolve has no --catalog-overlay flag, so check the directory)
-        overlay_models = os.path.join(self.OVERLAY_DIR, "models")
-        if os.path.isdir(overlay_models):
+        overlay_models = os.path.join(self.OVERLAY_DIR, "models") if self.OVERLAY_DIR else None
+        if overlay_models and os.path.isdir(overlay_models):
             for cand in candidates:
                 for variant in (cand, cand.lower()):
                     d = os.path.join(overlay_models, variant)
@@ -402,7 +417,7 @@ pools:
 
         scenarios_dir = pod_scenarios_dir or os.path.dirname(scenario_path)
         overlay_flag = None
-        if os.path.isdir(self.OVERLAY_DIR):
+        if self.OVERLAY_DIR and os.path.isdir(self.OVERLAY_DIR):
             if self.remote:
                 _pod_overlay = f"{pod_scenarios_dir}/catalog-overlay"
                 self.kubectl.run(
@@ -482,12 +497,41 @@ pools:
             self._log(f"BLIS: result parse failed: {e}", "warn")
             return None
 
+    def fetch_traces(self, traces_path: str) -> Optional[str]:
+        """Return a server-readable path for the traces file.
+
+        The wizard's default WekaTrace source is the path baked into the
+        WORKLOAD image (/app/traces/...), which the server cannot read.
+        When the file is missing server-side and we run remotely, pull it
+        from the workload pod once into a shared-storage cache.
+        """
+        if os.path.isfile(traces_path):
+            return traces_path
+        if not self.remote:
+            return None
+        cached = os.path.join(self.home, "traces", os.path.basename(traces_path))
+        if os.path.isfile(cached):
+            return cached
+        try:
+            os.makedirs(os.path.dirname(cached), exist_ok=True)
+            r = self.kubectl.run(
+                ["cp", f"{self.pod_name}:{traces_path}", cached,
+                 "-n", self.namespace], check=False, timeout=600)
+            if os.path.isfile(cached):
+                self._log(f"   BLIS: pulled traces from the workload pod "
+                          f"({os.path.basename(traces_path)}, {os.path.getsize(cached)//1024//1024}MB)", "info")
+                return cached
+        except Exception as e:
+            self._log(f"   BLIS: traces fetch failed: {e}", "warn")
+        return None
+
     # -- trace replay ------------------------------------------------------
 
     @staticmethod
     def convert_wekatrace(traces_path: str, out_dir: str, name: str,
                           max_traces: int = 10, duration_s: int = 300,
-                          model_name: str = "model", block_tokens: int = 64):
+                          model_name: str = "model", block_tokens: int = 64,
+                          max_input_tokens: int = None):
         """Convert WekaTrace agentic-session JSONL to BLIS TraceV2.
 
         Each JSONL line is one session (requests with hash_ids, in/out
@@ -495,6 +539,10 @@ pools:
         data CSV blis replay consumes. Arrival times are COMPRESSED to
         fit duration_s (order, session structure, burst ratios and
         prefix sharing preserved; absolute pacing is not).
+
+        max_input_tokens drops requests whose prompt exceeds the model's
+        context budget (they would be unservable in the simulator exactly
+        as they would 400 on a real deployment).
 
         Returns (header_path, csv_path) or (None, None) on failure.
         """
@@ -518,12 +566,19 @@ pools:
             return None, None
 
         rows = []
+        skipped = 0
         request_id = 0
         t_max = 0.0
         for s_idx, sess in enumerate(sessions):
             sid = f"weka-{s_idx:03d}"
-            reqs = [r for r in sess.get("requests", [])
-                    if r.get("type") != "subagent" and r.get("hash_ids")]
+            reqs = []
+            for r in sess.get("requests", []):
+                if r.get("type") == "subagent" or not r.get("hash_ids"):
+                    continue
+                if max_input_tokens and int(r.get("in", 0) or 0) > max_input_tokens:
+                    skipped += 1
+                    continue
+                reqs.append(r)
             prev_ids = []
             for r_idx, r in enumerate(reqs):
                 t = float(r.get("t", 0) or 0)
@@ -593,6 +648,11 @@ pools:
                     "time_unit: us\n"
                     "trace_version: 4\n"
                     f"workload_seed: 42\n")
+        if skipped:
+            import sys as _sys
+            print(f"WekaTrace->TraceV2: kept {len(rows)} requests, dropped "
+                  f"{skipped} over the {max_input_tokens}-token context budget",
+                  file=_sys.stderr)
         return header_path, csv_path
 
     def run_replay(self, scenario_path: str, scenario_name: str,
@@ -649,7 +709,7 @@ pools:
 
         scenarios_dir = pod_scenarios_dir or os.path.dirname(scenario_path)
         overlay_flag = None
-        if os.path.isdir(self.OVERLAY_DIR):
+        if self.OVERLAY_DIR and os.path.isdir(self.OVERLAY_DIR):
             if self.remote:
                 _pod_overlay = f"{pod_scenarios_dir}/catalog-overlay"
                 self.kubectl.run(
