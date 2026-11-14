@@ -104,7 +104,9 @@ class BlisRunner:
     server and the workload pod see the same paths.
     """
 
-    REMOTE_BINARY_FALLBACK = "/mnt/storage/blis/blis"
+    # in-image binary (workload-v4+); the pod's /mnt/storage is node-local,
+    # so the server-side shared-storage copy is NOT visible there
+    REMOTE_BINARY_FALLBACK = "/usr/local/bin/blis"
     OVERLAY_DIR = os.path.join(BLIS_HOME, "catalog-overlay")
 
     def __init__(self, log=None, blis_home=None, kubectl=None, namespace=None, pod_name=None):
