@@ -442,6 +442,34 @@ pools:
         except subprocess.TimeoutExpired:
             self._log(f"BLIS: simulation timed out after {timeout}s", "warn")
             return None
+
+        # Our rendered EndpointPickerConfig can lag the simulator's pinned
+        # router (llm-d v1.0.0) — plugin renames, format changes. On a
+        # config parse failure, fall back to the router's built-in defaults
+        # so the simulation still runs, with a clear note.
+        if r.returncode != 0 and "failed to parse" in (r.stderr or ""):
+            with open(scenario_path) as f:
+                _scn = f.read()
+            if "router/serveit-epp.yaml" in _scn:
+                self._log(
+                    "BLIS: ServeIt's EPP config doesn't parse in the simulator's "
+                    "pinned router — retrying with the router's built-in defaults "
+                    "(routing policy differs from the deployed cluster)", "warn")
+                _scn = _scn.replace("router/serveit-epp.yaml",
+                                    "router/default-colocated.yaml")
+                with open(scenario_path, "w") as f:
+                    f.write(_scn)
+                if self.remote:
+                    self.kubectl.run(
+                        ["cp", scenario_path,
+                         f"{self.pod_name}:{pod_scenarios_dir}/{scenario_name}",
+                         "-n", self.namespace], check=False, timeout=120)
+                try:
+                    r = self._exec(args, timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    self._log(f"BLIS: simulation timed out after {timeout}s", "warn")
+                    return None
+
         if r.returncode != 0:
             self._log(f"BLIS: run failed: {(r.stderr or r.stdout)[:300]}", "warn")
             return None

@@ -1741,6 +1741,47 @@ class RecipeOptimizer(
         kubectl = self.orchestrator.deployment_manager.kubectl
         pod_name = self.orchestrator._guidellm_pod_name
 
+        # Render OUR EndpointPickerConfig exactly as a real run deploys
+        # it: the prereq manager renders the gaie configmap from the
+        # wizard's EPP settings (preset, plugins, calibrated affinity
+        # parameters). Deploy is idempotent and CPU-only.
+        epp_doc = None
+        try:
+            from core import PrereqManager
+            prereq_mgr = PrereqManager(
+                namespace=self.config.namespace,
+                kubectl_runner=kubectl,
+                scheduler_image=getattr(self.config, "scheduler_image", None),
+                gateway_class=getattr(self.config, "gateway_class", "istio"),
+            )
+            prereq_mgr.deploy_prereqs(
+                architecture=(test_config.architecture or "aggregated"),
+                log_callback=lambda msg: self.log(msg, "info"),
+                epp_config=self._build_epp_config(),
+                optimizer_config=self.config,
+            )
+            cm_yaml = getattr(prereq_mgr, "last_epp_configmap_yaml", None)
+            if cm_yaml:
+                import yaml as _yaml
+                cm = _yaml.safe_load(cm_yaml) or {}
+                data = cm.get("data") or {}
+                for key in ("aggregated-config.yaml", "pd-config.yaml", "ep-config.yaml"):
+                    if key in data:
+                        doc = _yaml.safe_load(data[key])
+                        if isinstance(doc, dict):
+                            # normalize apiVersion to the simulator's
+                            # pinned router (llm-d v1.0.0)
+                            if str(doc.get("apiVersion", "")).endswith("v1alpha1"):
+                                doc["apiVersion"] = "llm-d.ai/v1"
+                            epp_doc = doc
+                        break
+            if epp_doc:
+                self.log("   BLIS: using ServeIt's rendered EndpointPickerConfig "
+                         "(calibrated scorers/affinity)", "info")
+        except Exception as e:
+            self.log(f"   BLIS: EPP config render failed ({e}) — simulator "
+                     f"falls back to router defaults", "warn")
+
         runner = BlisRunner(
             log=self.log,
             kubectl=kubectl,
@@ -1757,7 +1798,7 @@ class RecipeOptimizer(
             test_config, name, run_dir,
             gpu_type=self._gpu_catalog_name(),
             gpus_per_node=gpus_per_node,
-            epp_config=self._build_epp_config(),
+            epp_config=epp_doc,
         )
         if not scenario:
             self.log(
