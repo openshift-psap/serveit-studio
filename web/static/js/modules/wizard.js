@@ -83,6 +83,11 @@ function loadModelGallery() {
     if (customSection) customSection.style.display = config.use_blis ? 'none' : 'flex';
     var orDivider = document.getElementById('model-or-divider');
     if (orDivider) orDivider.style.display = config.use_blis ? 'none' : 'block';
+    // The simulated-fleet knob (Step 4) only applies in BLIS mode
+    var blisNodesRow = document.getElementById('blis-cluster-nodes-row');
+    if (blisNodesRow) blisNodesRow.style.display = config.use_blis ? 'block' : 'none';
+    var blisNodesInput = document.getElementById('blis-cluster-nodes');
+    if (blisNodesInput && config.blis_cluster_nodes) blisNodesInput.value = config.blis_cluster_nodes;
     fetch(url)
         .then(response => response.json())
         .then(models => {

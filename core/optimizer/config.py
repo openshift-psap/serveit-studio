@@ -227,6 +227,7 @@ class RecipeOptimizerConfig:
     use_corpus: bool = False
     dataset_source_mode: str = "synthetic"  # 'synthetic' | 'corpus' | 'wekatrace'
     use_blis: bool = False  # run tests in BLIS simulation instead of on GPUs
+    blis_cluster_nodes: int = 0  # fleet size override for simulation (capacity planning)
     wekatrace_source: str = "/app/traces/cc-traces-weka.jsonl"
     wekatrace_max_traces: int = 10
 

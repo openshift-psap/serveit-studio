@@ -635,8 +635,13 @@
                                             </div>
                                             <div>
                                                 <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Replicas (pods)</label>
-                                                <input type="number" id="single-test-replicas" value="1" min="1" max="64" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;">
+                                                <input type="number" id="single-test-replicas" value="1" min="1" max="999" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;">
                                             </div>
+                                        </div>
+                                        <div id="blis-cluster-nodes-row" style="display:none;margin-top:12px;">
+                                            <label style="display:block;font-weight:600;margin-bottom:6px;color:#0e7490;font-size:0.9em;">🔬 Simulated Cluster Nodes (BLIS) — any fleet size, no GPUs required</label>
+                                            <input type="number" id="blis-cluster-nodes" placeholder="auto (packs instances tightly)" min="1" max="999" style="width:100%;padding:10px 14px;border:2px solid #67e8f9;border-radius:8px;font-size:14px;background:#ecfeff;" oninput="config.blis_cluster_nodes=(parseInt(this.value)||0);saveConfig();">
+                                            <div style="font-size:0.8em;color:#0e7490;margin-top:4px;">Declares the simulated fleet for capacity planning — e.g. 24 pods on 4 nodes. Empty = auto (smallest cluster that fits the pods). Ignored on real (GPU) runs.</div>
                                         </div>
                                         <div id="single-test-gpu-summary" style="margin-top:10px;padding:10px 14px;background:#f5f3ff;border-radius:8px;font-size:0.88em;color:#5b21b6;font-weight:600;"></div>
                                     </div>

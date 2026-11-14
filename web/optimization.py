@@ -1056,6 +1056,7 @@ data:
                 wekatrace_source=_get("wekatrace_source", "/mnt/storage/tmp/cc-traces-weka.jsonl"),
                 wekatrace_max_traces=int(_get("wekatrace_max_traces", 10) or 10),
                 use_blis=bool(_get("use_blis", False)),
+                blis_cluster_nodes=int(_get("blis_cluster_nodes", 0) or 0),
                 epp_max_evals=epp_max_evals,
                 epp_config=epp_config,
                 thanos_url=thanos_url,

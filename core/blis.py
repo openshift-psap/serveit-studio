@@ -248,7 +248,7 @@ class BlisRunner:
 
     def generate_scenario(self, cfg, name: str, out_dir: str,
                           gpu_type: str = "h200", gpus_per_node: int = 8,
-                          epp_config=None):
+                          epp_config=None, cluster_nodes: int = None):
         """Write a Scenario+Deployment YAML for an aggregated deployment.
 
         cfg is any object with the ServeIt test-config fields (model_name,
@@ -304,9 +304,13 @@ class BlisRunner:
         # Pool nodes must sum to the cluster's node count (one pool node
         # per physical node). Multiple instances per node come from the
         # --num-instances run flag: 8xTP1 on one 8-GPU node = cluster/pool
-        # nodes 1, --num-instances 8.
+        # nodes 1, --num-instances 8. An explicit cluster_nodes override
+        # declares the fleet for capacity planning (e.g. 24 instances on
+        # a 4-node cluster with headroom) instead of the tight packing.
         total_gpus = tp * replicas
-        cluster_nodes = max(1, math.ceil(total_gpus / max(gpus_per_node, 1)))
+        if not cluster_nodes or int(cluster_nodes) < 1:
+            cluster_nodes = max(1, math.ceil(total_gpus / max(gpus_per_node, 1)))
+        cluster_nodes = int(cluster_nodes)
         nodes = cluster_nodes
 
         max_model_len = int(getattr(cfg, "max_model_len", 32768) or 32768)

@@ -2506,6 +2506,7 @@ def handle_setup_storage(data):
                 'single_test_prefill_pods': data.get('single_test_prefill_pods'),
                 'single_test_decode_pods': data.get('single_test_decode_pods'),
                 'use_blis': bool(data.get('use_blis', False)),
+                'blis_cluster_nodes': int(data.get('blis_cluster_nodes', 0) or 0),
             }
             if resume_run_id:
                 optimization_data['resume_run_id'] = resume_run_id

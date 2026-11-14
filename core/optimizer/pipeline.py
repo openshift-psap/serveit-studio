@@ -1805,6 +1805,7 @@ class RecipeOptimizer(
             gpu_type=self._gpu_catalog_name(),
             gpus_per_node=gpus_per_node,
             epp_config=epp_doc,
+            cluster_nodes=int(getattr(self.config, "blis_cluster_nodes", 0) or 0) or None,
         )
         if not scenario:
             self.log(

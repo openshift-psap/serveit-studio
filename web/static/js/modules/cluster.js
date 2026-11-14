@@ -238,7 +238,8 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         concurrency_sweep_max_configs: config.concurrency_sweep_max_configs || null,
         concurrency_sweep_mode: config.concurrency_sweep_mode || 'architecture_aware',
         concurrency_sweep_use_epp_tuned: !!config.concurrency_sweep_use_epp_tuned,
-        use_blis: !!config.use_blis
+        use_blis: !!config.use_blis,
+        blis_cluster_nodes: config.blis_cluster_nodes || null
     });
 });
 
