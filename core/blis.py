@@ -86,7 +86,9 @@ def _quantization_of(model_name: str) -> str:
         return "nvfp4"
     if "fp8" in m:
         return "fp8"
-    return "bf16"
+    # empty = checkpoint's own dtype (the catalog graph governs) —
+    # the kernel refuses invented values like bf16/fp16
+    return ""
 
 
 class BlisRunner:
