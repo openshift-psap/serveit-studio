@@ -301,13 +301,13 @@ class BlisRunner:
         replicas = int(getattr(cfg, "prefill_pods", None)
                        or getattr(cfg, "replicas", 1)
                        or getattr(cfg, "single_test_replicas", 1) or 1)
-        # Pool "nodes" = INSTANCE count (one engine replica per pool node,
-        # each of tp GPUs). The cluster's nodes x gpus_per_node is the
-        # physical capacity those instances pack into. ceil(8xTP1 on an
-        # 8-GPU node) = 8 instances on 1 cluster node, not 1 instance.
+        # Pool nodes must sum to the cluster's node count (one pool node
+        # per physical node). Multiple instances per node come from the
+        # --num-instances run flag: 8xTP1 on one 8-GPU node = cluster/pool
+        # nodes 1, --num-instances 8.
         total_gpus = tp * replicas
-        nodes = max(1, replicas)
         cluster_nodes = max(1, math.ceil(total_gpus / max(gpus_per_node, 1)))
+        nodes = cluster_nodes
 
         max_model_len = int(getattr(cfg, "max_model_len", 32768) or 32768)
         max_num_seqs = int(getattr(cfg, "max_num_seqs", 0) or 256)
@@ -457,6 +457,13 @@ pools:
             args += ["--rate", str(qps)]
         if prefix_tokens > 0:
             args += ["--prefix-tokens", str(prefix_tokens)]
+        # instance count: multiple replicas pack onto the scenario's nodes
+        _tp = int(getattr(cfg, "tensor_parallelism", 1) or 1)
+        _rep = int(getattr(cfg, "prefill_pods", None)
+                   or getattr(cfg, "replicas", 1)
+                   or getattr(cfg, "single_test_replicas", 1) or 1)
+        if _rep > 1:
+            args += ["--num-instances", str(_rep)]
 
         try:
             r = self._exec(args, timeout=timeout)
@@ -662,7 +669,8 @@ pools:
         return header_path, csv_path
 
     def run_replay(self, scenario_path: str, scenario_name: str,
-                   trace_header: str, trace_data: str, timeout: int = 1800):
+                   trace_header: str, trace_data: str, timeout: int = 1800,
+                   instances: int = None):
         """Replay a TraceV2 file through the scenario (blis replay).
 
         Stages scenario, router config, catalog overlay and both trace
@@ -734,6 +742,9 @@ pools:
         ]
         if overlay_flag:
             args += ["--catalog-overlay", overlay_flag]
+        # instance count: multiple replicas pack onto the scenario's nodes
+        if instances and int(instances) > 1:
+            args += ["--num-instances", str(int(instances))]
 
         try:
             r = self._exec(args, timeout=timeout)

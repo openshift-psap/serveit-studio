@@ -1851,7 +1851,11 @@ class RecipeOptimizer(
                 self.log(f"   BLIS: replaying WekaTrace sessions "
                          f"(max {max_traces}, compressed to {duration}s"
                          f"{f', input budget {max_input}' if max_input else ''})", "info")
-                sim = runner_scenario.run_replay(scenario, name, th, td)
+                _rep = int(getattr(test_config, "prefill_pods", None)
+                           or getattr(test_config, "replicas", 1)
+                           or getattr(test_config, "num_pods", 1) or 1)
+                sim = runner_scenario.run_replay(scenario, name, th, td,
+                                                 instances=_rep)
             else:
                 self.log("   BLIS: WekaTrace conversion failed — falling back "
                          "to the synthetic workload shape", "warn")
