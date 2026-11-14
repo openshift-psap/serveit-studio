@@ -177,6 +177,7 @@ class TestConfig:
     dataset_source_mode: str = "synthetic"  # synthetic, corpus, or wekatrace
     wekatrace_source: str = "/app/traces/cc-traces-weka.jsonl"
     wekatrace_max_traces: int = 10
+    use_blis: bool = False
     workload_type: str = "continuous"  # UI workload selector: 'continuous' or 'multiturn'
     dataset_source: Optional[str] = None  # HF dataset ID or file path
     dataset_column: Optional[str] = None  # Column name for prompt text

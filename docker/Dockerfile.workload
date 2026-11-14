@@ -1,5 +1,16 @@
 # inftune-workload — Guidellm benchmark runner + network debugging
 # Runs as a persistent pod, receives benchmark commands via kubectl exec.
+
+# BLIS (Blackbox Inference Simulator) — CPU-only discrete-event simulator
+# for llm-d deployments (real llm-d router embedded, vLLM 0.32.0 cost models).
+# Static binary: CGO_ENABLED=0 so it runs on any linux/amd64 host regardless
+# of glibc. Pinned to the commit validated against the ServeIt integration;
+# bump deliberately — Result schema and catalog coverage move with upstream.
+FROM golang:1.27.2 AS blis-builder
+RUN git clone https://github.com/inference-sim/inference-sim.git /src && \
+    git -C /src checkout c79c745 && \
+    cd /src && CGO_ENABLED=0 GOFLAGS=-trimpath go build -o /blis main.go
+
 FROM registry.access.redhat.com/ubi9/ubi:9.4
 ENV LANG="C.UTF-8" LC_ALL="C.UTF-8" PYTHONUNBUFFERED=1
 
@@ -75,6 +86,9 @@ RUN chmod +x /usr/local/bin/generate_wekatrace_dataset
 # These are REAL production agentic sessions from SemiAnalysis traces.
 COPY docker/data/cc-traces-subset.jsonl /app/traces/cc-traces-weka.jsonl
 
+# BLIS simulator from the builder stage (see blis-builder above).
+# Catalog + registry + router reference configs are embedded in the binary.
+COPY --from=blis-builder /blis /usr/local/bin/blis
 
 # Keep alive — the server does kubectl exec to run guidellm commands
 CMD ["sleep", "infinity"]

@@ -226,6 +226,7 @@ class RecipeOptimizerConfig:
     # Corpus-based dataset (wikitext-103 real prose instead of synthetic word salad)
     use_corpus: bool = False
     dataset_source_mode: str = "synthetic"  # 'synthetic' | 'corpus' | 'wekatrace'
+    use_blis: bool = False  # run tests in BLIS simulation instead of on GPUs
     wekatrace_source: str = "/app/traces/cc-traces-weka.jsonl"
     wekatrace_max_traces: int = 10
 

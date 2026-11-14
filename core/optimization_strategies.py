@@ -885,6 +885,11 @@ class SingleTestStrategy(OptimizationStrategy):
             self.opt.log(f"  ⏩ {test_config.test_id}: already completed — resuming from DB", 'info')
             row = self.opt.completed_tests[test_config.test_id]
             result = self.opt._make_test_result_from_db(row)
+        elif getattr(cfg, 'use_blis', False):
+            # BLIS simulation: no GPU pods, no guidellm — the simulator
+            # runs our EPP config against the wizard's workload definition
+            result = self.opt._run_blis_test(test_config)
+            self.opt._save_test_to_database(test_config, result)
         else:
             result = self.opt.orchestrator.run_test(
                 test_config,

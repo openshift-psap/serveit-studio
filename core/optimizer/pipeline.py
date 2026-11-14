@@ -1708,6 +1708,122 @@ class RecipeOptimizer(
         floor = 128 if self.config.objective in pd_goals else 8
         return max(floor, min(512, bs))
 
+    def _gpu_catalog_name(self) -> str:
+        """Map the cluster's GPU model to a BLIS catalog chip name."""
+        cr = getattr(self.config, "cluster_resources", None) or {}
+        model = (cr.get("gpu_model") or cr.get("gpu_type") or "").lower()
+        if not model:
+            return "h200"
+        for chip in ("h100", "h200", "b200", "b300", "a100", "l40s", "l4", "h800", "mi300x"):
+            if chip in model:
+                return chip
+        return "h200"
+
+    def _run_blis_test(self, test_config) -> "TestResult":
+        """Execute a test in BLIS simulation instead of on GPU pods.
+
+        Generates a scenario from the test config with OUR EndpointPicker
+        config (calibrated scorers included), runs the simulator on the
+        workload pod (target cluster), and returns a TestResult populated
+        from the simulated metrics. No vLLM pods are deployed.
+        """
+        import datetime
+        from core.blis import BlisRunner
+        from core.orchestrator.result import TestResult
+
+        self.log("", 'info')
+        self.log("🔬 BLIS SIMULATION — CPUs only, no GPU pods will be deployed", 'decision')
+        self.log("-" * 80, 'info')
+
+        # The simulator runs on the workload pod (target cluster)
+        self.orchestrator.ensure_guidellm_pod(
+            self.config, log_callback=lambda msg: self.log(msg, 'info'))
+        kubectl = self.orchestrator.deployment_manager.kubectl
+        pod_name = self.orchestrator._guidellm_pod_name
+
+        runner = BlisRunner(
+            log=self.log,
+            kubectl=kubectl,
+            namespace=self.config.namespace,
+            pod_name=pod_name,
+        )
+
+        cr = getattr(self.config, "cluster_resources", None) or {}
+        gpus_per_node = int(cr.get("gpus_per_node") or cr.get("gpu_count_per_node") or 8)
+
+        run_dir = f"/mnt/storage/blis/runs/{self.run_id or 'adhoc'}"
+        name = (test_config.test_id or "blis-test").replace("/", "-")
+        scenario = runner.generate_scenario(
+            test_config, name, run_dir,
+            gpu_type=self._gpu_catalog_name(),
+            gpus_per_node=gpus_per_node,
+            epp_config=self._build_epp_config(),
+        )
+        if not scenario:
+            self.log(
+                f"❌ BLIS: model '{self.config.model_name}' is not in the BLIS catalog "
+                f"(and has no overlay). Disable BLIS simulation or pick a catalogued "
+                f"model (e.g. glm-5.3, deepseek-v4-pro, kimi-k3).", 'error')
+            return TestResult(
+                test_id=test_config.test_id,
+                architecture=test_config.architecture,
+                deployment_success=False,
+                deployment_ready=False,
+                guidellm_success=False,
+                metrics_collected=False,
+                deployment_start_time=datetime.datetime.now().isoformat(),
+                error_message=f"model not in BLIS catalog: {self.config.model_name}",
+            )
+
+        # workload comes from the wizard config (the same definition
+        # guidellm would run against the real fleet)
+        sim = runner.run(scenario, name, self.config, seed=42)
+        summary = BlisRunner.summarize(sim)
+        if not summary:
+            return TestResult(
+                test_id=test_config.test_id,
+                architecture=test_config.architecture,
+                deployment_success=False,
+                deployment_ready=False,
+                guidellm_success=False,
+                metrics_collected=False,
+                deployment_start_time=datetime.datetime.now().isoformat(),
+                error_message="BLIS simulation failed (see logs)",
+            )
+
+        now = datetime.datetime.now().isoformat()
+        result = TestResult(
+            test_id=test_config.test_id,
+            architecture=test_config.architecture,
+            deployment_success=True,
+            deployment_ready=True,
+            guidellm_success=True,
+            metrics_collected=True,
+            deployment_start_time=now,
+            deployment_ready_time=now,
+            test_start_time=now,
+            test_end_time=now,
+            service_endpoint="blis-simulation",
+            ttft_p50=summary.get("ttft_p50_ms"),
+            ttft_p90=summary.get("ttft_p90_ms"),
+            ttft_p95=summary.get("ttft_p95_ms"),
+            ttft_p99=summary.get("ttft_p99_ms"),
+            itl_p50=summary.get("itl_p50_ms"),
+            itl_p90=summary.get("itl_p95_ms"),
+            itl_p95=summary.get("itl_p95_ms"),
+            itl_p99=summary.get("itl_p99_ms"),
+            throughput_p50=summary.get("request_throughput"),
+            throughput_p90=summary.get("request_throughput"),
+            throughput_p95=summary.get("request_throughput"),
+            throughput_p99=summary.get("request_throughput"),
+            e2e_latency_mean=(summary.get("e2e_mean_ms") or 0) / 1000.0 or None,
+            guidellm_raw_json=json.dumps(sim) if sim else None,
+        )
+        self.log(f"✅ BLIS: TTFT p95 {summary.get('ttft_p95_ms', 0):,.0f}ms, "
+                 f"ITL mean {summary.get('itl_mean_ms', 0):,.1f}ms, "
+                 f"throughput {summary.get('request_throughput', 0):,.2f} req/s", 'success')
+        return result
+
     def _build_epp_config(self) -> Optional[Dict]:
         """Build EPP config dict for prereq_manager from optimizer config."""
         # Raw-YAML passthrough: the user's exact EndpointPickerConfig —

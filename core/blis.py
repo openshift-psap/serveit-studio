@@ -90,20 +90,54 @@ def _quantization_of(model_name: str) -> str:
 
 
 class BlisRunner:
-    """Thin wrapper around the blis binary for scenario generation and runs."""
+    """Thin wrapper around the blis binary for scenario generation and runs.
 
-    def __init__(self, log=None, blis_home=None):
+    Execution modes:
+      local  — subprocess on this host (binary at BLIS_HOME/blis)
+      remote — kubectl exec into the workload pod on the target cluster
+               (binary baked into the workload image at /usr/local/bin/blis,
+               with the shared-storage copy as fallback)
+
+    Scenarios and Result documents live on shared storage so both the
+    server and the workload pod see the same paths.
+    """
+
+    REMOTE_BINARY_FALLBACK = "/mnt/storage/blis/blis"
+
+    def __init__(self, log=None, blis_home=None, kubectl=None, namespace=None, pod_name=None):
         self.home = blis_home or BLIS_HOME
         self.binary = os.path.join(self.home, "blis")
         self.scenarios_dir = os.path.join(self.home, "scenarios")
         self._log = log or (lambda msg, level="info": None)
+        # remote mode: kubectl runner + workload pod on the target cluster
+        self.kubectl = kubectl
+        self.namespace = namespace
+        self.pod_name = pod_name
+
+    @property
+    def remote(self):
+        return bool(self.kubectl and self.pod_name)
 
     # -- environment ----------------------------------------------------
 
     def available(self) -> bool:
+        if self.remote:
+            return True  # workload pod guarantees the binary (image or NFS)
         return os.path.isfile(self.binary) and os.access(self.binary, os.X_OK)
 
     def _exec(self, args, timeout=600):
+        if self.remote:
+            import shlex
+            # prefer the in-image binary; fall back to the shared-storage
+            # copy for workload pods built before BLIS was baked in
+            cmd_str = (
+                'B=$(command -v blis || echo ' + shlex.quote(self.REMOTE_BINARY_FALLBACK) + '); '
+                '"$B" ' + " ".join(shlex.quote(a) for a in args)
+            )
+            return self.kubectl.run(
+                ["exec", self.pod_name, "-n", self.namespace, "--", "bash", "-c", cmd_str],
+                check=False, timeout=timeout,
+            )
         cmd = [self.binary] + args
         return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
@@ -170,12 +204,20 @@ class BlisRunner:
     # -- scenario generation ---------------------------------------------
 
     def generate_scenario(self, cfg, name: str, out_dir: str,
-                          gpu_type: str = "h200", gpus_per_node: int = 8):
+                          gpu_type: str = "h200", gpus_per_node: int = 8,
+                          epp_config=None):
         """Write a Scenario+Deployment YAML for an aggregated deployment.
 
         cfg is any object with the ServeIt test-config fields (model_name,
         tensor_parallelism, replicas/prefill_pods, max_model_len,
         max_num_seqs, max_num_batched_tokens, block_size, isl, osl, ...).
+
+        epp_config is ServeIt's EndpointPickerConfig dict (the same document
+        deployed as the gaie configmap, including calibrated affinity
+        parameters). When given it is written beside the scenario and the
+        embedded llm-d router runs OUR routing policy; otherwise the
+        router's built-in defaults apply.
+
         Returns the scenario file path, or None when the model is not in
         the catalog (caller logs and skips simulation).
         """
@@ -196,6 +238,21 @@ class BlisRunner:
         if not os.path.isfile(run_router):
             with open(run_router, "w") as f:
                 f.write(_DEFAULT_ROUTER_CONFIG)
+        router_ref = "router/default-colocated.yaml"
+        if epp_config:
+            # OUR EPP config: same llm-d.ai/v1 EndpointPickerConfig the
+            # pipeline deploys as the gaie configmap (calibrated scorers,
+            # affinity filter, scheduling profiles). The embedded router
+            # in the simulator runs this policy.
+            try:
+                import yaml as _yaml
+                epp_text = _yaml.safe_dump(epp_config, sort_keys=False)
+            except ImportError:
+                epp_text = json.dumps(epp_config, indent=2)
+            our_router = os.path.join(run_router_dir, "serveit-epp.yaml")
+            with open(our_router, "w") as f:
+                f.write(epp_text)
+            router_ref = "router/serveit-epp.yaml"
 
         tp = int(getattr(cfg, "tensor_parallelism", 1) or 1)
         replicas = int(getattr(cfg, "prefill_pods", None)
@@ -249,7 +306,7 @@ pools:
         # Multi-instance deployments route through the embedded llm-d
         # router; single-instance skips it entirely.
         if replicas > 1:
-            scenario += "\nrouter:\n  endpoint_picker_config: router/default-colocated.yaml\n"
+            scenario += f"\nrouter:\n  endpoint_picker_config: {router_ref}\n"
 
         path = os.path.join(out_dir, f"{name}.yaml")
         with open(path, "w") as f:

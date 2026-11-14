@@ -542,6 +542,10 @@ function updateUIFromConfig() {
         eppCb.checked = !!config.epp_benchmark;
         var calCb = document.getElementById('epp-calibrate-enabled');
         if (calCb) calCb.checked = !!config.epp_calibrate_affinity;
+        var blisCb = document.getElementById('blis-enabled');
+        var blisToggle = document.getElementById('blis-toggle');
+        if (blisCb) blisCb.checked = !!config.use_blis;
+        if (blisToggle) { if (config.use_blis) blisToggle.classList.add('active'); else blisToggle.classList.remove('active'); }
         var calToggle = document.getElementById('epp-calibrate-toggle');
         if (calToggle) { if (config.epp_calibrate_affinity) calToggle.classList.add('active'); else calToggle.classList.remove('active'); }
         var eppInner = document.getElementById('epp-benchmark-inner');
