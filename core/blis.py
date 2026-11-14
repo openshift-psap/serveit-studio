@@ -271,6 +271,8 @@ pools:
         prefix_tokens = int(getattr(cfg, "prefix_tokens", 0) or 0)
 
         out_file = os.path.splitext(scenario_path)[0] + ".result.json"
+        if not scenario_name.endswith(".yaml"):
+            scenario_name += ".yaml"
         args = [
             "run",
             "--scenarios", os.path.dirname(scenario_path),
