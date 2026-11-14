@@ -250,6 +250,11 @@
                 '<strong>How it\'s measured:</strong> <code>instance\'s (prompt + output) tokens ÷ fleet tokens</code> per cycle — how the workload\'s actual processing is split across simulated instances, the direct analog of the pod GPU-work share on real runs.' +
                 '</div>';
             s += '<div id="' + id + '-pods-share" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
+            s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#2dd4bf); font-size:0.9em; margin:14px 20px 0;">Instance Occupancy — % of window each instance had requests in flight (BLIS)</div>';
+            s += '<div style="margin:0 20px 6px; color:#475569; font-size:0.82em; line-height:1.5;">' +
+                '<strong>How it\'s measured:</strong> request residence (arrival &#8594; completion) per instance, bucketed over the replay window — the simulated analog of the GPU-busy heatmap on real runs. Light = idle, dark = working.' +
+                '</div>';
+            s += '<div id="' + id + '-blis-occupancy" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
             s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#a78bfa); font-size:0.9em; margin:14px 20px 0;">Per-Request Latency — latest cycle (BLIS replay)</div>';
             s += '<div style="margin:0 20px 6px; color:#475569; font-size:0.82em; line-height:1.5;">' +
                 '<strong>How it\'s measured:</strong> per-request <code>ttft_us</code> against arrival time from the replayed trace — burst arrivals queueing behind prefill show as latency spikes.' +
@@ -433,6 +438,47 @@
                     } else if (elS) {
                         elS.innerHTML = '<div style="padding:18px; color:#64748b; font-size:0.88em; text-align:center;">' +
                             'No work-distribution telemetry recorded for this run.</div>';
+                    }
+
+                    // 2b. Instance occupancy: request residence per instance
+                    //     over time buckets (arrival -> arrival + e2e)
+                    var elO = document.getElementById(id + '-blis-occupancy');
+                    if (elO && withRows.length) {
+                        var occSrc = withRows[withRows.length - 1];
+                        var tOcc = blisTel(occSrc);
+                        var reqs = tOcc.per_request;
+                        var tMax = 0;
+                        reqs.forEach(function(p) { tMax = Math.max(tMax, p.arrival_s + p.e2e_ms / 1000.0); });
+                        var NB = 40, bw = Math.max(tMax, 0.001) / NB;
+                        var zO = insts.map(function(i) {
+                            return Array.apply(null, Array(NB)).map(function() { return 0; });
+                        });
+                        reqs.forEach(function(p) {
+                            var yi = insts.indexOf(p.instance);
+                            if (yi < 0) return;
+                            var s0 = p.arrival_s, s1 = p.arrival_s + p.e2e_ms / 1000.0;
+                            for (var b = 0; b < NB; b++) {
+                                var b0 = b * bw, b1 = (b + 1) * bw;
+                                var ov = Math.min(s1, b1) - Math.max(s0, b0);
+                                if (ov > 0) zO[yi][b] += ov; // seconds in flight
+                            }
+                        });
+                        var zPct = zO.map(function(row) {
+                            return row.map(function(v) { return Math.round(1000 * v / bw) / 10; });
+                        });
+                        var xsOcc = [];
+                        for (var b = 0; b < NB; b++) xsOcc.push((b * bw).toFixed(0) + 's');
+                        Plotly.newPlot(elO, [{
+                            x: xsOcc, y: insts, z: zPct, type: 'heatmap',
+                            colorscale: 'Tealgrn',
+                            colorbar: { title: { text: '% in flight', side: 'right' }, thickness: 12 },
+                            zmin: 0, zmax: 100,
+                            hovertemplate: '%{y} @ %{x}<br>%{z:.1f}% of bucket in flight<extra></extra>',
+                            xgap: 1, ygap: 1
+                        }], JSON.parse(JSON.stringify(heatLayout)), heatOpts);
+                    } else if (elO) {
+                        elO.innerHTML = '<div style="padding:18px; color:#64748b; font-size:0.88em; text-align:center;">' +
+                            'No per-request telemetry recorded for this run.</div>';
                     }
 
                     // 3. Per-request TTFT scatter from the latest cycle with rows

@@ -1942,6 +1942,21 @@ class RecipeOptimizer(
             e2e_latency_mean=(summary.get("e2e_mean_ms") or 0) / 1000.0 or None,
             guidellm_raw_json=json.dumps(sim) if sim else None,
         )
+        # tokens/s + TPOT from the simulator metrics (replay Results carry
+        # output_tok_s; run Results carry it in metrics too)
+        _otps = (sim or {}).get("metrics", {}).get("output_tok_s") or {}
+        if isinstance(_otps, dict) and _otps.get("value") is not None:
+            result.output_tps_mean = _otps["value"]
+            result.tokens_per_second = _otps["value"]
+            for _p in (50, 90, 95, 99):
+                setattr(result, f"output_tps_p{_p}", _otps["value"])
+        _tpot = summary.get("itl_mean_ms")
+        if _tpot is not None:
+            result.tpot_mean = _tpot
+            result.tpot_p50 = summary.get("itl_p50_ms")
+            result.tpot_p90 = summary.get("itl_p90_ms")
+            result.tpot_p95 = summary.get("itl_p95_ms")
+            result.tpot_p99 = summary.get("itl_p99_ms")
         result.blis_metrics = blis_metrics
         self.log(f"✅ BLIS: TTFT p95 {summary.get('ttft_p95_ms', 0):,.0f}ms, "
                  f"ITL mean {summary.get('itl_mean_ms', 0):,.1f}ms, "
