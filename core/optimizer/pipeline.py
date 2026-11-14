@@ -1903,6 +1903,16 @@ class RecipeOptimizer(
                 "instances": _inst,
                 "per_request": _per_req[:2000],
             }
+            # conversion stats explain thin routing cells (requests over
+            # the model's context budget are unservable by design)
+            try:
+                _stats_path = os.path.join(
+                    run_dir, f"{trace_tag}.stats.json")
+                if os.path.isfile(_stats_path):
+                    with open(_stats_path) as _sf:
+                        blis_metrics["trace_stats"] = json.load(_sf)
+            except (OSError, ValueError):
+                pass
 
         now = datetime.datetime.now().isoformat()
         result = TestResult(

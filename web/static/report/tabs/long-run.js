@@ -236,9 +236,13 @@
         if (isBlis) {
             // Simulated run: no GPU pods to profile — the simulator's own
             // telemetry replaces the GPU panels
+            var ts = (blisTel(rows[rows.length - 1]) || {}).trace_stats;
+            var tsNote = ts ? (' <strong>' + ts.kept + ' of ' + (ts.kept + ts.dropped_over_budget) +
+                ' trace requests servable</strong> — ' + ts.dropped_over_budget + ' exceed the model\'s ' +
+                ts.max_input_tokens.toLocaleString() + '-token context budget and are dropped at conversion (they would 400 on a real deployment).') : '';
             s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#2dd4bf); font-size:0.9em; margin:14px 20px 0;">Simulated Routing — requests served per instance (BLIS)</div>';
             s += '<div style="margin:0 20px 6px; color:#475569; font-size:0.82em; line-height:1.5;">' +
-                '<strong>How it\'s measured:</strong> per-request <code>instance</code> from the simulator\'s Result — which simulated instance the embedded llm-d router sent each request to. Concentration exposes routing/affinity skew exactly like the pod-share heatmap does on real runs.' +
+                '<strong>How it\'s measured:</strong> per-request <code>instance</code> from the simulator\'s Result — which simulated instance the embedded llm-d router sent each request to. Concentration exposes routing/affinity skew exactly like the pod-share heatmap does on real runs.' + tsNote +
                 '</div>';
             s += '<div id="' + id + '-pods-activity" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
             s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee); font-size:0.9em; margin:14px 20px 0;">Work Distribution — % of fleet token work per instance (BLIS)</div>';

@@ -675,6 +675,13 @@ pools:
             print(f"WekaTrace->TraceV2: kept {len(rows)} requests, dropped "
                   f"{skipped} over the {max_input_tokens}-token context budget",
                   file=_sys.stderr)
+        # sidecar stats so reports can explain thin routing cells
+        try:
+            with open(os.path.join(out_dir, f"{name}.stats.json"), "w") as f:
+                json.dump({"kept": len(rows), "dropped_over_budget": skipped,
+                           "max_input_tokens": max_input_tokens}, f)
+        except OSError:
+            pass
         return header_path, csv_path
 
     def run_replay(self, scenario_path: str, scenario_name: str,
