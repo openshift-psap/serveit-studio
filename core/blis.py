@@ -597,7 +597,9 @@ pools:
             for r in sess.get("requests", []):
                 if r.get("type") == "subagent" or not r.get("hash_ids"):
                     continue
-                if max_input_tokens and int(r.get("in", 0) or 0) > max_input_tokens:
+                _in = int(r.get("in", 0) or 0)
+                _out = max(1, int(r.get("out", 1) or 1))
+                if max_input_tokens and (_in + _out) > max_input_tokens:
                     skipped += 1
                     continue
                 reqs.append(r)
