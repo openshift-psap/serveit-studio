@@ -188,6 +188,14 @@ class BlisRunner:
 
         os.makedirs(out_dir, exist_ok=True)
         self.ensure_default_router()
+        # router configs resolve relative to the run's scenarios dir —
+        # stage the default beside the generated scenario
+        run_router_dir = os.path.join(out_dir, "router")
+        os.makedirs(run_router_dir, exist_ok=True)
+        run_router = os.path.join(run_router_dir, "default-colocated.yaml")
+        if not os.path.isfile(run_router):
+            with open(run_router, "w") as f:
+                f.write(_DEFAULT_ROUTER_CONFIG)
 
         tp = int(getattr(cfg, "tensor_parallelism", 1) or 1)
         replicas = int(getattr(cfg, "prefill_pods", None)
@@ -205,7 +213,9 @@ class BlisRunner:
         scenario = f"""\
 kind: Scenario
 name: {name}
-engine_version: "0.32.0"
+engine:
+  kind: vllm
+  version: "0.32.0"
 
 model: {model}
 coefficients: [{', '.join(_COEFFICIENTS)}]
