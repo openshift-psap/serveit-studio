@@ -340,9 +340,43 @@ pools:
         out_file = os.path.splitext(scenario_path)[0] + ".result.json"
         if not scenario_name.endswith(".yaml"):
             scenario_name += ".yaml"
+
+        # Remote mode: /mnt/storage is NOT shared between the server and
+        # the target cluster — stage the scenario (and any router config
+        # it references) onto the workload pod, and parse the Result
+        # document from stdout so nothing needs copying back.
+        pod_scenarios_dir = None
+        if self.remote:
+            pod_scenarios_dir = "/tmp/blis-runs"
+            self.kubectl.run(
+                ["exec", self.pod_name, "-n", self.namespace, "--",
+                 "mkdir", "-p", pod_scenarios_dir + "/router"], check=False)
+            self.kubectl.run(
+                ["cp", scenario_path,
+                 f"{self.pod_name}:{pod_scenarios_dir}/{scenario_name}",
+                 "-n", self.namespace], check=False, timeout=120)
+            import re as _re
+            with open(scenario_path) as f:
+                _scn = f.read()
+            _m = _re.search(r"endpoint_picker_config:\s*(\S+)", _scn)
+            if _m:
+                _ref = _m.group(1).strip("\"'")
+                _local_router = os.path.join(os.path.dirname(scenario_path), _ref)
+                if os.path.isfile(_local_router):
+                    self.kubectl.run(
+                        ["exec", self.pod_name, "-n", self.namespace, "--",
+                         "mkdir", "-p",
+                         f"{pod_scenarios_dir}/{os.path.dirname(_ref) or '.'}"],
+                        check=False)
+                    self.kubectl.run(
+                        ["cp", _local_router,
+                         f"{self.pod_name}:{pod_scenarios_dir}/{_ref}",
+                         "-n", self.namespace], check=False, timeout=120)
+
+        scenarios_dir = pod_scenarios_dir or os.path.dirname(scenario_path)
         args = [
             "run",
-            "--scenarios", os.path.dirname(scenario_path),
+            "--scenarios", scenarios_dir,
             "--scenario", scenario_name,
             "--prompt-tokens", str(isl),
             "--prompt-tokens-min", str(max(2, isl - 2 * isl_stdev)),
@@ -354,8 +388,9 @@ pools:
             "--output-tokens-stdev", str(osl_stdev),
             "--num-requests", str(num_requests),
             "--seed", str(seed),
-            "--output", out_file,
         ]
+        if not self.remote:
+            args += ["--output", out_file]
         if rate_type == "concurrent":
             args += ["--concurrency", str(int(qps))]
         else:
@@ -372,6 +407,8 @@ pools:
             self._log(f"BLIS: run failed: {(r.stderr or r.stdout)[:300]}", "warn")
             return None
         try:
+            if self.remote:
+                return json.loads(r.stdout)
             with open(out_file) as f:
                 return json.load(f)
         except (OSError, json.JSONDecodeError) as e:
