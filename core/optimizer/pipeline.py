@@ -1891,6 +1891,8 @@ class RecipeOptimizer(
                     "arrival_s": round((_r0.get("arrival_us") or 0) / 1e6, 3),
                     "ttft_ms": round((_r0.get("ttft_us") or 0) / 1e3, 2),
                     "e2e_ms": round((_r0.get("e2e_us") or 0) / 1e3, 2),
+                    "prompt_tokens": int(_r0.get("prompt_tokens") or 0),
+                    "output_tokens": int(_r0.get("output_tokens") or 0),
                     "instance": _i,
                     "session": _r0.get("session_id"),
                 })

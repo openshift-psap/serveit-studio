@@ -241,11 +241,16 @@
                 '<strong>How it\'s measured:</strong> per-request <code>instance</code> from the simulator\'s Result — which simulated instance the embedded llm-d router sent each request to. Concentration exposes routing/affinity skew exactly like the pod-share heatmap does on real runs.' +
                 '</div>';
             s += '<div id="' + id + '-pods-activity" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
-            s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee); font-size:0.9em; margin:14px 20px 0;">Per-Request Latency — latest cycle (BLIS replay)</div>';
+            s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee); font-size:0.9em; margin:14px 20px 0;">Work Distribution — % of fleet token work per instance (BLIS)</div>';
             s += '<div style="margin:0 20px 6px; color:#475569; font-size:0.82em; line-height:1.5;">' +
-                '<strong>How it\'s measured:</strong> per-request <code>ttft_us</code> against arrival time from the replayed trace — burst arrivals queueing behind prefill show as latency spikes, the analog of the profiling windows on real runs.' +
+                '<strong>How it\'s measured:</strong> <code>instance\'s (prompt + output) tokens ÷ fleet tokens</code> per cycle — how the workload\'s actual processing is split across simulated instances, the direct analog of the pod GPU-work share on real runs.' +
                 '</div>';
             s += '<div id="' + id + '-pods-share" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
+            s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#a78bfa); font-size:0.9em; margin:14px 20px 0;">Per-Request Latency — latest cycle (BLIS replay)</div>';
+            s += '<div style="margin:0 20px 6px; color:#475569; font-size:0.82em; line-height:1.5;">' +
+                '<strong>How it\'s measured:</strong> per-request <code>ttft_us</code> against arrival time from the replayed trace — burst arrivals queueing behind prefill show as latency spikes.' +
+                '</div>';
+            s += '<div id="' + id + '-blis-scatter" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
         } else {
         // Pod activity distribution — which pods actually served load.
         // Concentration (few lit rows while the fleet idles) exposes
@@ -390,9 +395,45 @@
                             'No routing telemetry recorded for this run (cycles saved before the BLIS report integration).</div>';
                     }
 
-                    // 2. Per-request TTFT scatter from the latest cycle with rows
-                    var withRows = rs.filter(function(r) { var t = blisTel(r); return t && t.per_request && t.per_request.length; });
+                    // 2. Work distribution: % of fleet token work per instance
+                    //    (fallback: request-count share for cycles saved
+                    //    before token counts were persisted)
                     var elS = document.getElementById(id + '-pods-share');
+                    if (elS && insts.length) {
+                        var zW = insts.map(function(i) {
+                            return rs.map(function(r) {
+                                var t = blisTel(r);
+                                if (!t || !t.per_request) return null;
+                                var mine = 0, total = 0, hasTok = false;
+                                t.per_request.forEach(function(p) {
+                                    var w = (p.prompt_tokens != null)
+                                        ? (p.prompt_tokens + p.output_tokens) : null;
+                                    if (w != null) { hasTok = true; total += w; if (p.instance === i) mine += w; }
+                                });
+                                if (hasTok && total > 0) return Math.round(1000 * mine / total) / 10;
+                                // fallback: request-count share
+                                var n = (t.instances && t.instances[i]) || 0;
+                                var tot = 0;
+                                Object.keys(t.instances || {}).forEach(function(k) { tot += t.instances[k]; });
+                                return tot > 0 ? Math.round(1000 * n / tot) / 10 : null;
+                            });
+                        });
+                        Plotly.newPlot(elS, [{
+                            x: xs, y: insts, z: zW, type: 'heatmap',
+                            colorscale: 'Blues',
+                            colorbar: { title: { text: '% work', side: 'right' }, thickness: 12 },
+                            zmin: 0,
+                            hovertemplate: '%{y} @ %{x}<br>%{z:.1f}% of fleet work<extra></extra>',
+                            xgap: 1, ygap: 1
+                        }], JSON.parse(JSON.stringify(heatLayout)), heatOpts);
+                    } else if (elS) {
+                        elS.innerHTML = '<div style="padding:18px; color:#64748b; font-size:0.88em; text-align:center;">' +
+                            'No work-distribution telemetry recorded for this run.</div>';
+                    }
+
+                    // 3. Per-request TTFT scatter from the latest cycle with rows
+                    var withRows = rs.filter(function(r) { var t = blisTel(r); return t && t.per_request && t.per_request.length; });
+                    var elS = document.getElementById(id + '-blis-scatter');
                     if (elS && withRows.length) {
                         var last = withRows[withRows.length - 1];
                         var t = blisTel(last);
