@@ -86,7 +86,7 @@ def _quantization_of(model_name: str) -> str:
         return "nvfp4"
     if "fp8" in m:
         return "fp8"
-    return "fp16"
+    return "bf16"
 
 
 class BlisRunner:
