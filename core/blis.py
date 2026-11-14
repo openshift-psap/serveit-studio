@@ -137,16 +137,23 @@ class BlisRunner:
             if base.endswith(suffix):
                 candidates.append(base[: -len(suffix)])
                 break
+        seen = set()
         for cand in candidates:
-            r = self._exec(["catalog", "resolve", "--model", cand, "--json"])
-            if r.returncode != 0:
-                continue
-            try:
-                out = json.loads(r.stdout)
-            except json.JSONDecodeError:
-                continue
-            if out.get("identity"):
-                return out["identity"]
+            # entry names match case-sensitively; source repos do not —
+            # try each candidate as-given and lowercased
+            for variant in (cand, cand.lower()):
+                if variant in seen:
+                    continue
+                seen.add(variant)
+                r = self._exec(["catalog", "resolve", "--model", variant, "--json"])
+                if r.returncode != 0:
+                    continue
+                try:
+                    out = json.loads(r.stdout)
+                except json.JSONDecodeError:
+                    continue
+                if out.get("identity"):
+                    return out["identity"]
         return None
 
     def hardware_supported(self, gpu_type: str) -> bool:
