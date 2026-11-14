@@ -2,6 +2,17 @@
                         <h3>Workload Configuration</h3>
                         <p class="description">Describe what a typical request looks like in your application.</p>
 
+                        <!-- BLIS simulation toggle — execution target for the workload -->
+                        <div class="vllm-toggle" id="blis-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');document.getElementById('blis-enabled').checked=on;config.use_blis=on;saveConfig();" style="margin:0 0 20px 0;">
+                            <div style="font-size:1.5em;flex-shrink:0;">🔬</div>
+                            <div>
+                                <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Run in BLIS Simulation</div>
+                                <div style="color:#64748b;font-size:0.82em;margin-top:2px;">Execute this workload in the Blackbox Inference Simulator (CPU-only, on the target cluster's workload pod) instead of deploying GPU pods. Your EPP config and the workload below run through the embedded llm-d router — results are estimates (median 7–9% error), best for configuration ranking and capacity planning. Requires a BLIS-catalogued model (GLM-5.x, DeepSeek-V4, Kimi-K3, Llama…).</div>
+                            </div>
+                            <input type="checkbox" id="blis-enabled">
+                            <div class="tgl-sw"></div>
+                        </div>
+
                         <!-- Workload Presets Card -->
                         <div style="border:2px solid #6366f1;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#eef2ff,#e0e7ff);padding:14px 20px;">
