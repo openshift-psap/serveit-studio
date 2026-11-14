@@ -301,8 +301,13 @@ class BlisRunner:
         replicas = int(getattr(cfg, "prefill_pods", None)
                        or getattr(cfg, "replicas", 1)
                        or getattr(cfg, "single_test_replicas", 1) or 1)
+        # Pool "nodes" = INSTANCE count (one engine replica per pool node,
+        # each of tp GPUs). The cluster's nodes x gpus_per_node is the
+        # physical capacity those instances pack into. ceil(8xTP1 on an
+        # 8-GPU node) = 8 instances on 1 cluster node, not 1 instance.
         total_gpus = tp * replicas
-        nodes = max(1, math.ceil(total_gpus / max(gpus_per_node, 1)))
+        nodes = max(1, replicas)
+        cluster_nodes = max(1, math.ceil(total_gpus / max(gpus_per_node, 1)))
 
         max_model_len = int(getattr(cfg, "max_model_len", 32768) or 32768)
         max_num_seqs = int(getattr(cfg, "max_num_seqs", 0) or 256)
@@ -322,7 +327,7 @@ coefficients: [{', '.join(_COEFFICIENTS)}]
 
 cluster:
   hardware: {gpu_type.lower()}
-  nodes: {nodes}
+  nodes: {cluster_nodes}
   gpus_per_node: {gpus_per_node}
 ---
 kind: Deployment
