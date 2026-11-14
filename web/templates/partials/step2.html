@@ -21,7 +21,18 @@
 
                         <!-- Custom Model (toggle) -->
                         <div style="border:2px solid #0ea5e9;border-radius:12px;overflow:hidden;margin-bottom:16px;">
-                            <div id="custom-model-toggle" style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('custom-model-enabled').checked;document.getElementById('custom-model-enabled').checked=on;document.getElementById('custom-model-body').style.display=on?'block':'none';var sw=document.getElementById('custom-model-switch');sw.style.background=on?'#0ea5e9':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';var gs=document.getElementById('model-gallery-section');var od=document.getElementById('model-or-divider');if(gs){gs.style.opacity=on?'0.35':'1';gs.style.pointerEvents=on?'none':'auto';}if(od){od.style.opacity=on?'0.35':'1';}if(on){document.getElementById('custom-model').focus();document.querySelectorAll('.model-card').forEach(function(c){c.classList.remove('selected')});}else{document.getElementById('custom-model').value='';config.model=null;saveConfig();}">
+                            <!-- BLIS simulation toggle — execution target, switches the gallery -->
+                        <div class="vllm-toggle" id="blis-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');document.getElementById('blis-enabled').checked=on;config.use_blis=on;saveConfig();loadModelGallery();">
+                            <div style="font-size:1.5em;flex-shrink:0;">🔬</div>
+                            <div>
+                                <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Run in BLIS Simulation</div>
+                                <div style="color:#64748b;font-size:0.82em;margin-top:2px;">Execute in the Blackbox Inference Simulator (CPU-only, on the target cluster's workload pod) instead of deploying GPU pods. Your EPP config and workload run through the embedded llm-d router — results are estimates (median 7–9% error), best for configuration ranking and capacity planning.</div>
+                            </div>
+                            <input type="checkbox" id="blis-enabled">
+                            <div class="tgl-sw"></div>
+                        </div>
+
+                        <div id="custom-model-toggle" style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('custom-model-enabled').checked;document.getElementById('custom-model-enabled').checked=on;document.getElementById('custom-model-body').style.display=on?'block':'none';var sw=document.getElementById('custom-model-switch');sw.style.background=on?'#0ea5e9':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';var gs=document.getElementById('model-gallery-section');var od=document.getElementById('model-or-divider');if(gs){gs.style.opacity=on?'0.35':'1';gs.style.pointerEvents=on?'none':'auto';}if(od){od.style.opacity=on?'0.35':'1';}if(on){document.getElementById('custom-model').focus();document.querySelectorAll('.model-card').forEach(function(c){c.classList.remove('selected')});}else{document.getElementById('custom-model').value='';config.model=null;saveConfig();}">
                                 <div>
                                     <div style="font-weight:700;color:#0c4a6e;font-size:1.05em;">✏️ Custom Model</div>
                                     <div style="color:#075985;font-size:0.92em;margin-top:4px;">Enter a HuggingFace model path directly. Use this for private, gated, or unlisted models.</div>
@@ -38,17 +49,6 @@
                                     <div class="help-text" style="margin-top: 8px; color: #6b7280; font-size: 0.85em;">The model's HuggingFace path, e.g. "meta-llama/Llama-3-8B". You can find this on the model's HuggingFace page.</div>
                                 </div>
                             </div>
-                        </div>
-
-                        <!-- BLIS simulation toggle — execution target, switches the gallery -->
-                        <div class="vllm-toggle" id="blis-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');document.getElementById('blis-enabled').checked=on;config.use_blis=on;saveConfig();loadModelGallery();">
-                            <div style="font-size:1.5em;flex-shrink:0;">🔬</div>
-                            <div>
-                                <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Run in BLIS Simulation</div>
-                                <div style="color:#64748b;font-size:0.82em;margin-top:2px;">Execute in the Blackbox Inference Simulator (CPU-only, on the target cluster's workload pod) instead of deploying GPU pods. Your EPP config and workload run through the embedded llm-d router — results are estimates (median 7–9% error), best for configuration ranking and capacity planning.</div>
-                            </div>
-                            <input type="checkbox" id="blis-enabled">
-                            <div class="tgl-sw"></div>
                         </div>
 
                         <div id="model-or-divider" style="text-align: center; margin: 20px 0; color: var(--rh-gray-500); font-weight: 700; font-size: 0.95em;">— OR —</div>

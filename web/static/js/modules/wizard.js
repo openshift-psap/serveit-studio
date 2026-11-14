@@ -77,6 +77,12 @@ function loadModelGallery() {
             ? 'Models the BLIS simulator can price (embedded catalog + local overlay). Simulatable end-to-end without GPU pods.'
             : 'Browse and select from popular open-source LLM models. Filter by category or search by name.';
     }
+    // Custom-model entry makes no sense in simulation mode (arbitrary HF
+    // paths are rarely catalogued) — hide it and the OR divider
+    var customSection = document.getElementById('custom-model-toggle');
+    if (customSection) customSection.style.display = config.use_blis ? 'none' : 'flex';
+    var orDivider = document.getElementById('model-or-divider');
+    if (orDivider) orDivider.style.display = config.use_blis ? 'none' : 'block';
     fetch(url)
         .then(response => response.json())
         .then(models => {
