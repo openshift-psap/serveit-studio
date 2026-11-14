@@ -747,8 +747,22 @@ pools:
     # -- results ----------------------------------------------------------
 
     @staticmethod
+    def _pct(values, p):
+        """Nearest-rank percentile of a list."""
+        if not values:
+            return None
+        s = sorted(values)
+        k = min(len(s) - 1, max(0, int(round((p / 100.0) * (len(s) - 1)))))
+        return s[k]
+
+    @staticmethod
     def summarize(result: dict):
-        """Flatten a BLIS Result into ServeIt-style metric names."""
+        """Flatten a BLIS Result into ServeIt-style metric names.
+
+        blis run Results carry ttft_*/itl_*/e2e_* in metrics; blis replay
+        Results carry per-request rows (ttft_us/tpot_us/e2e_us) with only
+        throughput keys in metrics — aggregate the rows in that case.
+        """
         if not result:
             return {}
         metrics = result.get("metrics", {})
@@ -757,4 +771,23 @@ pools:
             entry = metrics.get(blis_key)
             if isinstance(entry, dict) and entry.get("value") is not None:
                 out[blis_key] = entry["value"]
+
+        if not out.get("ttft_p95_ms") and result.get("request_rows"):
+            rows = [r for r in result["request_rows"]
+                    if r.get("fate") == "completed" and r.get("ttft_us") is not None]
+            if rows:
+                ttft = [r["ttft_us"] / 1000.0 for r in rows]
+                tpot = [r["tpot_us"] / 1000.0 for r in rows if r.get("tpot_us")]
+                e2e = [r["e2e_us"] / 1000.0 for r in rows if r.get("e2e_us")]
+                out["ttft_mean_ms"] = sum(ttft) / len(ttft)
+                out["itl_mean_ms"] = (sum(tpot) / len(tpot)) if tpot else None
+                out["e2e_mean_ms"] = (sum(e2e) / len(e2e)) if e2e else None
+                for p in (50, 90, 95, 99):
+                    out[f"ttft_p{p}_ms"] = BlisRunner._pct(ttft, p)
+                    out[f"itl_p{p}_ms"] = BlisRunner._pct(tpot, p)
+                    out[f"e2e_p{p}_ms"] = BlisRunner._pct(e2e, p)
+            if out.get("request_throughput") is None:
+                rt = metrics.get("request_throughput")
+                if isinstance(rt, dict) and rt.get("value") is not None:
+                    out["request_throughput"] = rt["value"]
         return out

@@ -1882,7 +1882,7 @@ class RecipeOptimizer(
             ttft_p95=summary.get("ttft_p95_ms"),
             ttft_p99=summary.get("ttft_p99_ms"),
             itl_p50=summary.get("itl_p50_ms"),
-            itl_p90=summary.get("itl_p95_ms"),
+            itl_p90=summary.get("itl_p90_ms"),
             itl_p95=summary.get("itl_p95_ms"),
             itl_p99=summary.get("itl_p99_ms"),
             throughput_p50=summary.get("request_throughput"),
