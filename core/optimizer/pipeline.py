@@ -767,8 +767,12 @@ class RecipeOptimizer(
         if self.db_manager and self.run_id:
             try:
                 manifests_yaml = self._render_manifests_json(test_config)
+                # BLIS runs carry simulator telemetry (routing, per-request
+                # latencies, fate) — persist it alongside the standard metrics
+                _blis_extra = getattr(test_result, "blis_metrics", None)
                 self.db_manager.insert_test_result(
-                    run_id=self.run_id, test_config=test_config, test_result=test_result, manifests_yaml=manifests_yaml
+                    run_id=self.run_id, test_config=test_config, test_result=test_result,
+                    manifests_yaml=manifests_yaml, metrics=_blis_extra
                 )
                 self.log(f"  💾 Saved to database (test_id={test_config.test_id})", "info")
             except Exception as e:
@@ -1744,57 +1748,59 @@ class RecipeOptimizer(
         # Render OUR EndpointPickerConfig exactly as a real run deploys
         # it: the prereq manager renders the gaie configmap from the
         # wizard's EPP settings (preset, plugins, calibrated affinity
-        # parameters). Deploy is idempotent and CPU-only.
-        epp_doc = None
-        try:
-            from core import PrereqManager
-            prereq_mgr = PrereqManager(
-                namespace=self.config.namespace,
-                kubectl_runner=kubectl,
-                scheduler_image=getattr(self.config, "scheduler_image", None),
-                gateway_class=getattr(self.config, "gateway_class", "istio"),
-            )
-            prereq_mgr.deploy_prereqs(
-                architecture=(test_config.architecture or "aggregated"),
-                log_callback=lambda msg: self.log(msg, "info"),
-                epp_config=self._build_epp_config(),
-                optimizer_config=self.config,
-            )
-            cm_yaml = getattr(prereq_mgr, "last_epp_configmap_yaml", None)
-            if cm_yaml:
-                import yaml as _yaml
-                cm = _yaml.safe_load(cm_yaml) or {}
-                data = cm.get("data") or {}
-                for key in ("aggregated-config.yaml", "pd-config.yaml", "ep-config.yaml"):
-                    if key in data:
-                        doc = _yaml.safe_load(data[key])
-                        if isinstance(doc, dict):
-                            # normalize apiVersion to the simulator's
-                            # pinned router (llm-d v1.0.0)
-                            if str(doc.get("apiVersion", "")).endswith("v1alpha1"):
-                                doc["apiVersion"] = "llm-d.ai/v1"
-                            epp_doc = doc
-                        break
-            if epp_doc:
-                self.log("   BLIS: using ServeIt's rendered EndpointPickerConfig "
-                         "(calibrated scorers/affinity)", "info")
-        except Exception as e:
-            self.log(f"   BLIS: EPP config render failed ({e}) — simulator "
-                     f"falls back to router defaults", "warn")
-
-        runner = BlisRunner(
-            log=self.log,
-            kubectl=kubectl,
-            namespace=self.config.namespace,
-            pod_name=pod_name,
-        )
+        # parameters). Cached per run — soak cycles repeat the same
+        # config and the render+deploy pass dominates cycle time.
+        epp_doc = getattr(self, "_blis_epp_doc", None)
+        if epp_doc is None:
+            try:
+                from core import PrereqManager
+                prereq_mgr = PrereqManager(
+                    namespace=self.config.namespace,
+                    kubectl_runner=kubectl,
+                    scheduler_image=getattr(self.config, "scheduler_image", None),
+                    gateway_class=getattr(self.config, "gateway_class", "istio"),
+                )
+                prereq_mgr.deploy_prereqs(
+                    architecture=(test_config.architecture or "aggregated"),
+                    log_callback=lambda msg: self.log(msg, "info"),
+                    epp_config=self._build_epp_config(),
+                    optimizer_config=self.config,
+                )
+                cm_yaml = getattr(prereq_mgr, "last_epp_configmap_yaml", None)
+                if cm_yaml:
+                    import yaml as _yaml
+                    cm = _yaml.safe_load(cm_yaml) or {}
+                    data = cm.get("data") or {}
+                    for key in ("aggregated-config.yaml", "pd-config.yaml", "ep-config.yaml"):
+                        if key in data:
+                            doc = _yaml.safe_load(data[key])
+                            if isinstance(doc, dict):
+                                # normalize apiVersion to the simulator's
+                                # pinned router (llm-d v1.0.0)
+                                if str(doc.get("apiVersion", "")).endswith("v1alpha1"):
+                                    doc["apiVersion"] = "llm-d.ai/v1"
+                                epp_doc = doc
+                            break
+            except Exception as e:
+                self.log(f"   BLIS: EPP config render failed ({e}) — simulator "
+                         f"falls back to router defaults", "warn")
+            self._blis_epp_doc = epp_doc
+        if epp_doc:
+            self.log("   BLIS: using ServeIt's rendered EndpointPickerConfig "
+                     "(calibrated scorers/affinity)", "info")
 
         cr = getattr(self.config, "cluster_resources", None) or {}
         gpus_per_node = int(cr.get("gpus_per_node") or cr.get("gpu_count_per_node") or 8)
 
         run_dir = f"/mnt/storage/blis/runs/{self.run_id or 'adhoc'}"
         name = (test_config.test_id or "blis-test").replace("/", "-")
-        scenario = runner.generate_scenario(
+        scenario = runner_scenario = BlisRunner(
+            log=self.log,
+            kubectl=kubectl,
+            namespace=self.config.namespace,
+            pod_name=pod_name,
+        )
+        scenario = runner_scenario.generate_scenario(
             test_config, name, run_dir,
             gpu_type=self._gpu_catalog_name(),
             gpus_per_node=gpus_per_node,
@@ -1821,7 +1827,7 @@ class RecipeOptimizer(
         # shapes go through blis run. Same definition guidellm would run.
         sim = None
         if getattr(self.config, "dataset_source_mode", "") == "wekatrace":
-            traces = runner.fetch_traces(getattr(
+            traces = runner_scenario.fetch_traces(getattr(
                 self.config, "wekatrace_source",
                 "/app/traces/cc-traces-weka.jsonl"))
             max_traces = int(getattr(self.config, "wekatrace_max_traces", 10) or 10)
@@ -1845,12 +1851,12 @@ class RecipeOptimizer(
                 self.log(f"   BLIS: replaying WekaTrace sessions "
                          f"(max {max_traces}, compressed to {duration}s"
                          f"{f', input budget {max_input}' if max_input else ''})", "info")
-                sim = runner.run_replay(scenario, name, th, td)
+                sim = runner_scenario.run_replay(scenario, name, th, td)
             else:
                 self.log("   BLIS: WekaTrace conversion failed — falling back "
                          "to the synthetic workload shape", "warn")
         if sim is None and not getattr(self.config, "dataset_source_mode", "") == "wekatrace":
-            sim = runner.run(scenario, name, self.config, seed=42)
+            sim = runner_scenario.run(scenario, name, self.config, seed=42)
         summary = BlisRunner.summarize(sim)
         if not summary:
             return TestResult(
@@ -1863,6 +1869,33 @@ class RecipeOptimizer(
                 deployment_start_time=datetime.datetime.now().isoformat(),
                 error_message="BLIS simulation failed (see logs)",
             )
+
+        # Simulator telemetry for the report: routing distribution,
+        # per-request latencies and fate counts (the analog of GPU
+        # profiling on real runs — there are no pods to profile)
+        blis_metrics = None
+        if sim:
+            _rows = sim.get("request_rows") or []
+            _inst = {}
+            _per_req = []
+            for _r0 in _rows:
+                if _r0.get("fate") != "completed":
+                    continue
+                _i = _r0.get("instance") or "?"
+                _inst[_i] = _inst.get(_i, 0) + 1
+                _per_req.append({
+                    "arrival_s": round((_r0.get("arrival_us") or 0) / 1e6, 3),
+                    "ttft_ms": round((_r0.get("ttft_us") or 0) / 1e3, 2),
+                    "e2e_ms": round((_r0.get("e2e_us") or 0) / 1e3, 2),
+                    "instance": _i,
+                    "session": _r0.get("session_id"),
+                })
+            blis_metrics = {
+                "blis": True,
+                "fate": sim.get("requests"),
+                "instances": _inst,
+                "per_request": _per_req[:2000],
+            }
 
         now = datetime.datetime.now().isoformat()
         result = TestResult(
@@ -1892,11 +1925,11 @@ class RecipeOptimizer(
             e2e_latency_mean=(summary.get("e2e_mean_ms") or 0) / 1000.0 or None,
             guidellm_raw_json=json.dumps(sim) if sim else None,
         )
+        result.blis_metrics = blis_metrics
         self.log(f"✅ BLIS: TTFT p95 {summary.get('ttft_p95_ms', 0):,.0f}ms, "
                  f"ITL mean {summary.get('itl_mean_ms', 0):,.1f}ms, "
                  f"throughput {summary.get('request_throughput', 0):,.2f} req/s", 'success')
         return result
-
     def _build_epp_config(self) -> Optional[Dict]:
         """Build EPP config dict for prereq_manager from optimizer config."""
         # Raw-YAML passthrough: the user's exact EndpointPickerConfig —

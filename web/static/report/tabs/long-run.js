@@ -78,6 +78,11 @@
         return ((mj(r).pprof || {}).torch || []).filter(function(t) { return t.parsed; });
     }
 
+    function blisTel(r) {
+        var a = mj(r).additional_metrics;
+        return (a && a.blis) ? a : null;
+    }
+
     function activePods(r) {
         var t = torchPods(r);
         return t.filter(function(p) { return p.kernel_count; }).length;
@@ -227,6 +232,21 @@
         s += '<div id="' + id + '-heap" style="flex:1; min-width:280px;"></div>';
         s += '</div>';
 
+        var isBlis = rows.some(blisTel);
+        if (isBlis) {
+            // Simulated run: no GPU pods to profile — the simulator's own
+            // telemetry replaces the GPU panels
+            s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#2dd4bf); font-size:0.9em; margin:14px 20px 0;">Simulated Routing — requests served per instance (BLIS)</div>';
+            s += '<div style="margin:0 20px 6px; color:#475569; font-size:0.82em; line-height:1.5;">' +
+                '<strong>How it\'s measured:</strong> per-request <code>instance</code> from the simulator\'s Result — which simulated instance the embedded llm-d router sent each request to. Concentration exposes routing/affinity skew exactly like the pod-share heatmap does on real runs.' +
+                '</div>';
+            s += '<div id="' + id + '-pods-activity" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
+            s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee); font-size:0.9em; margin:14px 20px 0;">Per-Request Latency — latest cycle (BLIS replay)</div>';
+            s += '<div style="margin:0 20px 6px; color:#475569; font-size:0.82em; line-height:1.5;">' +
+                '<strong>How it\'s measured:</strong> per-request <code>ttft_us</code> against arrival time from the replayed trace — burst arrivals queueing behind prefill show as latency spikes, the analog of the profiling windows on real runs.' +
+                '</div>';
+            s += '<div id="' + id + '-pods-share" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
+        } else {
         // Pod activity distribution — which pods actually served load.
         // Concentration (few lit rows while the fleet idles) exposes
         // routing/affinity skew, the hidden cause of batched-decode
@@ -242,6 +262,7 @@
             '<strong>How it\'s measured:</strong> <code>pod\'s kernel time ÷ fleet kernel time</code> — how the fleet\'s actual GPU work is split across pods.' +
             '</div>';
         s += '<div id="' + id + '-pods-share" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
+        }
 
         // Per-cycle table
         var tblId = id + '-tbl';
@@ -324,6 +345,92 @@
                  'Total Pod RSS (MiB) — leak check', '#dc2626', 'MiB');
             line(id + '-heap', rs.map(function(r) { return eppHeap(r); }),
                  'EPP Heap inuse (MB) — Go pprof', '#ea580c', 'MB');
+
+            // Simulated runs: render the simulator's telemetry instead of
+            // the GPU heatmaps (there are no pods to profile)
+            if (rs.some(blisTel)) {
+                (function() {
+                    var heatLayout = {
+                        margin: { l: 70, r: 15, t: 8, b: 48 },
+                        xaxis: {
+                            title: 'cycle', dtick: 1,
+                            tickfont: { size: 8, family: 'monospace' },
+                            tickangle: rs.length > 20 ? -45 : 0, automargin: true
+                        },
+                        yaxis: { automargin: true, tickfont: H.MONO_9 },
+                        plot_bgcolor: '#fff',
+                        height: Math.max(180, 24 * 8 + 60)
+                    };
+                    var heatOpts = { displayModeBar: false, responsive: true };
+
+                    // 1. Routing heatmap: requests per instance per cycle
+                    var instSeen = {};
+                    rs.forEach(function(r) {
+                        var t = blisTel(r);
+                        if (t && t.instances) Object.keys(t.instances).forEach(function(i) { instSeen[i] = 1; });
+                    });
+                    var insts = Object.keys(instSeen).sort();
+                    var elR = document.getElementById(id + '-pods-activity');
+                    if (elR && insts.length) {
+                        var zR = insts.map(function(i) {
+                            return rs.map(function(r) {
+                                var t = blisTel(r);
+                                return (t && t.instances && t.instances[i] != null) ? t.instances[i] : null;
+                            });
+                        });
+                        Plotly.newPlot(elR, [{
+                            x: xs, y: insts, z: zR, type: 'heatmap',
+                            colorscale: 'Blues',
+                            colorbar: { title: { text: 'requests', side: 'right' }, thickness: 12 },
+                            hovertemplate: '%{y} @ %{x}<br>%{z} requests<extra></extra>',
+                            xgap: 1, ygap: 1
+                        }], JSON.parse(JSON.stringify(heatLayout)), heatOpts);
+                    } else if (elR) {
+                        elR.innerHTML = '<div style="padding:18px; color:#64748b; font-size:0.88em; text-align:center;">' +
+                            'No routing telemetry recorded for this run (cycles saved before the BLIS report integration).</div>';
+                    }
+
+                    // 2. Per-request TTFT scatter from the latest cycle with rows
+                    var withRows = rs.filter(function(r) { var t = blisTel(r); return t && t.per_request && t.per_request.length; });
+                    var elS = document.getElementById(id + '-pods-share');
+                    if (elS && withRows.length) {
+                        var last = withRows[withRows.length - 1];
+                        var t = blisTel(last);
+                        var instColors = {};
+                        var palette = ['#2563eb', '#dc2626', '#059669', '#d97706', '#7c3aed', '#0891b2', '#db2777', '#65a30d'];
+                        var traces = {};
+                        t.per_request.forEach(function(p) {
+                            (traces[p.instance] = traces[p.instance] || []).push(p);
+                        });
+                        var data = Object.keys(traces).map(function(i, idx) {
+                            return {
+                                x: traces[i].map(function(p) { return p.arrival_s; }),
+                                y: traces[i].map(function(p) { return p.ttft_ms; }),
+                                mode: 'markers', type: 'scatter', name: i,
+                                marker: { size: 6, color: palette[idx % palette.length], opacity: 0.75 },
+                                text: traces[i].map(function(p) { return p.session; }),
+                                hovertemplate: '%{text} @ %{x}s<br>TTFT %{y:.0f}ms<extra>' + i + '</extra>'
+                            };
+                        });
+                        var fate = t.fate || {};
+                        Plotly.newPlot(elS, data, {
+                            margin: { l: 55, r: 15, t: 30, b: 40 },
+                            title: { text: 'TTFT vs arrival — cycle #' + last._cycle +
+                                     ' (' + (fate.completed || 0) + ' completed, ' +
+                                     (((fate.dropped || {}).unservable != null) ? (fate.dropped.unservable + ' unservable, ') : '') +
+                                     (t.per_request.length) + ' shown)', font: { size: 12 } },
+                            xaxis: { title: 'arrival (s)' },
+                            yaxis: { title: 'TTFT (ms)' },
+                            plot_bgcolor: '#fff', height: 280,
+                            showlegend: Object.keys(traces).length > 1 && Object.keys(traces).length <= 8
+                        }, { displayModeBar: false, responsive: true });
+                    } else if (elS) {
+                        elS.innerHTML = '<div style="padding:18px; color:#64748b; font-size:0.88em; text-align:center;">' +
+                            'No per-request telemetry recorded for this run.</div>';
+                    }
+                })();
+                return; // skip the GPU heatmaps below — no pods exist
+            }
 
             // Two honest views of pod GPU activity:
             //   1. UTILIZATION — % of the benchmark each pod's GPU spent
