@@ -20,6 +20,7 @@ import json
 import math
 import os
 import subprocess
+from typing import Optional
 
 BLIS_HOME = os.environ.get("BLIS_HOME", "/mnt/storage/blis")
 
