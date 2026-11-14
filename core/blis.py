@@ -248,7 +248,8 @@ class BlisRunner:
 
     def generate_scenario(self, cfg, name: str, out_dir: str,
                           gpu_type: str = "h200", gpus_per_node: int = 8,
-                          epp_config=None, cluster_nodes: int = None):
+                          epp_config=None, cluster_nodes: int = None,
+                          fabric: str = None):
         """Write a Scenario+Deployment YAML for an aggregated deployment.
 
         cfg is any object with the ServeIt test-config fields (model_name,
@@ -319,6 +320,10 @@ class BlisRunner:
         block_size = int(getattr(cfg, "block_size", 0) or 64)
         quant = _quantization_of(getattr(cfg, "model_name", ""))
 
+        # multi-node clusters need an explicit fabric — cross-node costs
+        # resolve from it, not the chip (single-node scenarios omit it)
+        _fabric = f"\n  fabric: {fabric or 'ib-400g'}" if cluster_nodes > 1 else ""
+
         scenario = f"""\
 kind: Scenario
 name: {name}
@@ -332,7 +337,7 @@ coefficients: [{', '.join(_COEFFICIENTS)}]
 cluster:
   hardware: {gpu_type.lower()}
   nodes: {cluster_nodes}
-  gpus_per_node: {gpus_per_node}
+  gpus_per_node: {gpus_per_node}{_fabric}
 ---
 kind: Deployment
 name: {name}
