@@ -1816,9 +1816,33 @@ class RecipeOptimizer(
                 error_message=f"model not in BLIS catalog: {self.config.model_name}",
             )
 
-        # workload comes from the wizard config (the same definition
-        # guidellm would run against the real fleet)
-        sim = runner.run(scenario, name, self.config, seed=42)
+        # Workload: WekaTrace sessions replay through blis replay (real
+        # request sequence, prefix structure and burstiness); synthetic
+        # shapes go through blis run. Same definition guidellm would run.
+        sim = None
+        if getattr(self.config, "dataset_source_mode", "") == "wekatrace":
+            traces = getattr(self.config, "wekatrace_source",
+                             "/app/traces/cc-traces-weka.jsonl")
+            max_traces = int(getattr(self.config, "wekatrace_max_traces", 10) or 10)
+            duration = int(getattr(self.config, "test_duration", 300) or 300)
+            # cache the conversion — cycles share the same trace files
+            trace_tag = f"wekatrace-{max_traces}-{duration}"
+            th = os.path.join(run_dir, f"{trace_tag}.trace-header.yaml")
+            td = os.path.join(run_dir, f"{trace_tag}.trace-data.csv")
+            if not (os.path.isfile(th) and os.path.isfile(td)):
+                th, td = BlisRunner.convert_wekatrace(
+                    traces, run_dir, trace_tag, max_traces=max_traces,
+                    duration_s=duration,
+                    model_name=self.config.model_name)
+            if th and td:
+                self.log(f"   BLIS: replaying WekaTrace sessions "
+                         f"(max {max_traces}, compressed to {duration}s)", "info")
+                sim = runner.run_replay(scenario, name, th, td)
+            else:
+                self.log("   BLIS: WekaTrace conversion failed — falling back "
+                         "to the synthetic workload shape", "warn")
+        if sim is None and not getattr(self.config, "dataset_source_mode", "") == "wekatrace":
+            sim = runner.run(scenario, name, self.config, seed=42)
         summary = BlisRunner.summarize(sim)
         if not summary:
             return TestResult(

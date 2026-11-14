@@ -1325,12 +1325,20 @@ class LongRunStrategy(OptimizationStrategy):
                 f"turn_delay={getattr(cycle_cfg, 'turn_delay', None)}", 'info')
 
             try:
-                result = self.opt.orchestrator.run_test(
-                    cycle_cfg,
-                    cleanup=False,
-                    log_callback=lambda msg: self.opt.log(msg, 'info'),
-                    stop_check=self.opt._should_stop,
-                )
+                if getattr(cfg, 'use_blis', False):
+                    # BLIS simulation: no deployment to reuse, no guidellm
+                    # workers — each cycle is an independent simulation of
+                    # the same scenario (deterministic: identical cycles
+                    # prove pipeline stability; there is no drift to catch
+                    # in a DES)
+                    result = self.opt._run_blis_test(cycle_cfg)
+                else:
+                    result = self.opt.orchestrator.run_test(
+                        cycle_cfg,
+                        cleanup=False,
+                        log_callback=lambda msg: self.opt.log(msg, 'info'),
+                        stop_check=self.opt._should_stop,
+                    )
             except Exception as e:
                 self.opt.log(f"  ⚠️ Cycle {cycle} raised: {e} — recording failure and continuing", 'warning')
                 # Minimal duck-typed result for the DB save path
@@ -1395,7 +1403,7 @@ class LongRunStrategy(OptimizationStrategy):
 
             # Fixed settle pause between cycles (not after the last) —
             # identical every cycle so cross-cycle timing is comparable
-            if cycle < cycles and not self.opt._should_stop():
+            if cycle < cycles and not self.opt._should_stop() and not getattr(cfg, 'use_blis', False):
                 pause = 90  # 90 seconds, fixed
                 self.opt.log(f"  ⏸️ Settle pause: 90s before cycle {cycle + 1}", 'info')
                 for _ in range(pause):

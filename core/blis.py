@@ -482,6 +482,207 @@ pools:
             self._log(f"BLIS: result parse failed: {e}", "warn")
             return None
 
+    # -- trace replay ------------------------------------------------------
+
+    @staticmethod
+    def convert_wekatrace(traces_path: str, out_dir: str, name: str,
+                          max_traces: int = 10, duration_s: int = 300,
+                          model_name: str = "model", block_tokens: int = 64):
+        """Convert WekaTrace agentic-session JSONL to BLIS TraceV2.
+
+        Each JSONL line is one session (requests with hash_ids, in/out
+        token counts, arrival t in seconds). Produces the header YAML +
+        data CSV blis replay consumes. Arrival times are COMPRESSED to
+        fit duration_s (order, session structure, burst ratios and
+        prefix sharing preserved; absolute pacing is not).
+
+        Returns (header_path, csv_path) or (None, None) on failure.
+        """
+        import csv as _csv
+
+        sessions = []
+        try:
+            with open(traces_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        sessions.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+        except OSError as e:
+            return None, None
+        sessions = [s for s in sessions if s.get("requests")][:max_traces]
+        if not sessions:
+            return None, None
+
+        rows = []
+        request_id = 0
+        t_max = 0.0
+        for s_idx, sess in enumerate(sessions):
+            sid = f"weka-{s_idx:03d}"
+            reqs = [r for r in sess.get("requests", [])
+                    if r.get("type") != "subagent" and r.get("hash_ids")]
+            prev_ids = []
+            for r_idx, r in enumerate(reqs):
+                t = float(r.get("t", 0) or 0)
+                t_max = max(t_max, t)
+                hash_ids = r.get("hash_ids") or []
+                # prefix shared with the previous request of this session
+                shared = 0
+                for a, b in zip(prev_ids, hash_ids):
+                    if a != b:
+                        break
+                    shared += 1
+                rows.append({
+                    "_t": t,
+                    "request_id": request_id,
+                    "session_id": sid,
+                    "client_id": sid,
+                    "round_index": r_idx,
+                    "arrival_time_us": 0,  # filled after scaling
+                    "input_tokens": int(r.get("in", 0) or 0),
+                    "output_tokens": max(1, int(r.get("out", 1) or 1)),
+                    "prefix_length": shared * block_tokens,
+                    "prefix_group": sid,
+                    "model": model_name,
+                    "status": "completed",
+                    "slo_class": "standard",
+                    "streaming": "true",
+                    "tenant_id": "serveit",
+                    "deadline_us": 0,
+                    "first_chunk_time_us": 0,
+                    "last_chunk_time_us": 0,
+                    "think_time_us": 0,
+                    "reason_ratio": 0.0,
+                    "text_tokens": int(r.get("in", 0) or 0),
+                    "image_tokens": 0,
+                    "audio_tokens": 0,
+                    "video_tokens": 0,
+                })
+                request_id += 1
+                prev_ids = hash_ids
+
+        if not rows:
+            return None, None
+
+        # compress arrivals into the soak window
+        scale = (duration_s / t_max) if t_max > 0 else 1.0
+        for row in rows:
+            row["arrival_time_us"] = int(row["_t"] * scale * 1_000_000)
+            del row["_t"]
+
+        os.makedirs(out_dir, exist_ok=True)
+        header_path = os.path.join(out_dir, f"{name}.trace-header.yaml")
+        csv_path = os.path.join(out_dir, f"{name}.trace-data.csv")
+        fields = [
+            "request_id", "session_id", "client_id", "round_index",
+            "arrival_time_us", "deadline_us", "first_chunk_time_us",
+            "last_chunk_time_us", "think_time_us", "input_tokens",
+            "output_tokens", "prefix_length", "prefix_group", "model",
+            "status", "slo_class", "streaming", "tenant_id", "reason_ratio",
+            "text_tokens", "image_tokens", "audio_tokens", "video_tokens",
+        ]
+        with open(csv_path, "w", newline="") as f:
+            w = _csv.DictWriter(f, fieldnames=fields)
+            w.writeheader()
+            w.writerows(rows)
+        with open(header_path, "w") as f:
+            f.write("mode: converted\n"
+                    "time_unit: us\n"
+                    "trace_version: 4\n"
+                    f"workload_seed: 42\n")
+        return header_path, csv_path
+
+    def run_replay(self, scenario_path: str, scenario_name: str,
+                   trace_header: str, trace_data: str, timeout: int = 1800):
+        """Replay a TraceV2 file through the scenario (blis replay).
+
+        Stages scenario, router config, catalog overlay and both trace
+        files to the workload pod in remote mode; Result parsed from
+        stdout like run().
+        """
+        if not scenario_name.endswith(".yaml"):
+            scenario_name += ".yaml"
+        if not self.available():
+            self._log("BLIS: binary not found — skipping replay", "warn")
+            return None
+
+        import shlex as _shlex
+        pod_scenarios_dir = None
+        if self.remote:
+            pod_scenarios_dir = "/tmp/blis-runs"
+            self.kubectl.run(
+                ["exec", self.pod_name, "-n", self.namespace, "--",
+                 "mkdir", "-p", pod_scenarios_dir + "/router"], check=False)
+            self.kubectl.run(
+                ["cp", scenario_path,
+                 f"{self.pod_name}:{pod_scenarios_dir}/{scenario_name}",
+                 "-n", self.namespace], check=False, timeout=120)
+            import re as _re
+            with open(scenario_path) as f:
+                _scn = f.read()
+            _m = _re.search(r"endpoint_picker_config:\s*(\S+)", _scn)
+            if _m:
+                _ref = _m.group(1).strip("\"'")
+                _local_router = os.path.join(os.path.dirname(scenario_path), _ref)
+                if os.path.isfile(_local_router):
+                    self.kubectl.run(
+                        ["exec", self.pod_name, "-n", self.namespace, "--",
+                         "mkdir", "-p",
+                         f"{pod_scenarios_dir}/{os.path.dirname(_ref) or '.'}"],
+                        check=False)
+                    self.kubectl.run(
+                        ["cp", _local_router,
+                         f"{self.pod_name}:{pod_scenarios_dir}/{_ref}",
+                         "-n", self.namespace], check=False, timeout=120)
+            for local in (trace_header, trace_data):
+                self.kubectl.run(
+                    ["cp", local,
+                     f"{self.pod_name}:{pod_scenarios_dir}/{os.path.basename(local)}",
+                     "-n", self.namespace], check=False, timeout=600)
+            _th = f"{pod_scenarios_dir}/{os.path.basename(trace_header)}"
+            _td = f"{pod_scenarios_dir}/{os.path.basename(trace_data)}"
+        else:
+            _th, _td = trace_header, trace_data
+
+        scenarios_dir = pod_scenarios_dir or os.path.dirname(scenario_path)
+        overlay_flag = None
+        if os.path.isdir(self.OVERLAY_DIR):
+            if self.remote:
+                _pod_overlay = f"{pod_scenarios_dir}/catalog-overlay"
+                self.kubectl.run(
+                    ["cp", self.OVERLAY_DIR, f"{self.pod_name}:{_pod_overlay}",
+                     "-n", self.namespace], check=False, timeout=300)
+                overlay_flag = _pod_overlay
+            else:
+                overlay_flag = self.OVERLAY_DIR
+
+        args = [
+            "replay",
+            "--scenarios", scenarios_dir,
+            "--scenario", scenario_name,
+            "--trace-header", _th,
+            "--trace-data", _td,
+        ]
+        if overlay_flag:
+            args += ["--catalog-overlay", overlay_flag]
+
+        try:
+            r = self._exec(args, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            self._log(f"BLIS: replay timed out after {timeout}s", "warn")
+            return None
+        if r.returncode != 0:
+            self._log(f"BLIS: replay failed: {(r.stderr or r.stdout)[:400]}", "warn")
+            return None
+        try:
+            return json.loads(r.stdout)
+        except (OSError, json.JSONDecodeError) as e:
+            self._log(f"BLIS: replay result parse failed: {e}", "warn")
+            return None
+
     # -- results ----------------------------------------------------------
 
     @staticmethod
