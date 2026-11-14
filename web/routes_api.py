@@ -829,6 +829,25 @@ def get_models():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/blis/models')
+def get_blis_models():
+    """Models the BLIS simulator can price — curated list, same shape as models.json.
+
+    Update periodically: entries must exist in the BLIS catalog (or the
+    local overlay at /mnt/storage/blis/catalog-overlay). Regenerate with
+    blis-substrate's catalog listing when the pinned BLIS version changes.
+    """
+    try:
+        models_file = os.path.join(os.path.dirname(__file__), 'data', 'blis-models.json')
+        with open(models_file, 'r') as f:
+            models = json.load(f)
+        return jsonify(models)
+    except FileNotFoundError:
+        return jsonify([])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/deployment_templates')
 def get_deployment_templates():
     """Get all active deployment templates."""

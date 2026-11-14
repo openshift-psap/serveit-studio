@@ -40,13 +40,24 @@
                             </div>
                         </div>
 
+                        <!-- BLIS simulation toggle — execution target, switches the gallery -->
+                        <div class="vllm-toggle" id="blis-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');document.getElementById('blis-enabled').checked=on;config.use_blis=on;saveConfig();loadModelGallery();">
+                            <div style="font-size:1.5em;flex-shrink:0;">🔬</div>
+                            <div>
+                                <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Run in BLIS Simulation</div>
+                                <div style="color:#64748b;font-size:0.82em;margin-top:2px;">Execute in the Blackbox Inference Simulator (CPU-only, on the target cluster's workload pod) instead of deploying GPU pods. Your EPP config and workload run through the embedded llm-d router — results are estimates (median 7–9% error), best for configuration ranking and capacity planning.</div>
+                            </div>
+                            <input type="checkbox" id="blis-enabled">
+                            <div class="tgl-sw"></div>
+                        </div>
+
                         <div id="model-or-divider" style="text-align: center; margin: 20px 0; color: var(--rh-gray-500); font-weight: 700; font-size: 0.95em;">— OR —</div>
 
                         <div id="model-gallery-section" style="border:2px solid #22c55e;border-radius:12px;overflow:hidden;margin-bottom:16px;transition:opacity 0.2s;">
                             <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('model-gallery-body');var a=document.getElementById('model-gallery-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
                                 <div>
                                     <div style="font-weight:700;color:#15803d;font-size:1.05em;">📋 Model Gallery</div>
-                                    <div style="color:#166534;font-size:0.92em;margin-top:4px;">Browse and select from popular open-source LLM models. Filter by category or search by name.</div>
+                                    <div style="color:#166534;font-size:0.92em;margin-top:4px;" id="model-gallery-subtitle">Browse and select from popular open-source LLM models. Filter by category or search by name.</div>
                                 </div>
                                 <div id="model-gallery-arrow" style="font-size:1.4em;color:#15803d;font-weight:700;">▾</div>
                             </div>

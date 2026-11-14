@@ -105,6 +105,7 @@ class BlisRunner:
     """
 
     REMOTE_BINARY_FALLBACK = "/mnt/storage/blis/blis"
+    OVERLAY_DIR = os.path.join(BLIS_HOME, "catalog-overlay")
 
     def __init__(self, log=None, blis_home=None, kubectl=None, namespace=None, pod_name=None):
         self.home = blis_home or BLIS_HOME
@@ -174,6 +175,28 @@ class BlisRunner:
                 candidates.append(base[: -len(suffix)])
                 break
         seen = set()
+        # Local catalog overlay first: models added on this install
+        # (resolve has no --catalog-overlay flag, so check the directory)
+        overlay_models = os.path.join(self.OVERLAY_DIR, "models")
+        if os.path.isdir(overlay_models):
+            for cand in candidates:
+                for variant in (cand, cand.lower()):
+                    d = os.path.join(overlay_models, variant)
+                    if os.path.isdir(d) and os.path.isfile(os.path.join(d, "graph.yaml")):
+                        return variant
+            # source-repo match against overlay model.yaml files
+            try:
+                import glob as _glob
+                import yaml as _yaml
+                for my in _glob.glob(os.path.join(overlay_models, "*", "model.yaml")):
+                    try:
+                        repo = ((_yaml.safe_load(open(my) or {}).get("source") or {}).get("repo") or "").lower()
+                    except Exception:
+                        continue
+                    if repo and repo in (model_name.lower(),):
+                        return os.path.basename(os.path.dirname(my))
+            except ImportError:
+                pass
         for cand in candidates:
             # entry names match case-sensitively; source repos do not —
             # try each candidate as-given and lowercased
@@ -376,6 +399,16 @@ pools:
                          "-n", self.namespace], check=False, timeout=120)
 
         scenarios_dir = pod_scenarios_dir or os.path.dirname(scenario_path)
+        overlay_flag = None
+        if os.path.isdir(self.OVERLAY_DIR):
+            if self.remote:
+                _pod_overlay = f"{pod_scenarios_dir}/catalog-overlay"
+                self.kubectl.run(
+                    ["cp", self.OVERLAY_DIR, f"{self.pod_name}:{_pod_overlay}",
+                     "-n", self.namespace], check=False, timeout=300)
+                overlay_flag = _pod_overlay
+            else:
+                overlay_flag = self.OVERLAY_DIR
         args = [
             "run",
             "--scenarios", scenarios_dir,
@@ -391,6 +424,8 @@ pools:
             "--num-requests", str(num_requests),
             "--seed", str(seed),
         ]
+        if overlay_flag:
+            args += ["--catalog-overlay", overlay_flag]
         if not self.remote:
             args += ["--output", out_file]
         if rate_type == "concurrent":

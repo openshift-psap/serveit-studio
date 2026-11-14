@@ -1,0 +1,338 @@
+[
+  {
+    "id": "Qwen/Qwen2.5-0.5B-Instruct",
+    "name": "qwen2.5-0.5b-instruct",
+    "description": "Qwen2 architecture, ~0.5B params",
+    "category": "Small (<8B)"
+  },
+  {
+    "id": "Qwen/Qwen2.5-0.5B-Instruct",
+    "name": "qwen2.5-0.5b-instruct",
+    "description": "Qwen2 architecture, ~0.5B params \u2014 on model cache (local overlay)",
+    "category": "Small (<8B)"
+  },
+  {
+    "id": "meta-llama/Llama-2-7b-hf",
+    "name": "llama-2-7b-hf",
+    "description": "Llama architecture, ~7B params",
+    "category": "Small (<8B)"
+  },
+  {
+    "id": "mistralai/Mixtral-8x7B-v0.1",
+    "name": "mixtral-8x7b-v0.1",
+    "description": "Mixtral architecture, ~7B params",
+    "category": "Small (<8B)"
+  },
+  {
+    "id": "Qwen/Qwen2.5-7B-Instruct",
+    "name": "qwen2.5-7b-instruct",
+    "description": "Qwen2 architecture, ~7B params",
+    "category": "Small (<8B)"
+  },
+  {
+    "id": "meta-llama/Llama-3.1-8B-Instruct",
+    "name": "llama-3.1-8b-instruct",
+    "description": "Llama architecture, ~8B params",
+    "category": "Medium (8-30B)"
+  },
+  {
+    "id": "mistralai/Mistral-Nemo-Instruct-2407",
+    "name": "mistral-nemo-instruct-2407",
+    "description": "Mistral architecture, ~12B params",
+    "category": "Medium (8-30B)"
+  },
+  {
+    "id": "Qwen/Qwen3-14B",
+    "name": "qwen3-14b",
+    "description": "Qwen3 architecture, ~14B params",
+    "category": "Medium (8-30B)"
+  },
+  {
+    "id": "deepseek-ai/DeepSeek-V2-Lite",
+    "name": "deepseek-v2-lite",
+    "description": "DeepseekV2 architecture, ~16B params",
+    "category": "Medium (8-30B)"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Scout-17B-16E-Instruct-FP8-dynamic",
+    "name": "llama-4-scout-17b-16e-instruct-fp8-dynamic",
+    "description": "Llama4 architecture, ~17B params",
+    "category": "Medium (8-30B)"
+  },
+  {
+    "id": "thinkingmachines/Inkling",
+    "name": "inkling",
+    "description": "Inkling architecture, ~20B params",
+    "category": "Medium (8-30B)"
+  },
+  {
+    "id": "mistralai/Mixtral-8x22B-v0.1",
+    "name": "mixtral-8x22b-v0.1",
+    "description": "Mixtral architecture, ~22B params",
+    "category": "Medium (8-30B)"
+  },
+  {
+    "id": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16",
+    "name": "nemotron-3.5-lightning-30b-a3b-bf16",
+    "description": "NemotronH architecture, ~30B params (MoE)",
+    "category": "Large (30B+)"
+  },
+  {
+    "id": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+    "name": "nemotron-3.5-lightning-30b-a3b-nvfp4",
+    "description": "NemotronH architecture, ~30B params (MoE)",
+    "category": "Large (30B+)"
+  },
+  {
+    "id": "Qwen/Qwen3-30B-A3B",
+    "name": "qwen3-30b-a3b",
+    "description": "Qwen3Moe architecture, ~30B params (MoE)",
+    "category": "Large (30B+)"
+  },
+  {
+    "id": "codellama/CodeLlama-34b-Instruct-hf",
+    "name": "codellama-34b-instruct-hf",
+    "description": "Llama architecture, ~34B params",
+    "category": "Large (30B+)"
+  },
+  {
+    "id": "01-ai/Yi-34B",
+    "name": "yi-34b",
+    "description": "Llama architecture, ~34B params",
+    "category": "Large (30B+)"
+  },
+  {
+    "id": "Qwen/Qwen3.6-35B-A3B",
+    "name": "qwen3.6-35b-a3b",
+    "description": "Qwen3_5Moe architecture, ~35B params (MoE)",
+    "category": "Large (30B+)"
+  },
+  {
+    "id": "meta-llama/Llama-2-70b-hf",
+    "name": "llama-2-70b-hf",
+    "description": "Llama architecture, ~70B params",
+    "category": "Large (30B+)"
+  },
+  {
+    "id": "meta-llama/Llama-3.1-70B-Instruct",
+    "name": "llama-3.1-70b-instruct",
+    "description": "Llama architecture, ~70B params",
+    "category": "Large (30B+)"
+  },
+  {
+    "id": "openai/gpt-oss-120b",
+    "name": "gpt-oss-120b",
+    "description": "GptOss architecture, ~120B params (MoE)",
+    "category": "Large MoE (100B+)"
+  },
+  {
+    "id": "MiniMaxAI/MiniMax-M2.5",
+    "name": "minimax-m2.5",
+    "description": "MiniMaxM2 architecture, ~230B params (MoE)",
+    "category": "Large MoE (100B+)"
+  },
+  {
+    "id": "MiniMaxAI/MiniMax-M2.7",
+    "name": "minimax-m2.7",
+    "description": "MiniMaxM2 architecture, ~230B params (MoE)",
+    "category": "Large MoE (100B+)"
+  },
+  {
+    "id": "MiniMaxAI/MiniMax-M3",
+    "name": "minimax-m3",
+    "description": "MiniMaxM3Sparse architecture, ~230B params (MoE)",
+    "category": "Large MoE (100B+)"
+  },
+  {
+    "id": "zai-org/GLM-5-FP8",
+    "name": "glm-5",
+    "description": "GlmMoeDsa architecture, ~355B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "zai-org/GLM-5.2",
+    "name": "glm-5.2",
+    "description": "GlmMoeDsa architecture, ~355B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "zai-org/GLM-5.2-FP8",
+    "name": "glm-5.2-fp8",
+    "description": "GlmMoeDsa architecture, ~355B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "zai-org/GLM-5.3",
+    "name": "glm-5.3",
+    "description": "GlmMoeDsa architecture, ~355B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "zai-org/GLM-5.3-Flash",
+    "name": "glm-5.3-flash",
+    "description": "Glm5Next architecture, ~355B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "Qwen/Qwen3.5-397B-A17B",
+    "name": "qwen3.5-397b-a17b",
+    "description": "Qwen3_5Moe architecture, ~397B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "Qwen/Qwen3.5-397B-A17B-FP8",
+    "name": "qwen3.5-397b-a17b-fp8",
+    "description": "Qwen3_5Moe architecture, ~397B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
+    "name": "nemotron-3-ultra-550b-a55b-bf16",
+    "description": "NemotronH architecture, ~550B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4",
+    "name": "nemotron-3-ultra-550b-a55b-nvfp4",
+    "description": "NemotronH architecture, ~550B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "deepseek-ai/DeepSeek-R1-0528",
+    "name": "deepseek-r1-0528",
+    "description": "DeepseekV3 architecture, ~671B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "deepseek-ai/DeepSeek-V3",
+    "name": "deepseek-v3",
+    "description": "DeepseekV3 architecture, ~671B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "deepseek-ai/DeepSeek-V4-Pro",
+    "name": "deepseek-v4-pro",
+    "description": "DeepseekV4 architecture, ~671B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
+    "name": "deepseek-v4-pro-0813",
+    "description": "DeepseekV4 architecture, ~671B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "nvidia/DeepSeek-V4-Pro-NVFP4",
+    "name": "deepseek-v4-pro-nvfp4",
+    "description": "DeepseekV4 architecture, ~671B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "deepseek-ai/DeepSeek-V4.1-Flash",
+    "name": "deepseek-v4.1-flash",
+    "description": "DeepseekV41 architecture, ~671B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "unsloth/Muse-Spark-Open-816B-A42B",
+    "name": "muse-spark-open-816b-a42b",
+    "description": "MuseSpark architecture, ~816B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "unsloth/Muse-Spark-Open-816B-A42B-NVFP4",
+    "name": "muse-spark-open-816b-a42b-nvfp4",
+    "description": "MuseSpark architecture, ~816B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "Inferact/Muse-Spark-Open-DSpark",
+    "name": "muse-spark-open-dspark",
+    "description": "MuseSparkDSparkModel architecture, ~816B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "moonshotai/Kimi-K2.5",
+    "name": "kimi-k2.5",
+    "description": "KimiK25 architecture, ~1000B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "moonshotai/Kimi-K2.6",
+    "name": "kimi-k2.6",
+    "description": "KimiK25 architecture, ~1000B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "moonshotai/Kimi-K3",
+    "name": "kimi-k3",
+    "description": "KimiK3 architecture, ~1000B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "moonshotai/Kimi-K3.1-Pro",
+    "name": "kimi-k3.1",
+    "description": "KimiK31 architecture, ~1000B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "nvidia/Kimi-K2.5-NVFP4",
+    "name": "kimi-k2.5-nvfp4",
+    "description": "KimiK25 architecture, ~1000B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "Inferact/Kimi-K3-DSpark",
+    "name": "kimi-k3-dspark",
+    "description": "K3DSparkModel architecture, ~1000B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "Inferact/Kimi-K3.1-Pro-DSpark-preview",
+    "name": "kimi-k3.1-dspark",
+    "description": "K3DSparkModel architecture, ~1000B params (MoE)",
+    "category": "XL MoE (300B+)"
+  },
+  {
+    "id": "nvidia/MiniMax-M2.5-NVFP4",
+    "name": "minimax-m2.5-nvfp4",
+    "description": "MiniMaxM2 architecture, ~230B params (MoE)",
+    "category": "Large MoE (100B+)"
+  },
+  {
+    "id": "Inferact/MiniMax-M3-EAGLE3",
+    "name": "minimax-m3-eagle3",
+    "description": "LlamaEagle3 architecture, ~230B params (MoE)",
+    "category": "Large MoE (100B+)"
+  },
+  {
+    "id": "Inferact/MiniMax-M3-EAGLE3-GQA",
+    "name": "minimax-m3-eagle3-gqa",
+    "description": "LlamaEagle3 architecture, ~230B params (MoE)",
+    "category": "Large MoE (100B+)"
+  },
+  {
+    "id": "MiniMaxAI/MiniMax-M3-MXFP8",
+    "name": "minimax-m3-mxfp8",
+    "description": "MiniMaxM3Sparse architecture, ~230B params (MoE)",
+    "category": "Large MoE (100B+)"
+  },
+  {
+    "id": "nvidia/MiniMax-M3-NVFP4",
+    "name": "minimax-m3-nvfp4",
+    "description": "MiniMaxM3Sparse architecture, ~230B params (MoE)",
+    "category": "Large MoE (100B+)"
+  },
+  {
+    "id": "MiniMaxAI/MiniMax-M3.1-Flash",
+    "name": "minimax-m3.1-flash",
+    "description": "MiniMaxM3Sparse architecture, ~230B params (MoE)",
+    "category": "Large MoE (100B+)"
+  },
+  {
+    "id": "MiniMaxAI/MiniMax-M3.1-Flash",
+    "name": "minimax-m3.1-flash-dspark",
+    "description": "DSparkMiniMaxDraftModel architecture, ~230B params (MoE)",
+    "category": "Large MoE (100B+)"
+  }
+]

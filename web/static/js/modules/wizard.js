@@ -68,18 +68,42 @@ function applyModelFilters() {
     renderModels(filtered);
 }
 
+// Gallery loader — BLIS mode swaps in the simulator's catalog
+function loadModelGallery() {
+    var url = config.use_blis ? '/api/blis/models' : '/api/models';
+    var subtitle = document.getElementById('model-gallery-subtitle');
+    if (subtitle) {
+        subtitle.textContent = config.use_blis
+            ? 'Models the BLIS simulator can price (embedded catalog + local overlay). Simulatable end-to-end without GPU pods.'
+            : 'Browse and select from popular open-source LLM models. Filter by category or search by name.';
+    }
+    fetch(url)
+        .then(response => response.json())
+        .then(models => {
+            if (!Array.isArray(models)) throw new Error('bad model list');
+            allModels = models;
+            buildCategoryFilters();
+            renderModels(models);
+            // A previously-selected model that the BLIS catalog can't
+            // simulate must not silently carry into the run
+            if (config.use_blis && config.model &&
+                !models.some(m => m.id === config.model)) {
+                document.querySelectorAll('.model-card').forEach(c => c.classList.remove('selected'));
+                config.model = null;
+                saveConfig();
+                if (typeof logToConsole === 'function') {
+                    logToConsole('🔬 BLIS enabled: previously selected model is not in the BLIS catalog — selection cleared. Pick a catalogued model.', 'warning');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Failed to load models:', error);
+            document.getElementById('model-list').innerHTML = '<div style="padding: 20px; text-align: center; color: #e53e3e;">Failed to load models. Please refresh the page.</div>';
+        });
+}
+
 // Fetch models on page load
-fetch('/api/models')
-    .then(response => response.json())
-    .then(models => {
-        allModels = models;
-        buildCategoryFilters();
-        renderModels(models);
-    })
-    .catch(error => {
-        console.error('Failed to load models:', error);
-        document.getElementById('model-list').innerHTML = '<div style="padding: 20px; text-align: center; color: #e53e3e;">Failed to load models. Please refresh the page.</div>';
-    });
+loadModelGallery();
 
 // Model search
 document.getElementById('model-search').addEventListener('input', () => applyModelFilters());
