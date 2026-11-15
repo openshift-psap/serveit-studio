@@ -1963,6 +1963,26 @@ class RecipeOptimizer(
             _sat = (sim.get("saturation") or {}).get("final") or {}
             if _sat:
                 blis_metrics["saturation"] = _sat
+            # Prometheus-shaped summaries from the simulator (the
+            # throughput/utilization table reads these shapes natively —
+            # BLIS engine-report values, no cluster telemetry involved)
+            _pm = {}
+            if _ec:
+                _dur = _ec.get("simulated_duration_s") or 1
+                if _ec.get("total_input_tokens") is not None:
+                    _pm["vllm_prompt_tokens_rate"] = {
+                        "avg": round(_ec["total_input_tokens"] / _dur, 1)}
+                _gen = (sim.get("metrics") or {}).get("output_tok_s") or {}
+                if isinstance(_gen, dict) and _gen.get("value") is not None:
+                    _pm["vllm_generation_tokens_rate"] = {"avg": round(_gen["value"], 1)}
+                if summary.get("request_throughput") is not None:
+                    _pm["vllm_e2e_count_rate"] = {"avg": round(summary["request_throughput"], 4)}
+                if _ec.get("in_flight_requests_mean") is not None:
+                    _pm["vllm_requests_running"] = {"avg": round(_ec["in_flight_requests_mean"], 1)}
+                if _ec.get("cache_hit_rate") is not None:
+                    _pm["vllm_prefix_cache_hits_rate"] = {"avg": round(_ec["cache_hit_rate"], 4)}
+            if _pm:
+                blis_metrics["prometheus_metrics"] = _pm
             # conversion stats explain thin routing cells (requests over
             # the model's context budget are unservable by design)
             try:
@@ -2002,6 +2022,12 @@ class RecipeOptimizer(
             e2e_latency_mean=(summary.get("e2e_mean_ms") or 0) / 1000.0 or None,
             guidellm_raw_json=json.dumps(sim) if sim else None,
         )
+        # guidellm-req/s + cache-hit columns on the throughput table
+        if summary.get("request_throughput") is not None:
+            result.throughput_mean = summary["request_throughput"]
+        _ec0 = ((sim or {}).get("reports") or {}).get("engine", {}).get("cluster") or {}
+        if _ec0.get("cache_hit_rate") is not None:
+            result.cache_hit_pct = round(_ec0["cache_hit_rate"] * 100, 1)
         # tokens/s + TPOT from the simulator metrics (replay Results carry
         # output_tok_s; run Results carry it in metrics too)
         _otps = (sim or {}).get("metrics", {}).get("output_tok_s") or {}

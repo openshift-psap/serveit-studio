@@ -501,6 +501,10 @@ class DatabaseManager:
 
         # Extract Prometheus metric summaries from the raw metrics file
         prometheus_summaries = {}
+        # BLIS runs carry simulator-derived summaries in the metrics dict
+        # (prometheus-shaped so the report tables read them natively)
+        if isinstance(metrics, dict) and isinstance(metrics.get("prometheus_metrics"), dict):
+            prometheus_summaries = metrics.pop("prometheus_metrics")
         if metrics_file_path:
             try:
                 prometheus_summaries = MetricsAnalyzer.extract_prometheus_summaries(Path(metrics_file_path))
