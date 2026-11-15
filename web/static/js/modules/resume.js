@@ -12,10 +12,19 @@ function loadResumeRuns() {
                 return;
             }
 
-            let html = '<table class="resume-table"><thead><tr>';
-            html += '<th>ID</th><th>Date</th><th>Description</th><th>Priority</th><th>Model</th>';
-            html += '<th>Workload</th><th>GPUs</th><th>Status</th><th>Progress</th><th>Actions</th>';
-            html += '</tr></thead><tbody>';
+            // Bulk-selection action bar (hidden until something is checked)
+            html += '<div id="bulk-run-bar" style="display:none;align-items:center;gap:12px;padding:10px 14px;margin-bottom:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">';
+            html += '<span id="bulk-run-count" style="font-weight:700;color:#991b1b;font-size:0.92em;">0 selected</span>';
+            html += '<button id="bulk-delete-btn" style="padding:6px 14px;background:#dc2626;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.88em;">🗑 Delete Selected</button>';
+            html += '<button id="bulk-clear-btn" style="padding:6px 14px;background:white;color:#475569;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:0.88em;">Clear</button>';
+            html += '</div>';
+
+            let html2 = '<table class="resume-table"><thead><tr>';
+            html2 += '<th style="width:28px;"><input type="checkbox" id="select-all-runs" title="Select all non-running runs" style="cursor:pointer;"></th>';
+            html2 += '<th>ID</th><th>Date</th><th>Description</th><th>Priority</th><th>Model</th>';
+            html2 += '<th>Workload</th><th>GPUs</th><th>Status</th><th>Progress</th><th>Actions</th>';
+            html2 += '</tr></thead><tbody>';
+            html = html + html2;
 
             runs.forEach(run => {
                 const date = new Date(run.created_at).toLocaleDateString('en-US', {
@@ -93,6 +102,10 @@ function loadResumeRuns() {
                 const gpus = run.max_gpus ? `${run.max_gpus}` : '-';
 
                 html += '<tr>';
+                const canSelect = run.status !== 'running';
+                html += `<td>${canSelect
+                    ? `<input type="checkbox" class="run-select" data-run-id="${run.id}" style="cursor:pointer;">`
+                    : '<input type="checkbox" disabled title="Running runs cannot be deleted" style="opacity:0.35;">'}</td>`;
                 html += `<td style="font-weight: 700; color: #7c3aed;">#${run.id}</td>`;
                 html += `<td style="white-space: nowrap;">${date}</td>`;
                 const notesEsc = (run.notes || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -173,6 +186,90 @@ function loadResumeRuns() {
                     const runId = parseInt(btn.dataset.runId);
                     applyRunSettings(runId, btn);
                 });
+            });
+
+            // ── Bulk selection ──
+            const bulkBar = content.querySelector('#bulk-run-bar');
+            const bulkCount = content.querySelector('#bulk-run-count');
+            const bulkDeleteBtn = content.querySelector('#bulk-delete-btn');
+            const bulkClearBtn = content.querySelector('#bulk-clear-btn');
+            const selectAll = content.querySelector('#select-all-runs');
+            const runCheckboxes = () => Array.from(content.querySelectorAll('.run-select'));
+
+            function refreshBulkBar() {
+                const n = runCheckboxes().filter(cb => cb.checked).length;
+                bulkCount.textContent = n + ' selected';
+                bulkDeleteBtn.textContent = n > 0 ? `🗑 Delete Selected (${n})` : '🗑 Delete Selected';
+                bulkBar.style.display = n > 0 ? 'flex' : 'none';
+                const all = runCheckboxes();
+                selectAll.checked = all.length > 0 && all.every(cb => cb.checked);
+                selectAll.indeterminate = n > 0 && !selectAll.checked;
+            }
+
+            runCheckboxes().forEach(cb => cb.addEventListener('change', refreshBulkBar));
+            selectAll.addEventListener('change', () => {
+                runCheckboxes().forEach(cb => { cb.checked = selectAll.checked; });
+                refreshBulkBar();
+            });
+            bulkClearBtn.addEventListener('click', () => {
+                runCheckboxes().forEach(cb => { cb.checked = false; });
+                refreshBulkBar();
+            });
+
+            bulkDeleteBtn.addEventListener('click', () => {
+                const ids = runCheckboxes().filter(cb => cb.checked)
+                    .map(cb => parseInt(cb.dataset.runId));
+                if (!ids.length) return;
+
+                // reuse the delete confirmation modal with a bulk message
+                const modal = document.getElementById('delete-run-modal');
+                const idSpan = document.getElementById('delete-run-id');
+                const oldLabel = idSpan.textContent;
+                idSpan.textContent = '';
+                const headerH3 = modal.querySelector('.modal-header-text h3');
+                const oldH3 = headerH3.innerHTML;
+                headerH3.innerHTML = `Delete ${ids.length} runs?`;
+                modal.classList.add('active');
+
+                const confirmBtn = document.getElementById('delete-run-confirm');
+                const cancelBtn = document.getElementById('delete-run-cancel');
+                const cleanup = () => {
+                    modal.classList.remove('active');
+                    headerH3.innerHTML = oldH3;
+                    idSpan.textContent = oldLabel;
+                    confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+                    cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+                };
+                cancelBtn.addEventListener('click', cleanup, { once: true });
+                confirmBtn.addEventListener('click', () => {
+                    cleanup();
+                    bulkDeleteBtn.disabled = true;
+                    bulkDeleteBtn.textContent = '⏳ Deleting…';
+                    fetch('/api/delete_runs_bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ run_ids: ids })
+                    })
+                        .then(res => res.json())
+                        .then(data => {
+                            bulkDeleteBtn.disabled = false;
+                            if (data.success) {
+                                logToConsole(`Deleted ${data.deleted_runs} runs (${data.deleted_tests} tests removed)` +
+                                    (data.failed_runs ? ` — ${data.failed_runs} refused (running/not found)` : ''), 'success');
+                                data.results.filter(r => !r.success)
+                                    .forEach(r => logToConsole(`  Run #${r.id}: ${r.error}`, 'warning'));
+                                loadResumeRuns();
+                            } else {
+                                logToConsole(`Bulk delete failed: ${data.error}`, 'error');
+                                refreshBulkBar();
+                            }
+                        })
+                        .catch(err => {
+                            bulkDeleteBtn.disabled = false;
+                            logToConsole(`Bulk delete failed: ${err.message}`, 'error');
+                            refreshBulkBar();
+                        });
+                }, { once: true });
             });
 
             // Attach click handlers to delete buttons

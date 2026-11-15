@@ -509,6 +509,59 @@ def _cleanup_result_files(test_ids):
             shutil.rmtree(artifact_dir, ignore_errors=True)
 
 
+@app.route('/api/delete_runs_bulk', methods=['POST'])
+def delete_runs_bulk():
+    """Delete multiple optimization runs in one call.
+
+    Body: {"run_ids": [int, ...]}. Per-run semantics identical to
+    /api/delete_run — running runs are refused, not killed. Returns
+    per-run results plus aggregate counts.
+    """
+    try:
+        run_ids = request.get_json(silent=True) or {}
+        run_ids = run_ids.get('run_ids') or []
+        if not isinstance(run_ids, list) or not run_ids:
+            return jsonify({'success': False, 'error': 'run_ids list required'}), 400
+        run_ids = [int(r) for r in run_ids][:500]
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'error': 'invalid run_ids'}), 400
+
+    results = []
+    deleted_total = 0
+    with get_db() as conn:
+        for run_id in run_ids:
+            status = conn.execute(
+                'SELECT status FROM optimization_runs WHERE id = ?', (run_id,)
+            ).fetchone()
+            if not status:
+                results.append({'id': run_id, 'success': False, 'error': 'not found'})
+                continue
+            if status['status'] == 'running':
+                results.append({'id': run_id, 'success': False,
+                                'error': 'currently running — stop it first'})
+                continue
+            test_ids = [r[0] for r in conn.execute(
+                'SELECT config_name FROM test_configurations WHERE run_id = ?', (run_id,)
+            ).fetchall()]
+            n = conn.execute(
+                'DELETE FROM test_configurations WHERE run_id = ?', (run_id,)
+            ).rowcount
+            conn.execute('DELETE FROM console_logs WHERE run_id = ?', (run_id,))
+            conn.execute('DELETE FROM optimization_runs WHERE id = ?', (run_id,))
+            _cleanup_result_files(test_ids)
+            deleted_total += n
+            results.append({'id': run_id, 'success': True, 'deleted_tests': n})
+
+    ok = sum(1 for r in results if r['success'])
+    return jsonify({
+        'success': True,
+        'deleted_runs': ok,
+        'failed_runs': len(results) - ok,
+        'deleted_tests': deleted_total,
+        'results': results,
+    })
+
+
 @app.route('/api/restart_run/<int:run_id>', methods=['POST'])
 def restart_run(run_id):
     """Clear all test results for a run and reset it so it can be re-run from the beginning."""
