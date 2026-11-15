@@ -494,19 +494,27 @@ def delete_run(run_id):
             conn.execute(
                 'DELETE FROM optimization_runs WHERE id = ?', (run_id,)
             )
-        _cleanup_result_files(test_ids)
+        _cleanup_result_files(test_ids, run_id=run_id)
         return jsonify({'success': True, 'deleted_tests': deleted_tests})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-def _cleanup_result_files(test_ids):
-    """Remove artifact directories for deleted tests."""
+def _cleanup_result_files(test_ids, run_id=None):
+    """Remove artifact directories for deleted tests.
+
+    Also removes the BLIS simulation run dir (scenarios + Results) when
+    the whole run is being deleted — those accumulate per run_id.
+    """
     results_dir = Path('/mnt/storage/results')
     for test_id in test_ids:
         artifact_dir = results_dir / test_id
         if artifact_dir.is_dir():
             shutil.rmtree(artifact_dir, ignore_errors=True)
+    if run_id is not None:
+        blis_dir = Path(f'/mnt/storage/blis/runs/{run_id}')
+        if blis_dir.is_dir():
+            shutil.rmtree(blis_dir, ignore_errors=True)
 
 
 @app.route('/api/delete_runs_bulk', methods=['POST'])
@@ -548,7 +556,7 @@ def delete_runs_bulk():
             ).rowcount
             conn.execute('DELETE FROM console_logs WHERE run_id = ?', (run_id,))
             conn.execute('DELETE FROM optimization_runs WHERE id = ?', (run_id,))
-            _cleanup_result_files(test_ids)
+            _cleanup_result_files(test_ids, run_id=run_id)
             deleted_total += n
             results.append({'id': run_id, 'success': True, 'deleted_tests': n})
 
