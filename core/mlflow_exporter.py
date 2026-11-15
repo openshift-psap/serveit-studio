@@ -57,6 +57,26 @@ def _get_or_create_experiment(tracking_uri, name, workspace, username, password,
     return resp.json()['experiment_id']
 
 
+def _pod_node_map(namespace):
+    """Best-effort pod -> node mapping via kubectl (pods may be gone)."""
+    import subprocess
+    try:
+        r = subprocess.run(
+            ['kubectl', 'get', 'pods', '-n', namespace, '-o',
+             'custom-columns=NAME:.metadata.name,NODE:.spec.nodeName,PHASE:.status.phase'],
+            capture_output=True, text=True, timeout=30, check=False)
+        if r.returncode != 0:
+            return {}
+        out = {}
+        for line in (r.stdout or '').splitlines()[1:]:
+            parts = line.split()
+            if len(parts) >= 2:
+                out[parts[0]] = {'node': parts[1], 'phase': parts[2] if len(parts) > 2 else ''}
+        return out
+    except Exception:
+        return {}
+
+
 def export_to_mlflow(
     db_path: str,
     tracking_uri: str,
@@ -67,6 +87,7 @@ def export_to_mlflow(
     test_ids: Optional[List[str]] = None,
     artifact_dir: str = '/mnt/storage/test-artifacts',
     insecure_tls: bool = True,
+    project_name: Optional[str] = None,
 ) -> Dict:
     """Export test results to MLflow.
 
@@ -203,6 +224,13 @@ def export_to_mlflow(
             'serveit.run_id': str(run_id),
             'serveit.total_gpus': str(run_dict['max_gpus']),
         }
+        if project_name:
+            tags['serveit.project'] = project_name
+            mlflow.log_param('project', project_name)
+        # node correlation: capture the live pod -> node mapping for the
+        # run's namespace (pods still up post-run); logged per test below
+        _namespace = run_config.get('namespace') or ''
+        _pod_nodes = _pod_node_map(_namespace) if _namespace else {}
         if llmd_version:
             tags['serveit.llmd_version'] = llmd_version
         if scheduler_version:
@@ -247,7 +275,70 @@ def export_to_mlflow(
                         child_tags['serveit.llmd_version'] = llmd_version
                     if run_config.get('gpu_type'):
                         child_tags['serveit.gpu_model'] = run_config['gpu_type']
+                    if project_name:
+                        child_tags['serveit.project'] = project_name
                     mlflow.set_tags(child_tags)
+
+                    # ── Node correlation ──────────────────────────────
+                    # Per-pod metrics keyed by pod AND node so MLflow
+                    # searches can slice by either. Sources: torch profile
+                    # summaries + resource snapshots (real runs), engine
+                    # report instances (BLIS runs).
+                    mj = {}
+                    if test_dict.get('metrics_json'):
+                        try:
+                            mj = json.loads(test_dict['metrics_json'])
+                        except (json.JSONDecodeError, TypeError):
+                            mj = {}
+                    node_metrics = {}
+                    node_pods = {}
+                    torch = ((mj.get('pprof') or {}).get('torch') or [])
+                    for t in torch:
+                        pod = t.get('pod') or ''
+                        if not pod:
+                            continue
+                        node = (_pod_nodes.get(pod) or {}).get('node') or 'unknown'
+                        node_pods.setdefault(node, []).append(pod)
+                        if t.get('kernel_count'):
+                            node_metrics[f'pod.{pod}.cuda_ms'] = float(t.get('total_cuda_ms') or 0)
+                            node_metrics[f'pod.{pod}.kernels'] = float(t['kernel_count'])
+                            node_metrics[f'node.{node}.cuda_ms'] = node_metrics.get(f'node.{node}.cuda_ms', 0) + float(t.get('total_cuda_ms') or 0)
+                    snap = mj.get('resource_snapshot') or {}
+                    for pod, s in snap.items():
+                        node = (_pod_nodes.get(pod) or {}).get('node') or 'unknown'
+                        node_pods.setdefault(node, []).append(pod)
+                        if s.get('rss_mb'):
+                            node_metrics[f'pod.{pod}.rss_mb'] = float(s['rss_mb'])
+                        if s.get('cpu_m'):
+                            node_metrics[f'pod.{pod}.cpu_m'] = float(s['cpu_m'])
+                    am = mj.get('additional_metrics') or {}
+                    if am.get('blis'):
+                        for inst, rep in (am.get('instance_report') or {}).items():
+                            node_metrics[f'instance.{inst}.completed'] = float(rep.get('completed_requests') or 0)
+                            if rep.get('e2e_mean_ms') is not None:
+                                node_metrics[f'instance.{inst}.e2e_mean_ms'] = float(rep['e2e_mean_ms'])
+                        node_pods['simulation'] = sorted((am.get('instances') or {}).keys())
+                    if node_metrics:
+                        mlflow.log_metrics(node_metrics)
+                    if node_pods:
+                        mlflow.log_dict({'namespace': _namespace, 'nodes': node_pods,
+                                         'pod_nodes': _pod_nodes}, 'pod-node-map.json')
+
+                    # ── Artifacts ─────────────────────────────────────
+                    # guidellm raw result + manifests + BLIS scenario/Result
+                    if test_dict.get('guidellm_raw_json'):
+                        mlflow.log_text(test_dict['guidellm_raw_json'],
+                                        f'{test_id}-guidellm-result.json')
+                    if test_dict.get('manifests_yaml'):
+                        mlflow.log_text(test_dict['manifests_yaml'],
+                                        f'{test_id}-manifests.yaml')
+                    if am.get('blis'):
+                        _blis_dir = Path(f'/mnt/storage/blis/runs/{run_id}')
+                        if _blis_dir.is_dir():
+                            for f in _blis_dir.glob(f'{test_id}.yaml'):
+                                mlflow.log_artifact(str(f), artifact_path='blis-scenario')
+                            for f in _blis_dir.glob('*.trace-header.yaml'):
+                                mlflow.log_artifact(str(f), artifact_path='blis-trace')
 
                     # Log params
                     params = {
@@ -289,12 +380,15 @@ def export_to_mlflow(
                     if metrics:
                         mlflow.log_metrics(metrics)
 
-                    # Log artifacts from disk
-                    test_artifact_dir = Path(artifact_dir) / test_id
-                    if test_artifact_dir.exists():
-                        for f in test_artifact_dir.iterdir():
-                            if f.is_file() and f.stat().st_size < 50 * 1024 * 1024:
-                                mlflow.log_artifact(str(f), artifact_path='test-artifacts')
+                    # Log artifacts from disk — the per-test results dir
+                    # (/mnt/storage/results/<test_id>) holds guidellm output,
+                    # torch traces and pprof summaries
+                    for base in (Path(artifact_dir), Path('/mnt/storage/results')):
+                        test_artifact_dir = base / test_id
+                        if test_artifact_dir.exists():
+                            for f in test_artifact_dir.iterdir():
+                                if f.is_file() and f.stat().st_size < 50 * 1024 * 1024:
+                                    mlflow.log_artifact(str(f), artifact_path='test-artifacts')
 
                     exported.append(test_id)
                     logger.info(f"Exported {test_id} to MLflow run {child_run.info.run_id}")

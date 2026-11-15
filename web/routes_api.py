@@ -1074,6 +1074,7 @@ def save_mlflow_config():
             password=data.get('password'),
             experiment_name=data.get('experiment_name'),
             insecure_tls=data.get('insecure_tls', True),
+            project_name=data.get('project_name'),
         )
         return jsonify({'success': True})
     except Exception as e:
@@ -1124,6 +1125,7 @@ def export_to_mlflow():
             username=cfg_dict.get('username'),
             password=cfg_dict.get('password'),
             experiment_name=data.get('experiment_name') or cfg_dict.get('experiment_name') or 'serveit-studio',
+            project_name=data.get('project_name') or cfg_dict.get('project_name'),
             run_id=data['run_id'],
             test_ids=data.get('test_ids'),
             insecure_tls=bool(cfg_dict.get('insecure_tls', 1)),

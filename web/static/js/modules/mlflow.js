@@ -11,6 +11,7 @@ function openMlflowDialog() {
                 document.getElementById('mlflow-uri').value = data.config.tracking_uri || '';
                 document.getElementById('mlflow-user').value = data.config.username || '';
                 document.getElementById('mlflow-experiment').value = data.config.experiment_name || '';
+                document.getElementById('mlflow-project').value = data.config.project_name || '';
                 var passField = document.getElementById('mlflow-pass');
                 passField.value = '';
                 passField.placeholder = data.config.password === '***' ? '(saved)' : 'optional';
@@ -30,6 +31,8 @@ function saveMlflowConfig() {
         username: document.getElementById('mlflow-user').value || null,
         password: document.getElementById('mlflow-pass').value || undefined,
         experiment_name: document.getElementById('mlflow-experiment').value || null,
+        project_name: document.getElementById('mlflow-project').value || null,
+        project_name: document.getElementById('mlflow-project').value || null,
         insecure_tls: document.getElementById('mlflow-insecure-tls').checked,
     };
     fetch('/api/mlflow/config', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)})
@@ -221,6 +224,7 @@ function exportAllMlflow() {
                 run_id: sr.run_id,
                 test_ids: sr.test_ids,
                 experiment_name: document.getElementById('mlflow-experiment').value || null,
+        project_name: document.getElementById('mlflow-project').value || null,
             }),
             signal: window._mlflowAbortController.signal,
         })

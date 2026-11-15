@@ -161,6 +161,7 @@ class DatabaseManager:
                 ('optimization_runs', 'dataset_max_output', 'INTEGER DEFAULT 256'),
                 ('optimization_runs', 'rate_type', "TEXT DEFAULT 'concurrent'"),
                 ('optimization_runs', 'prefix_cache_hit_pct', 'INTEGER DEFAULT 0'),
+                    ('mlflow_config', 'project_name', 'TEXT'),
                 ('optimization_runs', 'prefix_cache_seed', 'INTEGER'),
                 ('test_configurations', 'manifests_yaml', 'TEXT'),
                 ('test_configurations', 'architecture', 'TEXT'),
@@ -289,28 +290,35 @@ class DatabaseManager:
 
     def save_mlflow_config(self, tracking_uri: str, username: str = None,
                            password: str = None, experiment_name: str = None,
-                           insecure_tls: bool = True):
+                           insecure_tls: bool = True, project_name: str = None):
         with self.get_connection() as conn:
-            # Add insecure_tls column if missing
-            try:
-                conn.execute('ALTER TABLE mlflow_config ADD COLUMN insecure_tls INTEGER DEFAULT 1')
-            except Exception:
-                pass
+            # Add missing columns (older installs)
+            for col, default in (('insecure_tls', 'INTEGER DEFAULT 1'),
+                                 ('project_name', 'TEXT')):
+                try:
+                    conn.execute(f'ALTER TABLE mlflow_config ADD COLUMN {col} {default}')
+                except Exception:
+                    pass
             if password is None:
                 existing = conn.execute('SELECT password FROM mlflow_config WHERE id = 1').fetchone()
                 if existing:
                     password = existing['password']
+            if project_name is None:
+                existing = conn.execute('SELECT project_name FROM mlflow_config WHERE id = 1').fetchone()
+                if existing and existing['project_name']:
+                    project_name = existing['project_name']
             conn.execute('''
-                INSERT INTO mlflow_config (id, tracking_uri, username, password, experiment_name, insecure_tls, updated_at)
-                VALUES (1, ?, ?, ?, ?, ?, ?)
+                INSERT INTO mlflow_config (id, tracking_uri, username, password, experiment_name, project_name, insecure_tls, updated_at)
+                VALUES (1, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     tracking_uri=excluded.tracking_uri,
                     username=excluded.username,
                     password=excluded.password,
                     experiment_name=excluded.experiment_name,
+                    project_name=excluded.project_name,
                     insecure_tls=excluded.insecure_tls,
                     updated_at=excluded.updated_at
-            ''', (tracking_uri, username, password, experiment_name, 1 if insecure_tls else 0, datetime.now().isoformat()))
+            ''', (tracking_uri, username, password, experiment_name, project_name, 1 if insecure_tls else 0, datetime.now().isoformat()))
 
     def save_pod_errors(self, run_id: int, test_id: str, errors_json: str,
                         architecture: Optional[str] = None):
