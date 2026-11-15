@@ -49,6 +49,15 @@ _RESULT_METRICS = {
     "e2e_p95_ms": ("E2E p95 (sim)", True),
     "e2e_p99_ms": ("E2E p99 (sim)", True),
     "request_throughput": ("Throughput req/s (sim)", False),
+    "scheduling_delay_mean_ms": ("Scheduling delay mean (sim)", True),
+    "scheduling_delay_p95_ms": ("Scheduling delay p95 (sim)", True),
+    "preemptions": ("Preemptions (sim)", True),
+    "interactivity_mean": ("Interactivity tok/s/user (sim)", False),
+    "step_interval_mean_ms": ("Step interval mean (sim)", True),
+    "output_tok_s_per_gpu": ("Output tok/s per GPU (sim)", False),
+    "total_tokens_per_second_per_gpu": ("Total tok/s per GPU (sim)", False),
+    "slo_attainment": ("SLO attainment (sim)", False),
+    "goodput_rps": ("Goodput req/s (sim)", False),
 }
 
 _DEFAULT_ROUTER_CONFIG = """\
@@ -688,7 +697,7 @@ pools:
 
     def run_replay(self, scenario_path: str, scenario_name: str,
                    trace_header: str, trace_data: str, timeout: int = 1800,
-                   instances: int = None):
+                   instances: int = None, slo_ttft_ms: int = None):
         """Replay a TraceV2 file through the scenario (blis replay).
 
         Stages scenario, router config, catalog overlay and both trace
@@ -763,6 +772,10 @@ pools:
         # instance count: multiple replicas pack onto the scenario's nodes
         if instances and int(instances) > 1:
             args += ["--num-instances", str(int(instances))]
+        # SLO target from the wizard's latency constraint: enables
+        # slo_attainment + goodput_rps in the Result
+        if slo_ttft_ms and int(slo_ttft_ms) > 0:
+            args += ["--slo-ttft", f"standard={int(slo_ttft_ms)}ms"]
 
         try:
             r = self._exec(args, timeout=timeout)

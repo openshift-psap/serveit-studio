@@ -1855,8 +1855,11 @@ class RecipeOptimizer(
                 _rep = int(getattr(test_config, "prefill_pods", None)
                            or getattr(test_config, "replicas", 1)
                            or getattr(test_config, "num_pods", 1) or 1)
+                _slo = None
+                if getattr(self.config, "latency_constraint_enabled", False):
+                    _slo = int(getattr(self.config, "latency_constraint_ms", 0) or 0)
                 sim = runner_scenario.run_replay(scenario, name, th, td,
-                                                 instances=_rep)
+                                                 instances=_rep, slo_ttft_ms=_slo)
             else:
                 self.log("   BLIS: WekaTrace conversion failed — falling back "
                          "to the synthetic workload shape", "warn")
@@ -1891,6 +1894,7 @@ class RecipeOptimizer(
                 _per_req.append({
                     "arrival_s": round((_r0.get("arrival_us") or 0) / 1e6, 3),
                     "ttft_ms": round((_r0.get("ttft_us") or 0) / 1e3, 2),
+                    "sched_ms": round((_r0.get("scheduling_delay_us") or 0) / 1e3, 2),
                     "e2e_ms": round((_r0.get("e2e_us") or 0) / 1e3, 2),
                     "prompt_tokens": int(_r0.get("prompt_tokens") or 0),
                     "output_tokens": int(_r0.get("output_tokens") or 0),
@@ -1902,7 +1906,13 @@ class RecipeOptimizer(
                 "fate": sim.get("requests"),
                 "instances": _inst,
                 "per_request": _per_req[:2000],
+                "breakdowns": sim.get("breakdowns"),
             }
+            # TTFT composition headline: what share of TTFT is queue wait
+            _ttft_sum = sum(p["ttft_ms"] for p in _per_req)
+            _sched_sum = sum(p.get("sched_ms", 0) for p in _per_req)
+            if _ttft_sum > 0:
+                blis_metrics["queue_share_pct"] = round(100.0 * _sched_sum / _ttft_sum, 1)
             # conversion stats explain thin routing cells (requests over
             # the model's context budget are unservable by design)
             try:
@@ -1957,6 +1967,24 @@ class RecipeOptimizer(
             result.tpot_p90 = summary.get("itl_p90_ms")
             result.tpot_p95 = summary.get("itl_p95_ms")
             result.tpot_p99 = summary.get("itl_p99_ms")
+        # scheduling delay (queue wait) — the TTFT composition signal
+        _sd = summary.get("scheduling_delay_mean_ms")
+        if _sd is not None:
+            result.blis_sched_mean = _sd
+            result.blis_sched_p95 = summary.get("scheduling_delay_p95_ms")
+        # preemptions / interactivity / step interval / per-GPU tput / SLO
+        for _k, _attr in (
+            ("preemptions", "blis_preemptions"),
+            ("interactivity_mean", "blis_interactivity"),
+            ("step_interval_mean_ms", "blis_step_interval_ms"),
+            ("output_tok_s_per_gpu", "blis_tok_s_per_gpu"),
+            ("total_tokens_per_second_per_gpu", "blis_total_tok_s_per_gpu"),
+            ("slo_attainment", "blis_slo_attainment"),
+            ("goodput_rps", "blis_goodput_rps"),
+        ):
+            _v = summary.get(_k)
+            if _v is not None:
+                setattr(result, _attr, _v)
         result.blis_metrics = blis_metrics
         self.log(f"✅ BLIS: TTFT p95 {summary.get('ttft_p95_ms', 0):,.0f}ms, "
                  f"ITL mean {summary.get('itl_mean_ms', 0):,.1f}ms, "

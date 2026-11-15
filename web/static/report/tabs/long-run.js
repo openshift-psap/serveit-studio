@@ -234,6 +234,18 @@
 
         var isBlis = rows.some(blisTel);
         if (isBlis) {
+            // TTFT composition headline: queue wait vs prefill compute
+            var t0 = blisTel(rows[rows.length - 1]) || {};
+            if (t0.queue_share_pct != null) {
+                var qsColor = t0.queue_share_pct > 70 ? '#b91c1c' : (t0.queue_share_pct > 40 ? '#92400e' : '#166534');
+                s += '<div style="margin:10px 20px; padding:8px 14px; background:#f8fafc; border:1px solid #cbd5e1; ' +
+                    'border-radius:8px; color:' + qsColor + '; font-size:0.88em;">' +
+                    '&#9201; TTFT composition: <strong>' + t0.queue_share_pct + '% queue wait</strong> (' +
+                    (100 - t0.queue_share_pct) + '% prefill compute). ' +
+                    (t0.queue_share_pct > 70 ? 'The fleet is queue-bound — TTFT improves with more replicas or admission control, not faster GPUs.'
+                     : t0.queue_share_pct > 40 ? 'Mixed: queueing and prefill both contribute.'
+                     : 'Compute-bound — TTFT tracks prefill speed.') + '</div>';
+            }
             // Simulated run: no GPU pods to profile — the simulator's own
             // telemetry replaces the GPU panels
             var ts = (blisTel(rows[rows.length - 1]) || {}).trace_stats;
@@ -308,6 +320,10 @@
                 '<td data-val="' + (r.ttft_p99 || 0) + '">' + (r.ttft_p99 != null ? fmt(r.ttft_p99, 0) + 'ms' : '—') + '</td>' +
                 '<td data-val="' + (r.itl_p90 || 0) + '">' + (r.itl_p90 != null ? fmt(r.itl_p90, 1) + 'ms' : '—') + '</td>' +
                 '<td data-val="' + (tokPerSec(r) || 0) + '">' + (tokPerSec(r) != null ? fmt(tokPerSec(r), 0) : '—') + '</td>' +
+                '<td data-val="' + (((mj(r).additional_metrics || {}).blis_sched_p95) || 0) + '">' + (function(m2){ var v=(m2.additional_metrics||{}).blis_sched_p95; return v!=null?fmt(v,0)+'ms':'—';})(mj(r)) + '</td>' +
+                '<td data-val="' + (((mj(r).additional_metrics || {}).queue_share_pct) || 0) + '">' + (function(m2){ var v=(m2.additional_metrics||{}).queue_share_pct; return v!=null?v+'%':'—';})(mj(r)) + '</td>' +
+                '<td data-val="' + (((mj(r).additional_metrics || {}).blis_preemptions) || 0) + '">' + (function(m2){ var v=(m2.additional_metrics||{}).blis_preemptions; return v!=null?v:'—';})(mj(r)) + '</td>' +
+                '<td data-val="' + (((mj(r).additional_metrics || {}).blis_slo_attainment) || 0) + '">' + (function(m2){ var v=(m2.additional_metrics||{}).blis_slo_attainment; return v!=null?Math.round(v*100)+'%':'—';})(mj(r)) + '</td>' +
                 '<td data-val="' + (rss || 0) + '">' + (rss != null ? (rss / 1024).toFixed(1) + ' GiB' : '—') + '</td>' +
                 '<td data-val="' + (anonTotal(r) || 0) + '">' + (anonTotal(r) != null ? (anonTotal(r) / 1024).toFixed(1) + ' GiB' : '—') + '</td>' +
                 '<td data-val="' + (eppHeap(r) || 0) + '">' + (eppHeap(r) != null ? fmt(eppHeap(r), 1) + ' MB' : '—') + '</td>' +
