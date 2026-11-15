@@ -416,7 +416,12 @@ class GuidellmMixin:
             except Exception:
                 _rows = 0
             if _rows:
-                warmup = min(warmup, max(0, _rows // 3))
+                # guidellm's warmup phase consumes requests from the SAME
+                # dataset file and breaks small json_file benchmarks
+                # entirely (measured: warmup=0 serves all rows, warmup>=1
+                # completes with zero requests). Trace/corpus rows are the
+                # measurement — never warmup fodder.
+                warmup = 0
         if request_profile in ("concurrent",):
             profile_arg = f"kind=concurrent,streams={request_rate},warmup={warmup}"
         elif request_profile == "sweep":
