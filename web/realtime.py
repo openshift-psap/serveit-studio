@@ -2302,6 +2302,107 @@ def handle_recreate_storage(data):
         emit('recreate_storage_done', {'run_id': run_id, 'error': str(e)})
 
 
+def _node_cache_pvcs(namespace):
+    """Per-node model-cache PVC names (model-cache-<suffix>)."""
+    import subprocess as _sp
+    r = _sp.run(['kubectl', 'get', 'pvc', '-n', namespace, '-o', 'name'],
+                capture_output=True, text=True, timeout=15, check=False)
+    if r.returncode != 0:
+        return []
+    return [l.split('/')[-1].strip() for l in (r.stdout or '').splitlines()
+            if l.strip().startswith('persistentvolumeclaim/model-cache-')]
+
+
+def _verify_model_on_node_caches(model, namespace):
+    """Return the node-cache PVCs where the model is MISSING (no weights).
+
+    A one-shot pod per PVC tests for a snapshot dir containing weight
+    files — config.json alone (staged for BLIS overlays) is not enough
+    for a real deployment.
+    """
+    import re as _re
+    import subprocess as _sp
+    import time as _time
+    repo = model.split('/')[-1]
+    cache_dir = f"/cache/huggingface/models--{model.split('/')[0]}--{repo}"
+    test_cmd = (
+        f"ls {cache_dir}/snapshots/*/*.safetensors "
+        f"{cache_dir}/snapshots/*/*.bin 2>/dev/null | head -1 | grep -q . "
+        f"&& echo MODEL_OK || echo MODEL_MISSING"
+    )
+    missing = []
+    for pvc in _node_cache_pvcs(namespace):
+        pod = f'model-verify-{pvc}'
+        _sp.run(['kubectl', 'delete', 'pod', pod, '-n', namespace, '--ignore-not-found'],
+                capture_output=True, text=True, timeout=15, check=False)
+        _sp.run(
+            ['kubectl', 'run', pod, '-n', namespace, '--restart=Never',
+             '--image=quay.io/bbenshab/serveit-studio:workload-v4',
+             '--overrides', json.dumps({
+                 'spec': {'containers': [{
+                     'name': 'verify', 'image': 'quay.io/bbenshab/serveit-studio:workload-v4',
+                     'command': ['bash', '-c', test_cmd],
+                     'volumeMounts': [{'name': 'cache', 'mountPath': '/cache'}],
+                 }], 'volumes': [{'name': 'cache', 'persistentVolumeClaim': {'claimName': pvc}}],
+                  'restartPolicy': 'Never'}})],
+            capture_output=True, text=True, timeout=30, check=False)
+        verdict = 'MODEL_MISSING'
+        for _ in range(24):  # up to ~2 min
+            _time.sleep(5)
+            r = _sp.run(['kubectl', 'logs', pod, '-n', namespace],
+                        capture_output=True, text=True, timeout=10, check=False)
+            if r.returncode == 0 and r.stdout.strip():
+                verdict = r.stdout.strip().splitlines()[-1]
+                break
+        _sp.run(['kubectl', 'delete', 'pod', pod, '-n', namespace, '--ignore-not-found'],
+                capture_output=True, text=True, timeout=15, check=False)
+        log_to_ui(f'   {"✓" if verdict == "MODEL_OK" else "✗"} {pvc}: {verdict}', 'info')
+        if verdict != 'MODEL_OK':
+            missing.append(pvc)
+    return missing
+
+
+def _download_model_to_pvcs(model, pvcs, namespace, hf_token):
+    """Download the model into the given per-node cache PVCs (jobs)."""
+    import subprocess as _sp
+    import time as _time
+    from core import TemplateManager
+    tm = TemplateManager()
+    jobs = []
+    for pvc in pvcs:
+        job_name = f'model-download-fix-{pvc}'
+        job_yaml = tm.render_template(
+            'prereq/model-download-job.yaml.j2',
+            job_name=job_name, namespace=namespace, test_id='model-fix',
+            model_name=model, pvc_name=pvc, hf_token=hf_token,
+            tolerate_all_taints=True)
+        _sp.run(['kubectl', 'delete', 'job', job_name, '-n', namespace, '--ignore-not-found'],
+                capture_output=True, text=True, timeout=15, check=False)
+        r = _sp.run(['kubectl', 'apply', '-f', '-', '-n', namespace],
+                    input=job_yaml, capture_output=True, text=True, timeout=30, check=False)
+        if r.returncode == 0:
+            jobs.append(job_name)
+        else:
+            log_to_ui(f'   ❌ download job failed to start on {pvc}: {r.stderr[:150]}', 'error')
+    for job_name in jobs:
+        for _ in range(720):  # up to ~1h
+            gsleep(5)
+            r = _sp.run(['kubectl', 'get', 'job', job_name, '-n', namespace,
+                         '-o', 'jsonpath={.status.succeeded},{.status.failed}'],
+                        capture_output=True, text=True, timeout=10, check=False)
+            parts = (r.stdout or '').strip().split(',')
+            if parts and parts[0] == '1':
+                log_to_ui(f'   ✅ {job_name} completed', 'success')
+                break
+            if len(parts) > 1 and parts[1] not in ('', '0', 'None'):
+                log_to_ui(f'   ❌ {job_name} failed', 'error')
+                return False
+        else:
+            log_to_ui(f'   ❌ {job_name} timed out', 'error')
+            return False
+    return True
+
+
 @socketio.on('setup_storage')
 def handle_setup_storage(data):
     """Create PVC and start model download job."""
@@ -2443,8 +2544,25 @@ def handle_setup_storage(data):
                 'existing': True
             })
 
-            # Skip model download and go straight to optimization
-            log_to_ui('✅ Model already available in PVC', 'success')
+            # VERIFY the model actually exists on the per-node model
+            # caches before skipping the download. "Existing PVC" used to
+            # assume presence — runs failed at pod startup with
+            # LocalEntryNotFoundError when only config.json was staged
+            # (BLIS-era models never touched the node caches).
+            _missing = _verify_model_on_node_caches(model, namespace)
+            if _missing:
+                log_to_ui(f'📦 Model not found on node caches ({", ".join(_missing)}) — downloading...', 'info')
+                _ok = _download_model_to_pvcs(model, _missing, namespace, hf_token)
+                if not _ok:
+                    emit('storage_setup_result', {
+                        'success': False,
+                        'error': f'Model {model} download to node caches failed'})
+                    with state_lock:
+                        state['optimization_running'] = False
+                        save_state()
+                    socketio.emit('status_update', {'running': False})
+                    return
+            log_to_ui('✅ Model available on node caches', 'success')
             log_to_ui('', 'info')
             log_to_ui('🚀 Starting optimization...', 'info')
 
