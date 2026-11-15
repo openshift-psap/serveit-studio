@@ -400,9 +400,19 @@ class GuidellmMixin:
         # measured requests (14 servable WekaTrace rows vs warmup 60).
         # Clamp warmup to leave the bulk of the data for measurement.
         if workload_mode == "dataset" and dataset_path:
+            # the dataset lives on the WORKLOAD POD (node-local storage) —
+            # count rows there; a server-side read of the pod path fails
+            # silently and skips the clamp
+            _rows = 0
             try:
-                with open(dataset_path) as _f:
-                    _rows = sum(1 for _line in _f if _line.strip())
+                _wp = getattr(self, "_guidellm_pod_name", None)
+                if _wp:
+                    _r = self.deployment_manager.kubectl.run(
+                        ["exec", _wp, "-n", self.namespace, "--", "bash", "-c",
+                         f"wc -l < '{dataset_path}'"],
+                        check=False, timeout=30)
+                    if _r.returncode == 0 and _r.stdout.strip().isdigit():
+                        _rows = int(_r.stdout.strip())
             except Exception:
                 _rows = 0
             if _rows:
