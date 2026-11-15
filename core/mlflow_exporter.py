@@ -23,6 +23,14 @@ def _register_workspace_header(workspace):
         _serveit_workspace = True
         def __init__(self):
             self._workspace = workspace
+        def in_context(self):
+            return True
+        def request_headers(self):
+            # without these two methods the registry's in_context() call
+            # returns None (falsy) and the provider is SILENTLY SKIPPED —
+            # the workspace header never reached SDK requests and every
+            # run-create failed with RESOURCE_DOES_NOT_EXIST
+            return {'X-Mlflow-Workspace': self._workspace}
     _request_header_provider_registry.register(_Provider)
 
 
