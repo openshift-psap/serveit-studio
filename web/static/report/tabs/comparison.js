@@ -19,6 +19,12 @@
         var rec = data.recommendation;
         if (!rec) return '';
         var cr = coreResults(data);
+        // The comparison needs disaggregated results to compare against
+        // the aggregated baseline — single-architecture runs (aggregated
+        // soaks, BLIS simulations) have nothing side-by-side to show
+        var hasDisagg = cr.some(function(r) { return r.architecture === 'PD' || r.architecture === 'EP'; });
+        var hasAgg = cr.some(function(r) { return r.architecture === 'AGGREGATED'; });
+        if (!hasDisagg || !hasAgg) return '';
         var s = '';
 
         s += '<div class="chart-card" style="border-left:6px solid #0284c7;">' +
