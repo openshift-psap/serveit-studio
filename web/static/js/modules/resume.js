@@ -12,6 +12,7 @@ function loadResumeRuns() {
                 return;
             }
 
+            let html = '';
             // Bulk-selection action bar (hidden until something is checked)
             html += '<div id="bulk-run-bar" style="display:none;align-items:center;gap:12px;padding:10px 14px;margin-bottom:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">';
             html += '<span id="bulk-run-count" style="font-weight:700;color:#991b1b;font-size:0.92em;">0 selected</span>';
