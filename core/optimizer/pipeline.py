@@ -1913,6 +1913,13 @@ class RecipeOptimizer(
             _sched_sum = sum(p.get("sched_ms", 0) for p in _per_req)
             if _ttft_sum > 0:
                 blis_metrics["queue_share_pct"] = round(100.0 * _sched_sum / _ttft_sum, 1)
+            # scheduling-delay stats from the per-request rows (the replay
+            # metrics block doesn't carry them despite the registry entry)
+            _scheds = sorted(p.get("sched_ms", 0) for p in _per_req)
+            if _scheds:
+                blis_metrics["blis_sched_mean"] = round(sum(_scheds) / len(_scheds), 1)
+                blis_metrics["blis_sched_p95"] = round(
+                    _scheds[min(len(_scheds) - 1, int(round(0.95 * (len(_scheds) - 1))))], 1)
             # metric-block extras — persisted here (setattr on the result
             # is dropped by the DB saver, additional_metrics is not)
             for _k, _alias in (
