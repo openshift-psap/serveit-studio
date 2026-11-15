@@ -586,6 +586,7 @@ class DatabaseManager:
             # Infrastructure metrics
             'gpu_utilization': gpu_utilization,
             'kv_cache_usage': kv_cache_usage,
+            'cache_hit_pct': getattr(test_result, 'cache_hit_pct', None),
             'per_gpu_throughput_tokens_sec': per_gpu_throughput,
             'error_message': test_result.error_message,
             'analyzed_metrics': analyzed_data,
