@@ -1913,6 +1913,22 @@ class RecipeOptimizer(
             _sched_sum = sum(p.get("sched_ms", 0) for p in _per_req)
             if _ttft_sum > 0:
                 blis_metrics["queue_share_pct"] = round(100.0 * _sched_sum / _ttft_sum, 1)
+            # metric-block extras — persisted here (setattr on the result
+            # is dropped by the DB saver, additional_metrics is not)
+            for _k, _alias in (
+                ("scheduling_delay_mean_ms", "blis_sched_mean"),
+                ("scheduling_delay_p95_ms", "blis_sched_p95"),
+                ("preemptions", "blis_preemptions"),
+                ("interactivity_mean", "blis_interactivity"),
+                ("step_interval_mean_ms", "blis_step_interval_ms"),
+                ("output_tok_s_per_gpu", "blis_tok_s_per_gpu"),
+                ("total_tokens_per_second_per_gpu", "blis_total_tok_s_per_gpu"),
+                ("slo_attainment", "blis_slo_attainment"),
+                ("goodput_rps", "blis_goodput_rps"),
+            ):
+                _v = summary.get(_k)
+                if _v is not None:
+                    blis_metrics[_alias] = _v
             # conversion stats explain thin routing cells (requests over
             # the model's context budget are unservable by design)
             try:
