@@ -1936,6 +1936,33 @@ class RecipeOptimizer(
                 _v = summary.get(_k)
                 if _v is not None:
                     blis_metrics[_alias] = _v
+            # engine report (reports.engine): cache hit rate, gateway
+            # queue delay, in-flight depth, KV health, token totals
+            _eng = ((sim.get("reports") or {}).get("engine") or {})
+            _ec = _eng.get("cluster") or {}
+            if _ec:
+                for _k in ("cache_hit_rate", "gateway_queue_delay_mean_ms",
+                           "gateway_queue_delay_p90_ms", "in_flight_requests_mean",
+                           "in_flight_requests_max", "kv_allocation_failures",
+                           "kv_capacity_tokens_per_replica", "kv_thrashing_rate",
+                           "preemption_rate", "total_input_tokens",
+                           "total_output_tokens", "measured_failed_requests"):
+                    if _ec.get(_k) is not None:
+                        blis_metrics["blis_" + _k] = _ec[_k]
+            # per-instance engine report: admission/drop/latency per instance
+            _inst_rep = _eng.get("instances") or {}
+            if _inst_rep:
+                blis_metrics["instance_report"] = {
+                    k: {kk: v[kk] for kk in (
+                        "completed_requests", "dropped_unservable",
+                        "injected_requests", "e2e_mean_ms", "itl_mean_ms",
+                        "preemption_count") if kk in v}
+                    for k, v in _inst_rep.items()
+                }
+            # saturation verdict from the composite detector
+            _sat = (sim.get("saturation") or {}).get("final") or {}
+            if _sat:
+                blis_metrics["saturation"] = _sat
             # conversion stats explain thin routing cells (requests over
             # the model's context budget are unservable by design)
             try:

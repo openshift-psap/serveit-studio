@@ -234,6 +234,28 @@
 
         var isBlis = rows.some(blisTel);
         if (isBlis) {
+            // Saturation verdict from the composite detector
+            var tS = blisTel(rows[rows.length - 1]) || {};
+            var satV = (tS.saturation || {}).composite;
+            if (satV) {
+                var satColor = satV === 'OVERLOADED' ? '#b91c1c' :
+                               (satV === 'BACKLOGGED' || satV === 'SATURATED') ? '#b45309' : '#166534';
+                s += '<div style="margin:10px 20px; padding:8px 14px; background:#fef2f2; border:1px solid #fecaca; ' +
+                    'border-radius:8px; color:' + satColor + '; font-size:0.88em; font-weight:600;">' +
+                    '\u26A0 Saturation verdict (composite detector): ' + satV +
+                    (satV === 'OVERLOADED'
+                        ? ' — the fleet cannot sustain this offered load; requests queue faster than they complete.'
+                        : ' — load is within the fleet\'s sustainable range.') + '</div>';
+            }
+            var engBits = [];
+            if (tS.blis_cache_hit_rate != null) engBits.push('prefix cache hit <strong>' + (tS.blis_cache_hit_rate * 100).toFixed(1) + '%</strong>');
+            if (tS.blis_in_flight_requests_max != null) engBits.push('in-flight peak <strong>' + Math.round(tS.blis_in_flight_requests_max) + '</strong> (mean ' + Math.round(tS.blis_in_flight_requests_mean || 0) + ')');
+            if (tS.blis_kv_capacity_tokens_per_replica != null) engBits.push('KV capacity <strong>' + (tS.blis_kv_capacity_tokens_per_replica / 1000).toFixed(0) + 'k tok/replica</strong>');
+            if (tS.blis_gateway_queue_delay_p90_ms != null && tS.blis_gateway_queue_delay_p90_ms > 0) engBits.push('gateway queue p90 ' + tS.blis_gateway_queue_delay_p90_ms.toFixed(0) + 'ms');
+            if (engBits.length) {
+                s += '<div style="margin:0 20px 10px; padding:8px 14px; background:#f0fdf4; border:1px solid #bbf7d0; ' +
+                    'border-radius:8px; color:#166534; font-size:0.85em;">Engine: ' + engBits.join(' &middot; ') + '</div>';
+            }
             // TTFT composition headline: queue wait vs prefill compute
             var t0 = blisTel(rows[rows.length - 1]) || {};
             if (t0.queue_share_pct != null) {
@@ -296,6 +318,7 @@
             (function() {
                 var cols = [['Cycle', 'num'], ['ISL', 'num'], ['OSL', 'num'], ['Users', 'num'],
                             ['Hit %', 'num'], ['TTFT p90', 'num'], ['TTFT p95', 'num'], ['TTFT p99', 'num'], ['ITL p90', 'num'], ['Tokens/s', 'num'],
+                            ['Sched p95', 'num'], ['Queue %', 'num'], ['Preempt', 'num'], ['SLO %', 'num'], ['Cache %', 'num'], ['InFlight', 'num'],
                             ['Pod RSS', 'num'], ['Anon', 'num'], ['EPP Heap', 'num'], ['Pod CPU', 'num'],
                             ['Pods', 'num'], ['Status', 'str']];
                 var h = '<tr>';
@@ -324,6 +347,8 @@
                 '<td data-val="' + (((mj(r).additional_metrics || {}).queue_share_pct) || 0) + '">' + (function(m2){ var v=(m2.additional_metrics||{}).queue_share_pct; return v!=null?v+'%':'—';})(mj(r)) + '</td>' +
                 '<td data-val="' + (((mj(r).additional_metrics || {}).blis_preemptions) || 0) + '">' + (function(m2){ var v=(m2.additional_metrics||{}).blis_preemptions; return v!=null?v:'—';})(mj(r)) + '</td>' +
                 '<td data-val="' + (((mj(r).additional_metrics || {}).blis_slo_attainment) || 0) + '">' + (function(m2){ var v=(m2.additional_metrics||{}).blis_slo_attainment; return v!=null?Math.round(v*100)+'%':'—';})(mj(r)) + '</td>' +
+                '<td data-val="' + (((mj(r).additional_metrics || {}).blis_cache_hit_rate) || 0) + '">' + (function(m2){ var v=(m2.additional_metrics||{}).blis_cache_hit_rate; return v!=null?(v*100).toFixed(1)+'%':'—';})(mj(r)) + '</td>' +
+                '<td data-val="' + (((mj(r).additional_metrics || {}).blis_in_flight_requests_max) || 0) + '">' + (function(m2){ var v=(m2.additional_metrics||{}).blis_in_flight_requests_max; return v!=null?Math.round(v):'—';})(mj(r)) + '</td>' +
                 '<td data-val="' + (rss || 0) + '">' + (rss != null ? (rss / 1024).toFixed(1) + ' GiB' : '—') + '</td>' +
                 '<td data-val="' + (anonTotal(r) || 0) + '">' + (anonTotal(r) != null ? (anonTotal(r) / 1024).toFixed(1) + ' GiB' : '—') + '</td>' +
                 '<td data-val="' + (eppHeap(r) || 0) + '">' + (eppHeap(r) != null ? fmt(eppHeap(r), 1) + ' MB' : '—') + '</td>' +
@@ -456,6 +481,9 @@
                             'No work-distribution telemetry recorded for this run.</div>';
                     }
 
+                    // cycles carrying per-request telemetry (shared by the
+                    // occupancy and scatter panels — defined before first use)
+                    var withRows = rs.filter(function(r) { var t = blisTel(r); return t && t.per_request && t.per_request.length; });
                     // 2b. Instance occupancy: request residence per instance
                     //     over time buckets (arrival -> arrival + e2e)
                     var elO = document.getElementById(id + '-blis-occupancy');
@@ -498,7 +526,6 @@
                     }
 
                     // 3. Per-request TTFT scatter from the latest cycle with rows
-                    var withRows = rs.filter(function(r) { var t = blisTel(r); return t && t.per_request && t.per_request.length; });
                     var elS = document.getElementById(id + '-blis-scatter');
                     if (elS && withRows.length) {
                         var last = withRows[withRows.length - 1];

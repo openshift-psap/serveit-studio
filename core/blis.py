@@ -776,6 +776,10 @@ pools:
         # slo_attainment + goodput_rps in the Result
         if slo_ttft_ms and int(slo_ttft_ms) > 0:
             args += ["--slo-ttft", f"standard={int(slo_ttft_ms)}ms"]
+        # Saturation detection: composite detector + verdict trace
+        args += ["--detectors", "composite"]
+        if self.remote:
+            args += ["--saturation-report", f"{pod_scenarios_dir}/saturation.json"]
 
         try:
             r = self._exec(args, timeout=timeout)
@@ -786,10 +790,22 @@ pools:
             self._log(f"BLIS: replay failed: {(r.stderr or r.stdout)[:400]}", "warn")
             return None
         try:
-            return json.loads(r.stdout)
+            result = json.loads(r.stdout)
         except (OSError, json.JSONDecodeError) as e:
             self._log(f"BLIS: replay result parse failed: {e}", "warn")
             return None
+        # merge the saturation verdict (written to a file, not the Result)
+        if self.remote:
+            _sat = self.kubectl.run(
+                ["exec", self.pod_name, "-n", self.namespace, "--",
+                 "cat", f"{pod_scenarios_dir}/saturation.json"],
+                check=False, timeout=60)
+            if _sat.returncode == 0 and _sat.stdout.strip():
+                try:
+                    result["saturation"] = json.loads(_sat.stdout)
+                except json.JSONDecodeError:
+                    pass
+        return result
 
     # -- results ----------------------------------------------------------
 
