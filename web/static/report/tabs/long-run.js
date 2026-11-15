@@ -284,9 +284,9 @@
                 '<strong>How it\'s measured:</strong> <code>instance\'s (prompt + output) tokens ÷ fleet tokens</code> per cycle — how the workload\'s actual processing is split across simulated instances, the direct analog of the pod GPU-work share on real runs.' +
                 '</div>';
             s += '<div id="' + id + '-pods-share" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
-            s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#2dd4bf); font-size:0.9em; margin:14px 20px 0;">Instance Occupancy — % of window each instance had requests in flight (BLIS)</div>';
+            s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#2dd4bf); font-size:0.9em; margin:14px 20px 0;">Instance Occupancy — request residence timeline (BLIS)</div>';
             s += '<div style="margin:0 20px 6px; color:#475569; font-size:0.82em; line-height:1.5;">' +
-                '<strong>How it\'s measured:</strong> request residence (arrival &#8594; completion) per instance, bucketed over the replay window — the simulated analog of the GPU-busy heatmap on real runs. Light = idle, dark = working.' +
+                '<strong>How it\'s measured:</strong> each bar is one request\'s residence (arrival &#8594; completion) on its instance\'s row — the simulated analog of the GPU-busy view on real runs. Burst arrivals show as stacked bars at the window start.' +
                 '</div>';
             s += '<div id="' + id + '-blis-occupancy" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
             s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#a78bfa); font-size:0.9em; margin:14px 20px 0;">Per-Request Latency — latest cycle (BLIS replay)</div>';
@@ -484,42 +484,49 @@
                     // cycles carrying per-request telemetry (shared by the
                     // occupancy and scatter panels — defined before first use)
                     var withRows = rs.filter(function(r) { var t = blisTel(r); return t && t.per_request && t.per_request.length; });
-                    // 2b. Instance occupancy: request residence per instance
-                    //     over time buckets (arrival -> arrival + e2e)
+                    // 2b. Instance occupancy: per-request residence Gantt
+                    //     (arrival -> completion on the instance's row).
+                    //     Heatmap bucketing degenerated on sparse replays
+                    //     (14 survivors all arrive in the first seconds —
+                    //     one lit column); bars read at any density.
                     var elO = document.getElementById(id + '-blis-occupancy');
                     if (elO && withRows.length) {
                         var occSrc = withRows[withRows.length - 1];
                         var tOcc = blisTel(occSrc);
                         var reqs = tOcc.per_request;
-                        var tMax = 0;
-                        reqs.forEach(function(p) { tMax = Math.max(tMax, p.arrival_s + p.e2e_ms / 1000.0); });
-                        var NB = 40, bw = Math.max(tMax, 0.001) / NB;
-                        var zO = insts.map(function(i) {
-                            return Array.apply(null, Array(NB)).map(function() { return 0; });
+                        var palette = ['#2563eb', '#dc2626', '#059669', '#d97706', '#7c3aed', '#0891b2', '#db2777', '#65a30d'];
+                        var gTraces = insts.map(function(i, yi) {
+                            var rs = reqs.filter(function(p) { return p.instance === i; });
+                            return {
+                                x: [].concat.apply([], rs.map(function(p) { return [p.arrival_s, p.arrival_s + p.e2e_ms / 1000.0, null]; })),
+                                y: [].concat.apply([], rs.map(function() { return [i, i, null]; })),
+                                mode: 'lines', type: 'scatter', name: i,
+                                line: { color: palette[yi % palette.length], width: 5 },
+                                hoverinfo: 'skip',
+                                showlegend: false
+                            };
                         });
-                        reqs.forEach(function(p) {
-                            var yi = insts.indexOf(p.instance);
-                            if (yi < 0) return;
-                            var s0 = p.arrival_s, s1 = p.arrival_s + p.e2e_ms / 1000.0;
-                            for (var b = 0; b < NB; b++) {
-                                var b0 = b * bw, b1 = (b + 1) * bw;
-                                var ov = Math.min(s1, b1) - Math.max(s0, b0);
-                                if (ov > 0) zO[yi][b] += ov; // seconds in flight
-                            }
+                        // hover markers per request
+                        gTraces.push({
+                            x: reqs.map(function(p) { return p.arrival_s; }),
+                            y: reqs.map(function(p) { return p.instance; }),
+                            mode: 'markers', type: 'scatter', name: 'requests',
+                            marker: { size: 8, color: '#0f172a', symbol: 'circle' },
+                            text: reqs.map(function(p) {
+                                return p.session + ' &middot; TTFT ' + p.ttft_ms.toFixed(0) + 'ms &middot; ' +
+                                    (p.e2e_ms / 1000).toFixed(2) + 's residence';
+                            }),
+                            hovertemplate: '%{text}<extra>%{y}</extra>',
+                            showlegend: false
                         });
-                        var zPct = zO.map(function(row) {
-                            return row.map(function(v) { return Math.round(1000 * v / bw) / 10; });
-                        });
-                        var xsOcc = [];
-                        for (var b = 0; b < NB; b++) xsOcc.push((b * bw).toFixed(0) + 's');
-                        Plotly.newPlot(elO, [{
-                            x: xsOcc, y: insts, z: zPct, type: 'heatmap',
-                            colorscale: 'Tealgrn',
-                            colorbar: { title: { text: '% in flight', side: 'right' }, thickness: 12 },
-                            zmin: 0, zmax: 100,
-                            hovertemplate: '%{y} @ %{x}<br>%{z:.1f}% of bucket in flight<extra></extra>',
-                            xgap: 1, ygap: 1
-                        }], JSON.parse(JSON.stringify(heatLayout)), heatOpts);
+                        var tMaxG = 0;
+                        reqs.forEach(function(p) { tMaxG = Math.max(tMaxG, p.arrival_s + p.e2e_ms / 1000.0); });
+                        Plotly.newPlot(elO, gTraces, {
+                            margin: { l: 70, r: 15, t: 8, b: 40 },
+                            xaxis: { title: 'time (s)', gridcolor: '#e2e8f0' },
+                            yaxis: { automargin: true, tickfont: H.MONO_9, categoryorder: 'category ascending' },
+                            plot_bgcolor: '#fff', height: Math.max(180, insts.length * 24 + 70)
+                        }, { displayModeBar: false, responsive: true });
                     } else if (elO) {
                         elO.innerHTML = '<div style="padding:18px; color:#64748b; font-size:0.88em; text-align:center;">' +
                             'No per-request telemetry recorded for this run.</div>';
