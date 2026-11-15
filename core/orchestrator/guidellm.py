@@ -395,6 +395,18 @@ class GuidellmMixin:
         # Profile argument (rate type + rate)
         request_format = "/v1/chat/completions" if turns > 1 else "/v1/completions"
         warmup = min(60, max(0, config.test_duration - 30)) if hasattr(config, "test_duration") else 60
+        # Dataset mode: warmup consumes requests from the SAME file — a
+        # dataset smaller than the warmup count completes with zero
+        # measured requests (14 servable WekaTrace rows vs warmup 60).
+        # Clamp warmup to leave the bulk of the data for measurement.
+        if workload_mode == "dataset" and dataset_path:
+            try:
+                with open(dataset_path) as _f:
+                    _rows = sum(1 for _line in _f if _line.strip())
+            except Exception:
+                _rows = 0
+            if _rows:
+                warmup = min(warmup, max(0, _rows // 3))
         if request_profile in ("concurrent",):
             profile_arg = f"kind=concurrent,streams={request_rate},warmup={warmup}"
         elif request_profile == "sweep":
