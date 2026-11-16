@@ -440,6 +440,23 @@ pools:
                          "-n", self.namespace], check=False, timeout=120)
 
         scenarios_dir = pod_scenarios_dir or os.path.dirname(scenario_path)
+        # parallel-workload shapes run via a BLIS workload spec (one
+        # closed-loop client per shape) instead of single-shape flags
+        workload_spec_flag = None
+        if getattr(cfg, "parallel_workloads", None):
+            spec_path = BlisRunner.build_workload_spec(
+                cfg.parallel_workloads,
+                duration_s=duration,
+                out_dir=os.path.dirname(scenario_path))
+            if spec_path:
+                if self.remote:
+                    self.kubectl.run(
+                        ["cp", spec_path,
+                         f"{self.pod_name}:{pod_scenarios_dir}/serveit-workload-spec.yaml",
+                         "-n", self.namespace], check=False, timeout=120)
+                    workload_spec_flag = f"{pod_scenarios_dir}/serveit-workload-spec.yaml"
+                else:
+                    workload_spec_flag = spec_path
         overlay_flag = None
         if self.OVERLAY_DIR and os.path.isdir(self.OVERLAY_DIR):
             if self.remote:
@@ -454,25 +471,32 @@ pools:
             "run",
             "--scenarios", scenarios_dir,
             "--scenario", scenario_name,
-            "--prompt-tokens", str(isl),
-            "--prompt-tokens-min", str(max(2, isl - 2 * isl_stdev)),
-            "--prompt-tokens-max", str(isl + 2 * isl_stdev),
-            "--prompt-tokens-stdev", str(isl_stdev),
-            "--output-tokens", str(osl),
-            "--output-tokens-min", str(max(2, osl - 2 * osl_stdev)),
-            "--output-tokens-max", str(osl + 2 * osl_stdev),
-            "--output-tokens-stdev", str(osl_stdev),
-            "--num-requests", str(num_requests),
             "--seed", str(seed),
         ]
+        if workload_spec_flag:
+            args += ["--workload-spec", workload_spec_flag,
+                     "--horizon", str((duration + 60) * 1_000_000)]
+        else:
+            args += [
+                "--prompt-tokens", str(isl),
+                "--prompt-tokens-min", str(max(2, isl - 2 * isl_stdev)),
+                "--prompt-tokens-max", str(isl + 2 * isl_stdev),
+                "--prompt-tokens-stdev", str(isl_stdev),
+                "--output-tokens", str(osl),
+                "--output-tokens-min", str(max(2, osl - 2 * osl_stdev)),
+                "--output-tokens-max", str(osl + 2 * osl_stdev),
+                "--output-tokens-stdev", str(osl_stdev),
+                "--num-requests", str(num_requests),
+            ]
         if overlay_flag:
             args += ["--catalog-overlay", overlay_flag]
         if not self.remote:
             args += ["--output", out_file]
-        if rate_type == "concurrent":
-            args += ["--concurrency", str(int(qps))]
-        else:
-            args += ["--rate", str(qps)]
+        if not workload_spec_flag:
+            if rate_type == "concurrent":
+                args += ["--concurrency", str(int(qps))]
+            else:
+                args += ["--rate", str(qps)]
         if prefix_tokens > 0:
             args += ["--prefix-tokens", str(prefix_tokens)]
         # instance count: multiple replicas pack onto the scenario's nodes
@@ -555,6 +579,55 @@ pools:
         except Exception as e:
             self._log(f"   BLIS: traces fetch failed: {e}", "warn")
         return None
+
+    @staticmethod
+    def build_workload_spec(shapes, duration_s: int = 300, out_dir: str = "/tmp"):
+        """Convert ServeIt parallel-workload shapes to a BLIS workload spec.
+
+        Each shape becomes a closed-loop ClientSpec with its own
+        concurrency, ISL/OSL distribution and shared prefix group — the
+        analog of guidellm's parallel per-shape processes.
+        Returns the spec file path or None.
+        """
+        if not shapes:
+            return None
+        import yaml as _yaml
+        clients = []
+        total_conc = 0
+        for sh in shapes:
+            isl = int(sh.get("isl") or 4500)
+            isl_min = sh.get("isl_min")
+            isl_max = sh.get("isl_max")
+            osl = int(sh.get("osl") or 200)
+            conc = int(sh.get("concurrency") or 1)
+            total_conc += conc
+            # ISL range -> gaussian clamped to the range (BLIS has no
+            # uniform; mean = midpoint, std = range/4 covers ~95% inside)
+            if isl_min is not None and isl_max is not None:
+                lo, hi = int(isl_min), int(isl_max)
+                params = {"mean": (lo + hi) // 2, "std_dev": max(1, (hi - lo) // 4),
+                          "min": lo, "max": hi}
+            else:
+                params = {"mean": isl, "std_dev": 0, "min": max(2, isl), "max": isl}
+            clients.append({
+                "id": sh.get("name") or f"shape-{len(clients)}",
+                "concurrency": conc,
+                "closed_loop": True,
+                "prefix_group": sh.get("name") or f"shape-{len(clients)}",
+                "prefix_length": int(sh.get("prefix_tokens") or 0),
+                "input_distribution": {"type": "gaussian", "params": params},
+                "output_distribution": {
+                    "type": "constant", "params": {"value": osl}},
+            })
+        # enough requests to fill the window at these concurrencies;
+        # horizon caps the simulated duration
+        num_requests = max(1000, total_conc * duration_s * 2)
+        spec = {"version": "2", "num_requests": num_requests, "clients": clients}
+        os.makedirs(out_dir, exist_ok=True)
+        spec_path = os.path.join(out_dir, "serveit-workload-spec.yaml")
+        with open(spec_path, "w") as f:
+            _yaml.safe_dump(spec, f, sort_keys=False)
+        return spec_path
 
     # -- trace replay ------------------------------------------------------
 
