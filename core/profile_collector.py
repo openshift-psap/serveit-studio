@@ -429,6 +429,17 @@ class ProfileCollector:
                         started = True
                         started_port = port
                         break
+                if not started:
+                    # One retry after a short backoff: under load the 15s
+                    # POST timeout can miss healthy pods (observed 5/8
+                    # starts on a fully-running fleet)
+                    time.sleep(10)
+                    for port in [8000, 8200]:
+                        url = f"http://{pod_ip}:{port}/start_profile"
+                        if self._post_via_workload_pod(url, 30):
+                            started = True
+                            started_port = port
+                            break
                 if started:
                     # Marker for wait_for_torch_export: the trace file this
                     # profiler eventually writes will be newer than this

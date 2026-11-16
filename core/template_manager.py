@@ -416,9 +416,9 @@ class TemplateManager:
                 'profiler': 'torch',
                 'torch_profiler_dir': '/tmp/torch_traces',
                 'torch_profiler_activities': ['CPU', 'CUDA'],
-                'wait_iterations': 200,
+                'wait_iterations': 20,
                 'warmup_iterations': 1,
-                'active_iterations': 500,
+                'active_iterations': 100,
                 'ignore_frontend': True,
             })
         else:
