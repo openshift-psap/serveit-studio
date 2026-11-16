@@ -388,15 +388,27 @@ def export_to_mlflow(
                     if metrics:
                         mlflow.log_metrics(metrics)
 
-                    # Log artifacts from disk — the per-test results dir
-                    # (/mnt/storage/results/<test_id>) holds guidellm output,
-                    # torch traces and pprof summaries
-                    for base in (Path(artifact_dir), Path('/mnt/storage/results')):
-                        test_artifact_dir = base / test_id
-                        if test_artifact_dir.exists():
+                    # Log artifacts from disk. Runs archive the previous
+                    # run's artifacts before cycle 1 (run-archive-*/), so a
+                    # test's files may live in several places — take the
+                    # NEWEST existing copy.
+                    candidates = [
+                        Path(artifact_dir) / test_id,
+                        Path('/mnt/storage/results') / test_id,
+                    ]
+                    try:
+                        arch = sorted(
+                            (Path('/mnt/storage/test-artifacts').glob(f'run-archive-*/{test_id}')),
+                            key=lambda p: p.stat().st_mtime, reverse=True)
+                        candidates.append(arch[0] if arch else None)
+                    except OSError:
+                        pass
+                    for test_artifact_dir in candidates:
+                        if test_artifact_dir and test_artifact_dir.is_dir():
                             for f in test_artifact_dir.iterdir():
                                 if f.is_file() and f.stat().st_size < 50 * 1024 * 1024:
                                     mlflow.log_artifact(str(f), artifact_path='test-artifacts')
+                            break  # newest copy wins
 
                     exported.append(test_id)
                     logger.info(f"Exported {test_id} to MLflow run {child_run.info.run_id}")
