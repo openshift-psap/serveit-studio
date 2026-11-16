@@ -621,7 +621,9 @@ pools:
             })
         # enough requests to fill the window at these concurrencies;
         # horizon caps the simulated duration
-        num_requests = max(1000, total_conc * duration_s * 2)
+        # generous request budget — the horizon is the binding
+        # constraint, matching the real run's duration semantics
+        num_requests = max(1000, total_conc * duration_s * 5)
         spec = {"version": "2", "num_requests": num_requests, "clients": clients}
         os.makedirs(out_dir, exist_ok=True)
         spec_path = os.path.join(out_dir, "serveit-workload-spec.yaml")
