@@ -1840,6 +1840,7 @@ class RecipeOptimizer(
             max_input = (mml - osl_budget - 512) if mml > (osl_budget + 512) else None
             # cache the conversion — cycles share the same trace files
             trace_tag = f"wekatrace-{max_traces}-{duration}-{max_input or 0}"
+            self._blis_trace_tag = trace_tag
             th = os.path.join(run_dir, f"{trace_tag}.trace-header.yaml")
             td = os.path.join(run_dir, f"{trace_tag}.trace-data.csv")
             if traces and not (os.path.isfile(th) and os.path.isfile(td)):
@@ -1984,13 +1985,17 @@ class RecipeOptimizer(
             if _pm:
                 blis_metrics["prometheus_metrics"] = _pm
             # conversion stats explain thin routing cells (requests over
-            # the model's context budget are unservable by design)
+            # the model's context budget are unservable by design) —
+            # sidecar only exists in wekatrace mode (trace_tag is local
+            # to that branch; referencing it here crashed every non-
+            # wekatrace cycle with a NameError)
             try:
-                _stats_path = os.path.join(
-                    run_dir, f"{trace_tag}.stats.json")
-                if os.path.isfile(_stats_path):
-                    with open(_stats_path) as _sf:
-                        blis_metrics["trace_stats"] = json.load(_sf)
+                _tag = locals().get("trace_tag") or getattr(self, "_blis_trace_tag", None)
+                if _tag:
+                    _stats_path = os.path.join(run_dir, f"{_tag}.stats.json")
+                    if os.path.isfile(_stats_path):
+                        with open(_stats_path) as _sf:
+                            blis_metrics["trace_stats"] = json.load(_sf)
             except (OSError, ValueError):
                 pass
 

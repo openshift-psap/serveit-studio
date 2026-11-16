@@ -1341,15 +1341,21 @@ class LongRunStrategy(OptimizationStrategy):
                     )
             except Exception as e:
                 self.opt.log(f"  ⚠️ Cycle {cycle} raised: {e} — recording failure and continuing", 'warning')
-                # Minimal duck-typed result for the DB save path
-                class _R:
-                    pass
-                result = _R()
-                result.guidellm_success = False
-                result.deployment_success = False
-                result.deployment_ready = False
-                result.error_message = f"cycle exception: {e}"
-                result.test_id = cycle_id
+                # Failure result for the DB save path — a real TestResult
+                # with defaults (the bare duck-typed object crashed the
+                # saver, which reads .gpu_utilization and friends)
+                import datetime as _dt
+                from core.orchestrator.result import TestResult as _TR
+                result = _TR(
+                    test_id=cycle_id,
+                    architecture=base.architecture,
+                    deployment_success=False,
+                    deployment_ready=False,
+                    guidellm_success=False,
+                    metrics_collected=False,
+                    deployment_start_time=_dt.datetime.now().isoformat(),
+                    error_message=f"cycle exception: {e}",
+                )
 
             # Leak signal: pod RSS/CPU right after this cycle
             try:
