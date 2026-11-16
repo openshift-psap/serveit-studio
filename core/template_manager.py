@@ -399,17 +399,26 @@ class TemplateManager:
             # vLLM v0.31.0: 330s window under load -> exit 137 cascade).
             # delay_iterations skips the load ramp-up. 500 steps ≈ 30-60s
             # under load ≈ 60MB compressed trace (342K CUDA kernel events).
+            # Schedule-based profiling: on_trace_ready (the chrome-trace
+            # export via tensorboard_trace_handler) fires ONLY when a torch
+            # schedule completes its active window. max_iterations/delay
+            # alone create NO schedule on vLLM 0.31 — the profiler
+            # self-stops and writes only the summary table, and the report
+            # heatmaps come up empty (run 247). wait=200 skips the load
+            # ramp (replaces delay_iterations), active=500 is the
+            # recording window — its completion exports the trace.
+            # The frontend (async_llm) profiler shares this config: with a
+            # schedule it never completes (no steps on the frontend), and
+            # its stop-flush of a full benchmark window takes minutes
+            # (verified: 75s of load -> 5+ min flush). rank0 already
+            # carries CPU+CUDA for the engine.
             vars_dict['profiler_config_json'] = json.dumps({
                 'profiler': 'torch',
                 'torch_profiler_dir': '/tmp/torch_traces',
                 'torch_profiler_activities': ['CPU', 'CUDA'],
-                'max_iterations': 500,
-                'delay_iterations': 200,
-                # The frontend (async_llm) profiler shares this config: with
-                # delay_iterations > 0 it never starts (no steps on the
-                # frontend), and with 0 its stop-flush of a full benchmark
-                # window takes minutes (verified: 75s of load -> 5+ min
-                # flush). rank0 already carries CPU+CUDA for the engine.
+                'wait_iterations': 200,
+                'warmup_iterations': 1,
+                'active_iterations': 500,
                 'ignore_frontend': True,
             })
         else:
