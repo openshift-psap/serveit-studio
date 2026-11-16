@@ -2302,18 +2302,45 @@ def handle_recreate_storage(data):
         emit('recreate_storage_done', {'run_id': run_id, 'error': str(e)})
 
 
-def _node_cache_pvcs(namespace):
-    """Per-node model-cache PVC names (model-cache-<suffix>)."""
+def _pvc_node(namespace, pvc_name):
+    """Node a node-local (RWO LVMS) PVC is attached to, via its PV affinity."""
+    import subprocess as _sp
+    import json as _json
+    r = _sp.run(['kubectl', 'get', 'pvc', pvc_name, '-n', namespace,
+                 '-o', 'jsonpath={.spec.volumeName}'],
+                capture_output=True, text=True, timeout=15, check=False)
+    vol = (r.stdout or '').strip()
+    if not vol:
+        return None
+    r = _sp.run(['kubectl', 'get', 'pv', vol, '-o', 'json'],
+                capture_output=True, text=True, timeout=15, check=False)
+    try:
+        pv = _json.loads(r.stdout)
+        match = (pv['spec'].get('nodeAffinity') or {}).get('required', {}).get('nodeSelectorTerms', [])
+        for term in match:
+            for exp in term.get('matchExpressions', []):
+                if exp.get('key') == 'kubernetes.io/hostname' and exp.get('values'):
+                    return exp['values'][0]
+    except Exception:
+        pass
+    return None
+
+
+def _node_cache_pvcs(namespace, include_pvc=None):
+    """Model-cache PVCs to verify: per-node caches plus the deployment's
+    own pvc_name (node-local LVMS volumes are what the pods actually
+    mount when the payload names an existing PVC)."""
     import subprocess as _sp
     r = _sp.run(['kubectl', 'get', 'pvc', '-n', namespace, '-o', 'name'],
                 capture_output=True, text=True, timeout=15, check=False)
-    if r.returncode != 0:
-        return []
-    return [l.split('/')[-1].strip() for l in (r.stdout or '').splitlines()
+    pvcs = [l.split('/')[-1].strip() for l in (r.stdout or '').splitlines()
             if l.strip().startswith('persistentvolumeclaim/model-cache-')]
+    if include_pvc and include_pvc not in pvcs:
+        pvcs.append(include_pvc)
+    return pvcs
 
 
-def _verify_model_on_node_caches(model, namespace):
+def _verify_model_on_node_caches(model, namespace, include_pvc=None):
     """Return the node-cache PVCs where the model is MISSING (no weights).
 
     A one-shot pod per PVC tests for a snapshot dir containing weight
@@ -2331,20 +2358,25 @@ def _verify_model_on_node_caches(model, namespace):
         f"&& echo MODEL_OK || echo MODEL_MISSING"
     )
     missing = []
-    for pvc in _node_cache_pvcs(namespace):
+    for pvc in _node_cache_pvcs(namespace, include_pvc=include_pvc):
         pod = f'model-verify-{pvc}'
         _sp.run(['kubectl', 'delete', 'pod', pod, '-n', namespace, '--ignore-not-found'],
                 capture_output=True, text=True, timeout=15, check=False)
+        _node = _pvc_node(namespace, pvc)
+        _overrides = {
+            'spec': {'containers': [{
+                'name': 'verify', 'image': 'quay.io/bbenshab/serveit-studio:workload-v4',
+                'command': ['bash', '-c', test_cmd],
+                'volumeMounts': [{'name': 'cache', 'mountPath': '/cache'}],
+            }], 'volumes': [{'name': 'cache', 'persistentVolumeClaim': {'claimName': pvc}}],
+             'restartPolicy': 'Never'}}
+        if _node:
+            # node-local volume: the verify pod must land on its node
+            _overrides['spec']['nodeSelector'] = {'kubernetes.io/hostname': _node}
         _sp.run(
             ['kubectl', 'run', pod, '-n', namespace, '--restart=Never',
              '--image=quay.io/bbenshab/serveit-studio:workload-v4',
-             '--overrides', json.dumps({
-                 'spec': {'containers': [{
-                     'name': 'verify', 'image': 'quay.io/bbenshab/serveit-studio:workload-v4',
-                     'command': ['bash', '-c', test_cmd],
-                     'volumeMounts': [{'name': 'cache', 'mountPath': '/cache'}],
-                 }], 'volumes': [{'name': 'cache', 'persistentVolumeClaim': {'claimName': pvc}}],
-                  'restartPolicy': 'Never'}})],
+             '--overrides', json.dumps(_overrides)],
             capture_output=True, text=True, timeout=30, check=False)
         verdict = 'MODEL_MISSING'
         for _ in range(24):  # up to ~2 min
@@ -2549,7 +2581,7 @@ def handle_setup_storage(data):
             # assume presence — runs failed at pod startup with
             # LocalEntryNotFoundError when only config.json was staged
             # (BLIS-era models never touched the node caches).
-            _missing = _verify_model_on_node_caches(model, namespace)
+            _missing = _verify_model_on_node_caches(model, namespace, include_pvc=existing_pvc)
             if _missing:
                 log_to_ui(f'📦 Model not found on node caches ({", ".join(_missing)}) — downloading...', 'info')
                 _ok = _download_model_to_pvcs(model, _missing, namespace, hf_token)
