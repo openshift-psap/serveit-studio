@@ -1479,7 +1479,11 @@ class ReportAnalyzer:
     def build_all_results_table(self, results):
         """Build the all-results table data for the frontend."""
         import json
-        successful = [r for r in results if r.is_successful]
+        # config_gen runs have no latency metrics by design — include
+        # their rows so the report renders (the Generated Configs tab
+        # reads the config index from the API)
+        successful = [r for r in results if r.is_successful or (
+            getattr(r, 'service_endpoint', None) == 'config-generator')]
         all_results = []
         # Preserve test-execution order (DB id order from the loader) —
         # charts and tables should follow the run sequence, not metric rank
@@ -2354,7 +2358,7 @@ class ReportAnalyzer:
             'calibrated_qps': calibrated_qps_data,
             'latency_search': latency_search_data,
             'gpu_sizing': gpu_sizing,
-            'run_config': run_config,
+            'run_config': {**run_config, 'goal': goal},
             'infra_versions': infra_versions,
             'epp_tuning': epp_tuning_data,
             'concurrency_sweep': concurrency_sweep,
