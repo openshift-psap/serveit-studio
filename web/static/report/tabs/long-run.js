@@ -350,8 +350,15 @@
                     var am = m2.additional_metrics || {};
                     var pm = m2.prometheus_metrics || {};
                     function cell(val, fmtFn){ return '<td data-val="' + (val != null ? val : 0) + '">' + (val != null ? fmtFn(val) : '—') + '</td>'; }
-                    // Sched p95 / Queue %: BLIS-only (real runs expose no
-                    // per-request scheduling-delay breakdown)
+                    // Sched p95: BLIS-only (real runs expose no per-request
+                    // scheduling-delay breakdown). Queue %: BLIS share OR
+                    // real vLLM queue-time/TTFT ratio — the same TTFT
+                    // composition signal from the engine histograms.
+                    var queue = am.queue_share_pct;
+                    if (queue == null && pm.vllm_queue_time_rate && pm.vllm_ttft_sum_rate) {
+                        var qt = pm.vllm_queue_time_rate.avg, ts = pm.vllm_ttft_sum_rate.avg;
+                        if (qt != null && ts != null && ts > 0) queue = Math.round(1000 * qt / ts) / 10;
+                    }
                     // Preempt: BLIS count OR real vLLM preemption rate
                     var preempt = (am.blis_preemptions != null) ? am.blis_preemptions
                         : (pm.vllm_preemptions_rate ? (pm.vllm_preemptions_rate.avg || 0) : null);
@@ -365,7 +372,7 @@
                     var inflight = am.blis_in_flight_requests_max;
                     if (inflight == null && pm.vllm_requests_running) inflight = pm.vllm_requests_running.max;
                     return cell(am.blis_sched_p95, function(v){return fmt(v,0)+'ms';}) +
-                           cell(am.queue_share_pct, function(v){return v+'%';}) +
+                           cell(queue, function(v){return v+'%';}) +
                            cell(preempt, function(v){return v;}) +
                            cell(am.blis_slo_attainment, function(v){return Math.round(v*100)+'%';}) +
                            cell(cache, function(v){return (v*100).toFixed(1)+'%';}) +
