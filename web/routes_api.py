@@ -816,6 +816,10 @@ def get_run_report(run_id):
         if os.path.exists(js_path):
             with open(js_path) as f:
                 js_code = f.read()
+            # The file builds the report HTML with template literals that
+            # contain </script>. Embedded raw in <script>...</script> the
+            # first one closes the tag early → buildFullReport undefined.
+            js_code = js_code.replace('</script>', '<\\/script>')
 
             has_pd = any(r.get('architecture') == 'PD' for r in (data.get('all_results') or []))
             vllm_charts = (data.get('charts') or {}).get('vllm') or {}
