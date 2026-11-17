@@ -607,20 +607,27 @@ pools:
             osl = int(sh.get("osl") or 200)
             conc = int(sh.get("concurrency") or 1)
             total_conc += conc
-            # ISL range -> gaussian clamped to the range (BLIS has no
-            # uniform; mean = midpoint, std = range/4 covers ~95% inside)
+            # BLIS PREPENDS prefix_length ON TOP of the input
+            # distribution — guidellm CARVES prefix_tokens OUT of the ISL.
+            # The non-prefix portion = ISL - prefix_tokens. Without this
+            # subtraction, W1 (ISL 6000, prefix 4800) becomes 10800 total
+            # tokens and the cache hit collapses (3.5% vs the real 29.5%).
+            prefix_len = int(sh.get("prefix_tokens") or 0)
+            non_prefix = max(2, isl - prefix_len)
             if isl_min is not None and isl_max is not None:
-                lo, hi = int(isl_min), int(isl_max)
+                lo, hi = int(isl_min) - prefix_len, int(isl_max) - prefix_len
+                lo = max(2, lo)
                 params = {"mean": (lo + hi) // 2, "std_dev": max(1, (hi - lo) // 4),
                           "min": lo, "max": hi}
             else:
-                params = {"mean": isl, "std_dev": 0, "min": max(2, isl), "max": isl}
+                params = {"mean": non_prefix, "std_dev": 0,
+                          "min": non_prefix, "max": non_prefix}
             clients.append({
                 "id": sh.get("name") or f"shape-{len(clients)}",
                 "concurrency": conc,
                 "closed_loop": True,
                 "prefix_group": sh.get("name") or f"shape-{len(clients)}",
-                "prefix_length": int(sh.get("prefix_tokens") or 0),
+                "prefix_length": prefix_len,
                 "input_distribution": {"type": "gaussian", "params": params},
                 "output_distribution": {
                     "type": "constant", "params": {"value": osl}},
