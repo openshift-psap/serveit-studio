@@ -1138,6 +1138,128 @@ class DPEPOnlyStrategy(OptimizationStrategy):
         self._run_lora_sweep_if_enabled()
 
 
+class ConfigGenStrategy(OptimizationStrategy):
+    """Config Generator: render EPP + inference deployment YAMLs for
+    download. No tests, no deployment, no GPU time — the user gets the
+    exact manifests ServeIt WOULD apply, ready for git/argocd.
+    """
+
+    def execute(self):
+        self.opt.log("⚙️ CONFIG GENERATOR — rendering manifests, no tests will run", 'decision')
+        self.opt.log("-" * 80, 'info')
+
+        cfg = self.opt.config
+        arch = cfg.single_test_architecture or 'aggregated'
+        tp = cfg.single_test_tp or 1
+        replicas = cfg.single_test_replicas or 1
+        pp = cfg.single_test_pipeline_parallelism or 1
+        num_gpus = tp * pp * replicas
+
+        # Build the same TestConfig a real run would deploy
+        if arch == 'aggregated':
+            test_config = self.opt._create_aggregated_config(
+                tp=tp, num_gpus=num_gpus, isl=cfg.isl, osl=cfg.osl,
+                test_id=f"configgen-{arch}-tp{tp}-pp{pp}-{replicas}r",
+                use_concurrency=True, pipeline_parallel_size=pp)
+        elif arch == 'pd':
+            from core.optimizer.config import FeasibleSplit
+            prefill_tp = cfg.single_test_prefill_tp or 4
+            decode_tp = cfg.single_test_decode_tp or 8
+            prefill_pods = cfg.single_test_prefill_pods or 1
+            decode_pods = cfg.single_test_decode_pods or 1
+            split = FeasibleSplit(
+                prefill_pods=prefill_pods, decode_pods=decode_pods,
+                prefill_tp=prefill_tp, decode_tp=decode_tp,
+                prefill_gpus=prefill_tp * prefill_pods,
+                decode_gpus=decode_tp * decode_pods,
+                total_gpus=(prefill_tp * prefill_pods) + (decode_tp * decode_pods),
+                prefill_pct=prefill_pods / (prefill_pods + decode_pods))
+            test_config = self.opt._create_pd_config(split)
+            test_config.test_id = f"configgen-pd-{prefill_pods}p{decode_pods}d-ptp{prefill_tp}-dtp{decode_tp}"
+        else:
+            test_config = self.opt._create_ep_config(
+                tp=tp, num_gpus=num_gpus, isl=cfg.isl, osl=cfg.osl,
+                test_id=f"configgen-ep-tp{tp}-{replicas}r")
+
+        out_dir = f"/mnt/storage/generated-configs/{self.opt.run_id}"
+        import os as _os
+        _os.makedirs(out_dir, exist_ok=True)
+
+        # 1. Inference deployment manifest(s) — the exact LWS/vLLM YAML
+        manifests = self.opt._render_manifests_json(test_config) or {}
+        import json as _json
+        with open(f"{out_dir}/inference-deployment.yaml", "w") as f:
+            for name, yaml_text in (manifests or {}).items():
+                f.write(f"# ---- {name} ----\n{yaml_text}\n")
+        self.opt.log(f"   ✅ inference-deployment.yaml ({len(manifests or {})} document(s))", 'info')
+
+        # 2. EPP + prerequisite manifests — rendered with a recording
+        #    kubectl so the EXACT production templates are emitted
+        #    without touching the cluster
+        from core import PrereqManager
+        recorded = []
+
+        class _Rec:
+            def __init__(self, rc=0, stdout=""):
+                self.returncode, self.stdout, self.stderr = rc, stdout, ""
+        class _RecordingKubectl:
+            kubeconfig = "/dev/null"
+            def run(self, args, **kw):
+                if args[:2] == ["apply", "-f"]:
+                    recorded.append(kw.get("input_data") or "")
+                    return _Rec(0)
+                # existence checks: "not found" so everything renders
+                if args and args[0] == "get":
+                    return _Rec(1)
+                return _Rec(0)
+
+        try:
+            prereq_mgr = PrereqManager(
+                namespace=cfg.namespace,
+                kubectl_runner=_RecordingKubectl(),
+                scheduler_image=getattr(cfg, "scheduler_image", None),
+                gateway_class=getattr(cfg, "gateway_class", "istio"),
+            )
+            prereq_mgr.deploy_prereqs(
+                architecture=arch,
+                log_callback=lambda msg: None,
+                epp_config=self.opt._build_epp_config(),
+                optimizer_config=cfg,
+            )
+        except Exception as e:
+            self.opt.log(f"   ⚠️ prereq render partial: {e}", "warning")
+
+        with open(f"{out_dir}/epp-prereq-manifests.yaml", "w") as f:
+            f.write("\n---\n".join(recorded))
+        self.opt.log(f"   ✅ epp-prereq-manifests.yaml ({len(recorded)} manifest(s): "
+                     f"EPP configmap, service, deployment, InferencePool, gateway, RBAC)", 'info')
+
+        # 3. The EPP EndpointPickerConfig alone — handy for configmap patches
+        epp = self.opt._build_epp_config() or {}
+        raw = epp.get("raw_yaml")
+        if raw:
+            with open(f"{out_dir}/endpoint-picker-config.yaml", "w") as f:
+                f.write(raw)
+            self.opt.log("   ✅ endpoint-picker-config.yaml (raw EndpointPickerConfig)", 'info')
+
+        # Save a placeholder test row so the run shows in the report
+        import datetime as _dt
+        from core.orchestrator.result import TestResult as _TR
+        result = _TR(
+            test_id=test_config.test_id, architecture=arch,
+            deployment_success=True, deployment_ready=True,
+            guidellm_success=True, metrics_collected=False,
+            deployment_start_time=_dt.datetime.now().isoformat(),
+            service_endpoint="config-generator",
+        )
+        self.opt._save_test_to_database(test_config, result)
+
+        self.opt.log("", 'info')
+        self.opt.log(f"📁 Configs generated: {out_dir}", 'success')
+        self.opt.log(f"📥 Download: /api/runs/{self.opt.run_id}/configs", 'success')
+        self.opt.all_test_results.append((test_config, result))
+
+
 class LongRunStrategy(OptimizationStrategy):
     """Long Run (Soak): ONE deployment, N benchmark cycles of the SAME
     workload — for memory-leak / CPU-drift / degradation detection.

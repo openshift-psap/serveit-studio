@@ -1411,7 +1411,7 @@ function updateSingleTestVisibility() {
     if (_singleTestVisLock) return;
     _singleTestVisLock = true;
     // long_run reuses the single-test deployment spec section
-    var isSingle = config.goal === 'single_test' || config.goal === 'long_run';
+    var isSingle = config.goal === 'single_test' || config.goal === 'long_run' || config.goal === 'config_gen';
     var el = document.getElementById('single-test-config');
     if (el) {
         el.style.display = isSingle ? 'block' : 'none';

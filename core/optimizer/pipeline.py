@@ -662,6 +662,7 @@ class RecipeOptimizer(
             SingleTestStrategy,
             DPEPOnlyStrategy,
             LongRunStrategy,
+            ConfigGenStrategy,
         )
 
         strategies = {
@@ -675,6 +676,7 @@ class RecipeOptimizer(
             "dpep_only": DPEPOnlyStrategy,
             "single_test": SingleTestStrategy,
             "long_run": LongRunStrategy,
+            "config_gen": ConfigGenStrategy,
         }
         # Without RDMA, PD and EP are not valid: KV transfer (NIXL) and expert
         # routing fall back to slow eth0. Only aggregated configs are tested.
@@ -683,7 +685,7 @@ class RecipeOptimizer(
         if (
             self.cluster_resources
             and not self.cluster_resources.has_rdma
-            and self.config.objective not in ("single_test", "aggregated_only", "long_run")
+            and self.config.objective not in ("single_test", "aggregated_only", "long_run", "config_gen")
         ):
             self.log(
                 "No RDMA detected — forcing AggregatedOnly strategy "

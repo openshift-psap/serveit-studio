@@ -7,7 +7,7 @@ import shutil
 import logging
 from datetime import datetime
 from pathlib import Path
-from flask import jsonify, request, render_template, Response
+from flask import jsonify, request, render_template, Response, send_file
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -1045,6 +1045,26 @@ def get_console_logs():
 
 
 # --- MLflow Integration ---
+
+@app.route('/api/runs/<int:run_id>/configs')
+def download_run_configs(run_id):
+    """Download the generated configuration YAMLs (config-gen goal) as a zip."""
+    import zipfile
+    cfg_dir = f'/mnt/storage/generated-configs/{run_id}'
+    if not os.path.isdir(cfg_dir):
+        return jsonify({'success': False, 'error': f'No generated configs for run {run_id}'}), 404
+    import tempfile
+    import io
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        for f in sorted(os.listdir(cfg_dir)):
+            fp = os.path.join(cfg_dir, f)
+            if os.path.isfile(fp):
+                z.write(fp, f)
+    buf.seek(0)
+    return send_file(buf, mimetype='application/zip', as_attachment=True,
+                     download_name=f'serveit-configs-run{run_id}.zip')
+
 
 @app.route('/api/mlflow/config', methods=['GET'])
 def get_mlflow_config():

@@ -85,6 +85,18 @@
                         <div style="text-align: center; margin: 24px 0 16px; color: var(--rh-gray-500); font-weight: 700; font-size: 0.95em;">— OR run a specific configuration —</div>
 
                         <div class="architecture-grid">
+                            <div class="arch-card" data-goal="config_gen">
+                                <h4>⚙️ Config Generator</h4>
+                                <p>Render the EPP and inference deployment YAMLs for your exact
+                                configuration and download them. No tests run, no GPUs used —
+                                the same manifests ServeIt would deploy, ready for Git or ArgoCD.</p>
+                                <div class="best-for">
+                                    <strong>Best For:</strong> <span>GitOps workflows, config reviews, pipeline integration</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="architecture-grid">
                             <div class="arch-card" data-goal="single_test">
                                 <h4>Single Test</h4>
                                 <p>Deploy one exact configuration — architecture, TP, and
