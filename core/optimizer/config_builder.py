@@ -723,6 +723,10 @@ class ConfigBuilderMixin:
         # user's workload at their requested concurrency.
         if not getattr(self.config, "advanced_vllm_custom_enabled", True):
             cfg.gpu_memory_utilization = None
+            # PD/EP carry per-role copies — strip them too so every
+            # architecture consistently defers to vLLM's defaults
+            cfg.prefill_gpu_memory_utilization = None
+            cfg.decode_gpu_memory_utilization = None
             cfg.max_num_seqs = None
             cfg.prefill_max_num_seqs = None
             cfg.decode_max_num_seqs = None
