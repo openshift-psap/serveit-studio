@@ -1213,12 +1213,14 @@ class ConfigGenStrategy(OptimizationStrategy):
         # (/scripts/discover_ib_hca.sh); emit it as its own file so users who
         # apply manifests individually still have it.
         try:
-            import yaml as _yaml
-            for _doc in _yaml.safe_load_all(recorded_cache[arch_key]):
-                if (_doc and _doc.get("kind") == "ConfigMap"
-                        and (_doc.get("metadata") or {}).get("name") == "rdma-discovery-script"):
+            # Slice the original document text (not a re-dump) so the script
+            # stays a readable block scalar with its real formatting.
+            _raw = recorded_cache[arch_key]
+            _chunks = _raw.split("\n---\n")
+            for _chunk in _chunks:
+                if "name: rdma-discovery-script" in _chunk and "kind: ConfigMap" in _chunk:
                     with open(_os.path.join(cfg_dir, "rdma-discovery-script.yaml"), "w") as _f:
-                        _yaml.safe_dump(_doc, _f, sort_keys=False, default_flow_style=False)
+                        _f.write(_chunk.strip() + "\n")
                     break
         except Exception:
             pass
