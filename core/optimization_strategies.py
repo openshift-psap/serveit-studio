@@ -1398,10 +1398,12 @@ class ConfigGenStrategy(OptimizationStrategy):
             _tc = _TC(
                 test_id=name,
                 architecture=_summary.get("architecture", "aggregated"),
+                model_name=cfg.model_name,
+                namespace=cfg.namespace,
+                isl=cfg.isl, osl=cfg.osl,
+                num_users=int(getattr(cfg, "qps", 100) or 100),
                 tensor_parallelism=_summary.get("tp", 1),
                 replicas=_summary.get("replicas", 1),
-                isl=cfg.isl, osl=cfg.osl,
-                namespace=cfg.namespace,
                 max_model_len=_summary.get("max_model_len"),
             )
             _tc.test_config_json = _json.dumps(_summary)
