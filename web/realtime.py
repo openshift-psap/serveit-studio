@@ -1244,9 +1244,13 @@ spec:
             # /models/tmp holds pip-temp dirs owned by root (created by the
             # model-download job) — find as the reader user hits EACCES there.
             # Prune it and silence stderr so expected misses stay quiet.
+            # Prune the download job's root-owned dirs (EACCES as the reader
+            # user) and force exit 0 — find returns 1 when any directory is
+            # unreadable, which would discard the matches it already printed.
             find_result = kubectl.run(
                 ['exec', pod_name, '-n', namespace, '--', 'sh', '-c',
-                 "find /models -name config.json -not -path '/models/tmp/*' 2>/dev/null"],
+                 "find /models -path /models/tmp -prune -o "
+                 "-name config.json -print 2>/dev/null; exit 0"],
                 check=False
             )
 
