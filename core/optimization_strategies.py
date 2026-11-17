@@ -1245,21 +1245,40 @@ class ConfigGenStrategy(OptimizationStrategy):
         else:
             _gpus = test_config.tensor_parallelism * _rep
             _replicas = _rep
+        # max_num_seqs / gpu_memory_utilization are computed per role and
+        # kept on the TestConfig — vLLM does not receive them as CLI flags,
+        # so parsing the rendered YAML would always yield null. Prefer the
+        # flag when present, else the computed value.
+        _is_split = arch in ("pd", "ep")
+        _pf_gmu = getattr(test_config, "prefill_gpu_memory_utilization", None)
+        _dc_gmu = getattr(test_config, "decode_gpu_memory_utilization", None)
+        _pf_mns = getattr(test_config, "prefill_max_num_seqs", None)
+        _dc_mns = getattr(test_config, "decode_max_num_seqs", None)
         summary = {
             "name": name,
             "architecture": arch,
             "tp": test_config.tensor_parallelism,
             "pp": getattr(test_config, "pipeline_parallel_size", None) or 1,
             "replicas": _replicas,
-            "prefill_tp": _pf_tp if arch in ("pd", "ep") else None,
-            "decode_tp": _dc_tp if arch in ("pd", "ep") else None,
-            "prefill_pods": _pf_pods if arch in ("pd", "ep") else None,
-            "decode_pods": _dc_pods if arch in ("pd", "ep") else None,
+            "prefill_tp": _pf_tp if _is_split else None,
+            "decode_tp": _dc_tp if _is_split else None,
+            "prefill_pods": _pf_pods if _is_split else None,
+            "decode_pods": _dc_pods if _is_split else None,
             "gpus": _gpus,
             "max_model_len": _arg("--max-model-len") or getattr(test_config, "max_model_len", None),
-            "max_num_seqs": _arg("--max-num-seqs"),
-            "gpu_memory_utilization": _arg("--gpu-memory-utilization"),
-            "block_size": _arg("--block-size"),
+            # single-role value (prefill for PD/EP) + split values when applicable
+            "max_num_seqs": (_arg("--max-num-seqs")
+                             or getattr(test_config, "max_num_seqs", None)
+                             or _pf_mns if _is_split else
+                             (_arg("--max-num-seqs")
+                              or getattr(test_config, "max_num_seqs", None))),
+            "prefill_max_num_seqs": _pf_mns if _is_split else None,
+            "decode_max_num_seqs": _dc_mns if _is_split else None,
+            "gpu_memory_utilization": (_arg("--gpu-memory-utilization")
+                                       or getattr(test_config, "gpu_memory_utilization", None)),
+            "prefill_gpu_memory_utilization": _pf_gmu if _is_split else None,
+            "decode_gpu_memory_utilization": _dc_gmu if _is_split else None,
+            "block_size": _arg("--block-size") or getattr(test_config, "block_size", None),
         }
         with open(_os.path.join(cfg_dir, "config-summary.json"), "w") as f:
             _json.dump(summary, f, indent=1)

@@ -76,7 +76,13 @@
                 max_model_len: c.max_model_len,
                 prefill_tp: c.prefill_tp, decode_tp: c.decode_tp,
                 prefill_pods: c.prefill_pods, decode_pods: c.decode_pods,
-                replicas: c.replicas
+                replicas: c.replicas,
+                max_num_seqs: c.max_num_seqs,
+                prefill_max_num_seqs: c.prefill_max_num_seqs,
+                decode_max_num_seqs: c.decode_max_num_seqs,
+                gpu_memory_utilization: c.gpu_memory_utilization,
+                prefill_gpu_memory_utilization: c.prefill_gpu_memory_utilization,
+                decode_gpu_memory_utilization: c.decode_gpu_memory_utilization
             };
             var m = /^(pd|ep)-(\d+)p(\d+)d-ptp(\d+)-dtp(\d+)/.exec(o.name || '');
             if (m) {
@@ -92,11 +98,20 @@
             return o;
         }
 
+        function splitPair(c, base) {
+            var pf = c['prefill_' + base], dc = c['decode_' + base];
+            if (pf != null && dc != null) {
+                return (pf === dc) ? pf : (pf + ' / ' + dc);
+            }
+            var v = c[base];
+            return (v != null && v !== '') ? v : 'auto';
+        }
+
         var rows = configs.map(norm);
         var tblId = 'gen-configs-tbl';
         var s = '<table class="results-table" id="' + tblId + '" style="font-size:0.82em;width:100%">';
         var headers = ['Configuration', 'Architecture', 'TP', 'PP', 'Pods',
-                       'GPUs', 'max_model_len', 'Download'];
+                       'GPUs', 'gpu_mem_util', 'max_num_seqs', 'max_model_len', 'Download'];
         s += '<tr>';
         headers.forEach(function(h, i) {
             s += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tblId + '\',' + i + ',\'num\')">' + h + ' &#x21C5;</th>';
@@ -120,6 +135,8 @@
                 '<td style="text-align:center;">' + (c.pp > 1 ? c.pp : '&#8212;') + '</td>' +
                 '<td style="text-align:center;">' + pods + '</td>' +
                 '<td style="text-align:center;">' + (c.gpus != null ? c.gpus : '&#8212;') + '</td>' +
+                '<td style="text-align:center;">' + splitPair(c, 'gpu_memory_utilization') + '</td>' +
+                '<td style="text-align:center;">' + splitPair(c, 'max_num_seqs') + '</td>' +
                 '<td>' + (c.max_model_len || '&#8212;') + '</td>' +
                 '<td><button onclick="window.open(\'/api/runs/' + runId + '/configs/' + c.name + '\', \'_blank\')" ' +
                 'style="padding:3px 10px;background:#f0f9ff;color:#0284c7;border:1px solid #bae6fd;border-radius:4px;cursor:pointer;font-size:0.85em;">&#11015; zip</button></td>' +
