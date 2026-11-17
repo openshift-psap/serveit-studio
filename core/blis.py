@@ -43,6 +43,8 @@ _RESULT_METRICS = {
     "ttft_p95_ms": ("TTFT p95 (sim)", True),
     "ttft_p99_ms": ("TTFT p99 (sim)", True),
     "itl_mean_ms": ("ITL mean (sim)", True),
+    "itl_p50_ms": ("ITL p50 (sim)", True),
+    "itl_p90_ms": ("ITL p90 (sim)", True),
     "itl_p95_ms": ("ITL p95 (sim)", True),
     "itl_p99_ms": ("ITL p99 (sim)", True),
     "e2e_mean_ms": ("E2E mean (sim)", True),

@@ -2069,6 +2069,10 @@ class RecipeOptimizer(
             if _v is not None:
                 setattr(result, _attr, _v)
         result.blis_metrics = blis_metrics
+        # itl_mean feeds the DB saver's metrics_json.itl_mean field (the
+        # saver reads this attribute; tpot_mean lands nowhere)
+        if summary.get("itl_mean_ms") is not None:
+            result.itl_mean = summary["itl_mean_ms"]
         self.log(f"✅ BLIS: TTFT p95 {summary.get('ttft_p95_ms', 0):,.0f}ms, "
                  f"ITL mean {summary.get('itl_mean_ms', 0):,.1f}ms, "
                  f"throughput {summary.get('request_throughput', 0):,.2f} req/s", 'success')
