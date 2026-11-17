@@ -1672,10 +1672,17 @@ class ReportAnalyzer:
         charts = self.build_chart_data(
             test_results, pareto, stats, calibration_results
         )
-        _run_goal = (loader.conn.execute(
-            'SELECT goal FROM optimization_runs WHERE id = ?', (run_id,)
-        ).fetchone() or [None])[0]
-        _report_goal = (run_config.get('objective') or run_config.get('goal') or _run_goal)
+        _run_row = loader.conn.execute(
+            'SELECT goal, config_json FROM optimization_runs WHERE id = ?', (run_id,)
+        ).fetchone()
+        _run_goal = _run_row[0] if _run_row else None
+        _run_cfg = {}
+        try:
+            if _run_row and _run_row[1]:
+                _run_cfg = json.loads(_run_row[1])
+        except (ValueError, TypeError):
+            _run_cfg = {}
+        _report_goal = (_run_cfg.get('objective') or _run_cfg.get('goal') or _run_goal)
         all_results = self.build_all_results_table(
             results, include_all=(str(_run_goal).lower() == 'config_gen'))
 
