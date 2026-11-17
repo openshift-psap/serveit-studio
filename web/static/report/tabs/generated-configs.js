@@ -113,8 +113,10 @@
         var headers = ['Configuration', 'Architecture', 'TP', 'PP', 'Pods',
                        'GPUs', 'gpu_mem_util', 'max_num_seqs', 'max_model_len', 'Download'];
         // text columns must sort as text; numeric ones as numbers
-        var sortTypes = ['str', 'str', 'str', 'num', 'num', 'num',
-                         'num', 'num', 'num', 'str'];
+        // split-pair cells ("TP1 / TP2", "0.94 / 0.84", "96 / 64", "auto",
+        // "2P + 8D") are strings — only PP/GPUs/max_model_len are numeric
+        var sortTypes = ['str', 'str', 'str', 'num', 'str', 'num',
+                         'str', 'str', 'num', 'str'];
         s += '<tr>';
         headers.forEach(function(h, i) {
             s += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tblId + '\',' + i + ',\'' + sortTypes[i] + '\')">' + h + ' &#x21C5;</th>';

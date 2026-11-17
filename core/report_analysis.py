@@ -2394,7 +2394,7 @@ class ReportAnalyzer:
             'calibrated_qps': calibrated_qps_data,
             'latency_search': latency_search_data,
             'gpu_sizing': gpu_sizing,
-            'run_config': {**run_config, 'goal': _report_goal},
+            'run_config': {**(run_config or {}), 'goal': _report_goal},
             'generated_configs': _generated_configs,
             'infra_versions': infra_versions,
             'epp_tuning': epp_tuning_data,

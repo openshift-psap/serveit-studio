@@ -1206,11 +1206,22 @@ class ConfigGenStrategy(OptimizationStrategy):
                 # be applied — surface it instead of failing silently
                 self.opt.log(
                     f"   ⚠️  prereq render failed for {arch}: {_e}", 'warn')
-            recorded_cache[arch_key] = "\n---\n".join(recorded)
+            if recorded:
+                recorded_cache[arch_key] = "\n---\n".join(recorded)
+            else:
+                # Don't cache a failed render — the next config retries
+                self.opt.log(
+                    f"   ⚠️  no prereq manifests rendered for {arch}", 'warn')
 
+        _bundle = recorded_cache.get(arch_key, "")
         _prereq_path = _os.path.join(cfg_dir, "epp-prereq-manifests.yaml")
-        with open(_prereq_path, "w") as f:
-            f.write(recorded_cache[arch_key])
+        if _bundle:
+            with open(_prereq_path, "w") as f:
+                f.write(_bundle)
+        else:
+            self.opt.log(
+                f"   ⚠️  {name}: no prereq bundle available — "
+                f"apply the EPP/RDMA manifests separately", 'warn')
 
         # The RDMA discovery ConfigMap is mounted into every model-server pod
         # (/scripts/discover_ib_hca.sh); emit it as its own file so users who
@@ -1218,15 +1229,16 @@ class ConfigGenStrategy(OptimizationStrategy):
         try:
             # Slice the original document text (not a re-dump) so the script
             # stays a readable block scalar with its real formatting.
-            _raw = recorded_cache[arch_key]
+            _raw = recorded_cache.get(arch_key, "")
             _chunks = _raw.split("\n---\n")
             for _chunk in _chunks:
                 if "name: rdma-discovery-script" in _chunk and "kind: ConfigMap" in _chunk:
                     with open(_os.path.join(cfg_dir, "rdma-discovery-script.yaml"), "w") as _f:
                         _f.write(_chunk.strip() + "\n")
                     break
-        except Exception:
-            pass
+        except Exception as _e:
+            self.opt.log(
+                f"   ⚠️  could not extract rdma-discovery-script.yaml: {_e}", 'warn')
 
         # 3. Raw EndpointPickerConfig
         epp = self.opt._build_epp_config() or {}

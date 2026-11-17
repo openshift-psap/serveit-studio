@@ -542,7 +542,7 @@
                     const onlyMean = m.key === 'throughput' && _tputMean != null;
                     let p90Style = '';
                     if (a) {
-                        const other = idx === 0 ? a[m.key] : p[m.key];
+                        const other = (idx === 0 ? a[m.key] : p[m.key]) || {};
                         const wins = m.lowerBetter ? betterLower(d.p90, other.p90) : betterHigher(d.p90, other.p90);
                         if (wins) p90Style = 'color:#10b981; font-weight:700;';
                     }
