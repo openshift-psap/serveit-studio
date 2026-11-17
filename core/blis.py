@@ -548,7 +548,23 @@ pools:
                     return None
 
         if r.returncode != 0:
-            self._log(f"BLIS: run failed: {(r.stderr or r.stdout)[:300]}", "warn")
+            _err = r.stderr or r.stdout or ""
+            # Warnings dominate the head of stderr; the actual error is at
+            # the tail. Persist the full text next to the scenario and log
+            # the tail so failures are diagnosable.
+            _err_path = out_file + ".stderr.log"
+            try:
+                with open(_err_path, "w") as f:
+                    f.write(_err)
+            except OSError:
+                _err_path = None
+            _tail = " | ".join(
+                ln.strip() for ln in _err.strip().splitlines()[-3:] if ln.strip()
+            )
+            self._log(
+                f"BLIS: run failed (exit {r.returncode}"
+                f"{', full stderr: ' + _err_path if _err_path else ''}): "
+                f"{_tail[:400]}", "warn")
             return None
         try:
             if self.remote:
