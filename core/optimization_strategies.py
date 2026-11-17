@@ -1186,10 +1186,11 @@ class ConfigGenStrategy(OptimizationStrategy):
         _os.makedirs(out_dir, exist_ok=True)
 
         # 1. Inference deployment manifest(s) — the exact LWS/vLLM YAML
-        manifests = self.opt._render_manifests_json(test_config) or {}
         import json as _json
+        manifests_raw = self.opt._render_manifests_json(test_config) or "{}"
+        manifests = _json.loads(manifests_raw) if isinstance(manifests_raw, str) else (manifests_raw or {})
         with open(f"{out_dir}/inference-deployment.yaml", "w") as f:
-            for name, yaml_text in (manifests or {}).items():
+            for name, yaml_text in manifests.items():
                 f.write(f"# ---- {name} ----\n{yaml_text}\n")
         self.opt.log(f"   ✅ inference-deployment.yaml ({len(manifests or {})} document(s))", 'info')
 
