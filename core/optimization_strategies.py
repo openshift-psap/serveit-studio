@@ -1205,8 +1205,23 @@ class ConfigGenStrategy(OptimizationStrategy):
                 pass
             recorded_cache[arch_key] = "\n---\n".join(recorded)
 
-        with open(_os.path.join(cfg_dir, "epp-prereq-manifests.yaml"), "w") as f:
+        _prereq_path = _os.path.join(cfg_dir, "epp-prereq-manifests.yaml")
+        with open(_prereq_path, "w") as f:
             f.write(recorded_cache[arch_key])
+
+        # The RDMA discovery ConfigMap is mounted into every model-server pod
+        # (/scripts/discover_ib_hca.sh); emit it as its own file so users who
+        # apply manifests individually still have it.
+        try:
+            import yaml as _yaml
+            for _doc in _yaml.safe_load_all(recorded_cache[arch_key]):
+                if (_doc and _doc.get("kind") == "ConfigMap"
+                        and (_doc.get("metadata") or {}).get("name") == "rdma-discovery-script"):
+                    with open(_os.path.join(cfg_dir, "rdma-discovery-script.yaml"), "w") as _f:
+                        _yaml.safe_dump(_doc, _f, sort_keys=False, default_flow_style=False)
+                    break
+        except Exception:
+            pass
 
         # 3. Raw EndpointPickerConfig
         epp = self.opt._build_epp_config() or {}
