@@ -808,60 +808,14 @@ def get_run_report(run_id):
 
         # Prefer synced code on PVC, fall back to bundled image code
         app_root = '/mnt/storage/app' if os.path.isdir('/mnt/storage/app/web') else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        js_path = os.path.join(app_root, 'web', 'static', 'js', 'report-download.js')
 
-        # Generate a self-contained HTML that embeds the data + JS
-        # The report renders client-side when opened in a browser — same as the UI download
         html = None
-        if os.path.exists(js_path):
-            with open(js_path) as f:
-                js_code = f.read()
-            # The file builds the report HTML with template literals that
-            # contain </script>. Embedded raw in <script>...</script> the
-            # first one closes the tag early → buildFullReport undefined.
-            js_code = js_code.replace('</script>', '<\\/script>')
-
-            has_pd = any(r.get('architecture') == 'PD' for r in (data.get('all_results') or []))
-            vllm_charts = (data.get('charts') or {}).get('vllm') or {}
-            has_vllm = bool(vllm_charts.get('configs'))
-            data_json = json.dumps(data)
-
-            html = f"""<!DOCTYPE html>
-<html><head><meta charset="UTF-8">
-<title>ServeIt Studio Report — Run #{run_id}</title>
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-<script>
-{js_code}
-</script>
-</head><body>
-<script>
-window.addEventListener('load', function() {{
-    var data = {data_json};
-    var runId = {run_id};
-    var hasPD = {str(has_pd).lower()};
-    var hasVllm = {str(has_vllm).lower()};
-    var summary = data.summary || {{}};
-    var rec = data.recommendation || {{}};
-    var best = summary.best_configs || {{}};
-    var allRes = data.all_results || [];
-    try {{
-        var reportHtml = buildFullReport(
-            runId, data, data.charts, rec, summary, best, allRes, hasPD, hasVllm
-        );
-        // innerHTML doesn't execute <script> tags — extract and run them separately
-        document.body.innerHTML = reportHtml;
-        var scripts = document.body.querySelectorAll('script');
-        scripts.forEach(function(s) {{
-            var newScript = document.createElement('script');
-            newScript.textContent = s.textContent;
-            s.parentNode.replaceChild(newScript, s);
-        }});
-    }} catch(e) {{
-        document.body.innerHTML = '<h1>Report Error</h1><pre>' + e.stack + '</pre>';
-    }}
-}});
-</script>
-</body></html>"""
+        try:
+            from web.offline_report import build_offline_report_html
+            html = build_offline_report_html(run_id, data, app_root)
+        except Exception:
+            import traceback
+            traceback.print_exc()
 
         if not html:
             from cli.inftune import build_python_html_report
