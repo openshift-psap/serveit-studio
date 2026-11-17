@@ -904,8 +904,17 @@ data:
             "dpep_only",
             "single_test",
             "long_run",
+            "config_gen",
         ):
             goal_descriptions = {
+                "config_gen": {
+                    "label": "Config Generator (render YAMLs, no tests)",
+                    "steps": [
+                        "Build the deployment config for the chosen architecture",
+                        "Render inference + EPP manifests (exact production templates)",
+                        "Provide a download link — nothing is deployed or tested",
+                    ],
+                },
                 "ttft": {
                     "label": "Response Time Priority (PD vs Aggregated)",
                     "steps": [
