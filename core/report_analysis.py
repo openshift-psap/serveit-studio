@@ -1675,8 +1675,23 @@ class ReportAnalyzer:
         _run_goal = (loader.conn.execute(
             'SELECT goal FROM optimization_runs WHERE id = ?', (run_id,)
         ).fetchone() or [None])[0]
+        _report_goal = (run_config.get('objective') or run_config.get('goal') or _run_goal)
         all_results = self.build_all_results_table(
             results, include_all=(str(_run_goal).lower() == 'config_gen'))
+
+        # Embed generated configs so downloaded (offline) reports render too
+        _generated_configs = []
+        if str(_run_goal).lower() == 'config_gen':
+            import os as _os
+            _cg_dir = f'/mnt/storage/generated-configs/{run_id}'
+            try:
+                for _nm in sorted(_os.listdir(_cg_dir)):
+                    _sp = _os.path.join(_cg_dir, _nm, 'config-summary.json')
+                    if _os.path.isfile(_sp):
+                        with open(_sp) as _f:
+                            _generated_configs.append(json.load(_f))
+            except (OSError, ValueError):
+                _generated_configs = []
         recommendation = self.build_recommendation(run_id, results, loader.conn)
 
         # Load calibrated concurrency and capacity info from optimal_config JSON
@@ -2366,11 +2381,8 @@ class ReportAnalyzer:
             'calibrated_qps': calibrated_qps_data,
             'latency_search': latency_search_data,
             'gpu_sizing': gpu_sizing,
-            'run_config': {**run_config, 'goal': (
-                run_config.get('objective') or run_config.get('goal')
-                or (loader.conn.execute(
-                    'SELECT goal FROM optimization_runs WHERE id = ?', (run_id,)
-                ).fetchone() or [None])[0])},
+            'run_config': {**run_config, 'goal': _report_goal},
+            'generated_configs': _generated_configs,
             'infra_versions': infra_versions,
             'epp_tuning': epp_tuning_data,
             'concurrency_sweep': concurrency_sweep,

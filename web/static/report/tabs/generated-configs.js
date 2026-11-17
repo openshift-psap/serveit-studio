@@ -24,8 +24,14 @@
         s += '<div id="gen-configs-table" style="margin:0 20px 20px;">' +
             '<div style="padding:20px;color:#64748b;text-align:center;">Loading configurations…</div></div>';
 
-        // load + render after DOM insertion (fetch from the API)
-        setTimeout(function() { loadConfigs(runId); }, 50);
+        // prefer configs embedded in the report data (works offline);
+        // fall back to the API for live views
+        var embedded = data.generated_configs;
+        if (Array.isArray(embedded)) {
+            setTimeout(function() { renderTable(embedded, runId); }, 0);
+        } else {
+            setTimeout(function() { loadConfigs(runId); }, 50);
+        }
         return s;
     }
 
