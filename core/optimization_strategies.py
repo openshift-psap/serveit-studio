@@ -1215,25 +1215,22 @@ class ConfigGenStrategy(OptimizationStrategy):
             with open(_os.path.join(cfg_dir, "endpoint-picker-config.yaml"), "w") as f:
                 f.write(raw)
 
-        # 4. Config summary (auto-tuned params for the tab table)
-        tc = {}
-        try:
-            tc = _json.loads(test_config.test_config_json) if test_config.test_config_json else {}
-        except Exception:
-            tc = {}
+        # 4. Config summary (auto-tuned params for the tab table) — read
+        #    from the TestConfig OBJECT (test_config_json isn't populated
+        #    until the DB saver runs)
         summary = {
             "name": name,
             "architecture": arch,
             "tp": test_config.tensor_parallelism,
-            "pp": tc.get("pipeline_parallel_size") or 1,
+            "pp": getattr(test_config, "pipeline_parallel_size", None) or 1,
             "replicas": getattr(test_config, "prefill_pods", None)
                 or getattr(test_config, "replicas", 1) or 1,
             "gpus": (getattr(test_config, "prefill_gpus", 0) or 0) or
                 (test_config.tensor_parallelism * (getattr(test_config, "replicas", 1) or 1)),
-            "max_model_len": tc.get("max_model_len"),
-            "max_num_seqs": tc.get("max_num_seqs"),
-            "gpu_memory_utilization": tc.get("gpu_memory_utilization"),
-            "block_size": tc.get("block_size"),
+            "max_model_len": getattr(test_config, "max_model_len", None),
+            "max_num_seqs": getattr(test_config, "max_num_seqs", None),
+            "gpu_memory_utilization": getattr(test_config, "gpu_memory_utilization", None),
+            "block_size": getattr(test_config, "block_size", None),
             "decode_tp": getattr(test_config, "decode_tp", None),
             "prefill_pods": getattr(test_config, "prefill_pods", None),
             "decode_pods": getattr(test_config, "decode_pods", None),
