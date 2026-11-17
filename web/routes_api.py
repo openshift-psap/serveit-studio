@@ -1058,16 +1058,26 @@ def get_generated_configs(run_id):
                      'run_id': run_id})
 
 
-def _zip_directory(dir_path, arc_root=''):
-    """Zip the files in dir_path (optionally nested under arc_root)."""
+def _zip_directory(dir_path, include_subdirs=False):
+    """Zip the files in dir_path.
+
+    include_subdirs=True adds each subdirectory's files under a folder of
+    the same name — the bundle layout for generated configurations (one
+    folder per config). Without it only top-level files are added.
+    """
     import io
     import zipfile
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
-        for f in sorted(os.listdir(dir_path)):
-            fp = os.path.join(dir_path, f)
+        for name in sorted(os.listdir(dir_path)):
+            fp = os.path.join(dir_path, name)
             if os.path.isfile(fp):
-                z.write(fp, os.path.join(arc_root, f) if arc_root else f)
+                z.write(fp, name)
+            elif include_subdirs and os.path.isdir(fp):
+                for f in sorted(os.listdir(fp)):
+                    fpath = os.path.join(fp, f)
+                    if os.path.isfile(fpath):
+                        z.write(fpath, f"{name}/{f}")
     buf.seek(0)
     return buf
 
@@ -1090,8 +1100,8 @@ def download_run_configs(run_id):
     cfg_dir = f'/mnt/storage/generated-configs/{run_id}'
     if not os.path.isdir(cfg_dir):
         return jsonify({'success': False, 'error': f'No generated configs for run {run_id}'}), 404
-    return send_file(_zip_directory(cfg_dir), mimetype='application/zip',
-                     as_attachment=True,
+    return send_file(_zip_directory(cfg_dir, include_subdirs=True),
+                     mimetype='application/zip', as_attachment=True,
                      download_name=f'serveit-configs-run{run_id}.zip')
 
 
