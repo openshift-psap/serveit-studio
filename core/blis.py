@@ -364,6 +364,7 @@ pools:
     engine:
       quantization: {quant}
       kv_cache_dtype: fp8
+      enable_prefix_caching: true
       block_size: {block_size}
       max_num_batched_tokens: {max_num_batched_tokens}
       max_num_seqs: {max_num_seqs}
