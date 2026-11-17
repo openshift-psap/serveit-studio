@@ -378,8 +378,34 @@ def get_runs():
     """Get all optimization runs from database."""
     try:
         with get_db() as conn:
-            runs = conn.execute('SELECT * FROM optimization_runs ORDER BY created_at DESC').fetchall()
-            return jsonify([dict(run) for run in runs])
+            runs = conn.execute('''
+                SELECT id, run_name, model, isl, osl, num_users, status,
+                       created_at, completed_at, notes, goal, test_duration,
+                       max_gpus, isl_stdev, osl_stdev, turns, rate_type,
+                       workload_mode, prefix_cache_hit_pct, stop_mode
+                FROM optimization_runs
+                ORDER BY created_at DESC
+            ''').fetchall()
+            out = []
+            for run in runs:
+                d = dict(run)
+                # Small config-derived display fields (chars conversion,
+                # image tag) — avoids shipping the whole 6KB config blob
+                # just to render the dropdown label.
+                try:
+                    cfg = conn.execute(
+                        'SELECT config_json FROM optimization_runs WHERE id = ?',
+                        (d['id'],)).fetchone()
+                    c = json.loads(cfg['config_json']) if cfg and cfg['config_json'] else {}
+                except (ValueError, TypeError):
+                    c = {}
+                d['chars_per_token'] = c.get('chars_per_token')
+                d['isl_original_chars'] = c.get('isl_original_chars')
+                d['osl_original_chars'] = c.get('osl_original_chars')
+                d['isl_stdev_original_chars'] = c.get('isl_stdev_original_chars')
+                d['image'] = c.get('image')
+                out.append(d)
+            return jsonify(out)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -432,7 +458,12 @@ def get_runs_for_resume():
     try:
         with get_db() as conn:
             runs = conn.execute('''
-                SELECT r.*, COUNT(tc.id) as completed_tests
+                SELECT r.id, r.run_name, r.model, r.isl, r.osl, r.num_users,
+                       r.status, r.created_at, r.completed_at, r.notes, r.goal,
+                       r.test_duration, r.max_gpus, r.isl_stdev, r.osl_stdev,
+                       r.turns, r.rate_type, r.workload_mode,
+                       r.prefix_cache_hit_pct, r.stop_mode,
+                       COUNT(tc.id) as completed_tests
                 FROM optimization_runs r
                 LEFT JOIN test_configurations tc ON tc.run_id = r.id AND tc.status = 'completed'
                 GROUP BY r.id

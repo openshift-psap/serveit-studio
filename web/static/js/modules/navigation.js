@@ -1212,13 +1212,15 @@ function _startEverythingDownload() {
 function _showDatasetCmd() {
     document.getElementById('download-choice-modal').classList.remove('active');
     fetch('/api/runs').then(r => r.json()).then(runs => {
-        var cfg = null;
-        for (var i = 0; i < runs.length; i++) {
-            if (runs[i].config_json) {
-                try { cfg = JSON.parse(runs[i].config_json); break; } catch(e) {}
-            }
+        if (!runs || !runs.length) { alert('No run config found'); return; }
+        // Runs API no longer ships config_json — fetch the latest run's config
+        return fetch('/api/runs/' + runs[0].id + '/config')
+            .then(function(res) { return res.json(); })
+            .then(function(payload) {
+        var cfg = payload && (payload.config || payload);
+        if (!cfg || typeof cfg !== 'object' || !Object.keys(cfg).length) {
+            alert('No run config found'); return;
         }
-        if (!cfg) { alert('No run config found'); return; }
         var isl = cfg.isl || 2000;
         var osl = cfg.osl || 100;
         var model = cfg.model_name || cfg.model || 'unknown';
@@ -1272,6 +1274,7 @@ function _showDatasetCmd() {
             document.getElementById('dataset-cmd-text').textContent = cmd;
             document.getElementById('dataset-cmd-modal').classList.add('active');
         }
+            });
     });
 }
 

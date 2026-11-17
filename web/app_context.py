@@ -61,6 +61,44 @@ def _get_secret_key():
 
 
 app = Flask(__name__, template_folder='templates')
+
+# ── Gzip JSON/HTML responses ─────────────────────────────────────────────
+# The UI fetches multi-megabyte payloads (/api/runs/<id>/charts can be
+# >2MB of JSON). Over a port-forward or slow route that is tens of
+# seconds; gzip cuts it ~10x. Small responses are left untouched.
+import gzip as _gzip
+from flask import request as _req
+
+
+@app.after_request
+def _gzip_api_response(resp):
+    try:
+        if resp.direct_passthrough or resp.headers.get('Content-Encoding'):
+            return resp
+        if resp.status_code >= 300:
+            return resp
+        ae = (_req.headers.get('Accept-Encoding') or '').lower()
+        if 'gzip' not in ae:
+            return resp
+        ct = (resp.headers.get('Content-Type') or '').lower()
+        if not any(t in ct for t in (
+                'application/json', 'text/html', 'text/css',
+                'javascript', 'image/svg')):
+            return resp
+        data = resp.get_data()
+        if len(data) < 1024:
+            return resp
+        comp = _gzip.compress(data, 6)
+        if len(comp) >= len(data):
+            return resp
+        resp.set_data(comp)
+        resp.headers['Content-Encoding'] = 'gzip'
+        resp.headers['Content-Length'] = str(len(comp))
+        resp.headers['Vary'] = 'Accept-Encoding'
+    except Exception:
+        pass
+    return resp
+
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.config['SECRET_KEY'] = _get_secret_key()
 app.jinja_env.globals['SERVEIT_VERSION'] = SERVEIT_VERSION

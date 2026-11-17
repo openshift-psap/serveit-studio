@@ -37,12 +37,11 @@ function loadRunList() {
                 const goal = goalMap[(run.goal || '').toLowerCase()] || run.goal || '?';
                 let workload = '';
                 if (run.isl && run.osl) {
-                    let rcfg = null;
-                    try { rcfg = run.config_json ? JSON.parse(run.config_json) : null; } catch(e) {}
-                    const cpt2 = (rcfg && rcfg.chars_per_token) || 4.5;
-                    const dIsl = (rcfg && rcfg.isl_original_chars) || Math.round(run.isl * cpt2);
-                    const dOsl = (rcfg && rcfg.osl_original_chars) || Math.round(run.osl * cpt2);
-                    const dIslStd = run.isl_stdev ? ((rcfg && rcfg.isl_stdev_original_chars) || Math.round(run.isl_stdev * cpt2)) : null;
+                    // /api/runs returns these pre-extracted; no 6KB blob needed
+                    const cpt2 = run.chars_per_token || 4.5;
+                    const dIsl = run.isl_original_chars || Math.round(run.isl * cpt2);
+                    const dOsl = run.osl_original_chars || Math.round(run.osl * cpt2);
+                    const dIslStd = run.isl_stdev ? (run.isl_stdev_original_chars || Math.round(run.isl_stdev * cpt2)) : null;
                     workload = `${run.isl}`;
                     if (run.isl_stdev) workload += `+${run.isl_stdev}`;
                     workload += ` (${dIsl.toLocaleString()} chars)`;
@@ -56,9 +55,7 @@ function loadRunList() {
                 const statusLabel = _st.indexOf('completed') === 0 ? '\u2705 completed' : _st === 'running' ? '\u23F3 running' : _st === 'stopped' ? '\u23F9 stopped' : _st === 'interrupted' ? '\u23F9 interrupted' : '\u274C ' + _st;
                 const desc = run.notes ? `"${run.notes}"` : '';
                 let imgTag = '';
-                if (run.config_json) {
-                    try { const rc = JSON.parse(run.config_json); imgTag = rc.image ? rc.image.split(':').pop() : ''; } catch(e) {}
-                }
+                if (run.image) imgTag = run.image.split(':').pop();
                 const parts = [`#${run.id}`, desc, goal, modelShort, workload, users, gpus, imgTag, statusLabel, date].filter(Boolean);
                 opt.textContent = parts.join(' | ');
                 sel.appendChild(opt);
