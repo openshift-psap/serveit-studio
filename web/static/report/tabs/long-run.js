@@ -317,7 +317,8 @@
         s += '<table class="results-table" id="' + tblId + '" style="font-size:0.82em; margin:8px 20px; width:calc(100% - 40px);">' +
             (function() {
                 var cols = [['Cycle', 'num'], ['ISL', 'num'], ['OSL', 'num'], ['Users', 'num'],
-                            ['Hit %', 'num'], ['TTFT p90', 'num'], ['TTFT p95', 'num'], ['TTFT p99', 'num'], ['ITL p90', 'num'], ['Tokens/s', 'num'],
+                            ['Hit %', 'num'], ['TTFT p90', 'num'], ['TTFT p95', 'num'], ['TTFT p99', 'num'],
+                            ['ITL p90', 'num'], ['ITL p95', 'num'], ['ITL p99', 'num'], ['Tokens/s', 'num'],
                             ['Sched p95', 'num'], ['Queue %', 'num'], ['Preempt', 'num'], ['SLO %', 'num'], ['Cache %', 'num'], ['InFlight', 'num'],
                             ['Pod RSS', 'num'], ['Anon', 'num'], ['EPP Heap', 'num'], ['Pod CPU', 'num'],
                             ['Pods', 'num'], ['Status', 'str']];
@@ -342,13 +343,34 @@
                 '<td data-val="' + (r.ttft_p95 || 0) + '">' + (r.ttft_p95 != null ? fmt(r.ttft_p95, 0) + 'ms' : '—') + '</td>' +
                 '<td data-val="' + (r.ttft_p99 || 0) + '">' + (r.ttft_p99 != null ? fmt(r.ttft_p99, 0) + 'ms' : '—') + '</td>' +
                 '<td data-val="' + (r.itl_p90 || 0) + '">' + (r.itl_p90 != null ? fmt(r.itl_p90, 1) + 'ms' : '—') + '</td>' +
+                '<td data-val="' + (r.itl_p95 || 0) + '">' + (r.itl_p95 != null ? fmt(r.itl_p95, 1) + 'ms' : '—') + '</td>' +
+                '<td data-val="' + (r.itl_p99 || 0) + '">' + (r.itl_p99 != null ? fmt(r.itl_p99, 1) + 'ms' : '—') + '</td>' +
                 '<td data-val="' + (tokPerSec(r) || 0) + '">' + (tokPerSec(r) != null ? fmt(tokPerSec(r), 0) : '—') + '</td>' +
-                '<td data-val="' + (((mj(r).additional_metrics || {}).blis_sched_p95) || 0) + '">' + (function(m2){ var v=(m2.additional_metrics||{}).blis_sched_p95; return v!=null?fmt(v,0)+'ms':'—';})(mj(r)) + '</td>' +
-                '<td data-val="' + (((mj(r).additional_metrics || {}).queue_share_pct) || 0) + '">' + (function(m2){ var v=(m2.additional_metrics||{}).queue_share_pct; return v!=null?v+'%':'—';})(mj(r)) + '</td>' +
-                '<td data-val="' + (((mj(r).additional_metrics || {}).blis_preemptions) || 0) + '">' + (function(m2){ var v=(m2.additional_metrics||{}).blis_preemptions; return v!=null?v:'—';})(mj(r)) + '</td>' +
-                '<td data-val="' + (((mj(r).additional_metrics || {}).blis_slo_attainment) || 0) + '">' + (function(m2){ var v=(m2.additional_metrics||{}).blis_slo_attainment; return v!=null?Math.round(v*100)+'%':'—';})(mj(r)) + '</td>' +
-                '<td data-val="' + (((mj(r).additional_metrics || {}).blis_cache_hit_rate) || 0) + '">' + (function(m2){ var v=(m2.additional_metrics||{}).blis_cache_hit_rate; return v!=null?(v*100).toFixed(1)+'%':'—';})(mj(r)) + '</td>' +
-                '<td data-val="' + (((mj(r).additional_metrics || {}).blis_in_flight_requests_max) || 0) + '">' + (function(m2){ var v=(m2.additional_metrics||{}).blis_in_flight_requests_max; return v!=null?Math.round(v):'—';})(mj(r)) + '</td>' +
+                (function(m2){
+                    var am = m2.additional_metrics || {};
+                    var pm = m2.prometheus_metrics || {};
+                    function cell(val, fmtFn){ return '<td data-val="' + (val != null ? val : 0) + '">' + (val != null ? fmtFn(val) : '—') + '</td>'; }
+                    // Sched p95 / Queue %: BLIS-only (real runs expose no
+                    // per-request scheduling-delay breakdown)
+                    // Preempt: BLIS count OR real vLLM preemption rate
+                    var preempt = (am.blis_preemptions != null) ? am.blis_preemptions
+                        : (pm.vllm_preemptions_rate ? (pm.vllm_preemptions_rate.avg || 0) : null);
+                    // Cache %: BLIS engine report OR real hits/queries ratio
+                    var cache = am.blis_cache_hit_rate;
+                    if (cache == null && pm.vllm_prefix_cache_hits_rate && pm.vllm_prefix_cache_queries_rate) {
+                        var h = pm.vllm_prefix_cache_hits_rate.avg, q = pm.vllm_prefix_cache_queries_rate.avg;
+                        if (h != null && q > 0) cache = h / q;
+                    }
+                    // InFlight: BLIS max OR real running max
+                    var inflight = am.blis_in_flight_requests_max;
+                    if (inflight == null && pm.vllm_requests_running) inflight = pm.vllm_requests_running.max;
+                    return cell(am.blis_sched_p95, function(v){return fmt(v,0)+'ms';}) +
+                           cell(am.queue_share_pct, function(v){return v+'%';}) +
+                           cell(preempt, function(v){return v;}) +
+                           cell(am.blis_slo_attainment, function(v){return Math.round(v*100)+'%';}) +
+                           cell(cache, function(v){return (v*100).toFixed(1)+'%';}) +
+                           cell(inflight, function(v){return Math.round(v);});
+                })(mj(r)) +
                 '<td data-val="' + (rss || 0) + '">' + (rss != null ? (rss / 1024).toFixed(1) + ' GiB' : '—') + '</td>' +
                 '<td data-val="' + (anonTotal(r) || 0) + '">' + (anonTotal(r) != null ? (anonTotal(r) / 1024).toFixed(1) + ' GiB' : '—') + '</td>' +
                 '<td data-val="' + (eppHeap(r) || 0) + '">' + (eppHeap(r) != null ? fmt(eppHeap(r), 1) + ' MB' : '—') + '</td>' +
