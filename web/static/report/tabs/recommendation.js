@@ -496,9 +496,19 @@
         if (hasPrimary) {
             const p = primaryRec.config.percentiles;
             const a = hasAgg ? aggBase.percentiles : null;
+            const baselineArch = (aggBase && aggBase.architecture) || 'Aggregated';
 
-            s += `<div class="chart-card"><div class="chart-card-header">Percentile Breakdown: ${primaryArch} vs Aggregated</div>`;
-            s += `<div style="padding:10px 20px 4px; color:#4b5563; font-size:0.9em;">Full percentile distribution (P50 through P99) for TTFT, ITL, and Throughput — comparing the best ${primaryArch} configuration against the Aggregated baseline using the same GPU budget. Green-highlighted P90 values indicate the winner for each metric.</div>`;
+            // Single-architecture runs (e.g. long-run soak, one config) have
+            // no distinct baseline — don't claim a comparison that isn't one
+            const title = a
+                ? `Percentile Breakdown: ${primaryArch} vs ${baselineArch}`
+                : `Percentile Breakdown — ${primaryArch}`;
+            const blurb = a
+                ? `Full percentile distribution (P50 through P99) for TTFT, ITL, and Throughput — comparing the best ${primaryArch} configuration against the ${baselineArch} baseline using the same GPU budget. Green-highlighted P90 values indicate the winner for each metric.`
+                : `Full percentile distribution (P50 through P99) of the best ${primaryArch} configuration. This run has no separate ${baselineArch} baseline to compare against, so results are shown for the recommended configuration only.`;
+
+            s += `<div class="chart-card"><div class="chart-card-header">${title}</div>`;
+            s += `<div style="padding:10px 20px 4px; color:#4b5563; font-size:0.9em;">${blurb}</div>`;
             s += '<div class="chart-card-body" style="padding:0;">';
             s += '<table class="results-table">';
 
@@ -514,12 +524,14 @@
             ];
 
             const entries = [{label: primaryArch, pctl: p}];
-            if (a) entries.push({label: 'Aggregated', pctl: a});
+            if (a) entries.push({label: baselineArch, pctl: a});
 
             entries.forEach(({label, pctl}, idx) => {
                 metricDefs.forEach((m, mi) => {
-                    const d = pctl[m.key];
+                    const d = pctl[m.key] || {};
                     const borderStyle = mi === 0 && idx > 0 ? ' border-top:2px solid #cbd5e1;' : '';
+                    const onlyMean = m.key === 'throughput'
+                        && d.p90 != null && d.p50 == null && d.p95 == null && d.p99 == null;
                     let p90Style = '';
                     if (a) {
                         const other = idx === 0 ? a[m.key] : p[m.key];
@@ -529,10 +541,16 @@
                     s += '<tr>';
                     if (mi === 0) s += `<td rowspan="3" style="vertical-align:middle; font-weight:700;${borderStyle}">${label}</td>`;
                     s += `<td style="color:#64748b;${borderStyle}">${m.name}</td>`;
-                    s += `<td style="${borderStyle}">${d.p50 ?? '-'}</td>`;
-                    s += `<td style="${p90Style}${borderStyle}">${d.p90 ?? '-'}</td>`;
-                    s += `<td style="${borderStyle}">${d.p95 ?? '-'}</td>`;
-                    s += `<td style="${borderStyle}">${d.p99 ?? '-'}</td>`;
+                    if (onlyMean) {
+                        // Throughput is a window mean in guidellm — no
+                        // per-request percentiles exist to show
+                        s += `<td colspan="4" style="${p90Style}${borderStyle}">${d.p90} <span style="color:#94a3b8; font-size:0.9em;">(mean; a rate has no per-request percentiles)</span></td>`;
+                    } else {
+                        s += `<td style="${borderStyle}">${d.p50 ?? '-'}</td>`;
+                        s += `<td style="${p90Style}${borderStyle}">${d.p90 ?? '-'}</td>`;
+                        s += `<td style="${borderStyle}">${d.p95 ?? '-'}</td>`;
+                        s += `<td style="${borderStyle}">${d.p99 ?? '-'}</td>`;
+                    }
                     s += '</tr>';
                 });
             });
