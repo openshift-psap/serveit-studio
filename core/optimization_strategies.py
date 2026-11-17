@@ -1159,14 +1159,17 @@ class ConfigGenStrategy(OptimizationStrategy):
 
         name = test_config.test_id
         try:
-            import inspect as _insp, hashlib as _hl
-            _f = _insp.getsourcefile(type(self))
-            _src = open(_f, 'rb').read()
-            self.opt.log(f"[DBG] strat={_f} sha={_hl.sha1(_src).hexdigest()[:8]} "
-                         f"mns={getattr(test_config,'max_num_seqs',None)} "
-                         f"gmu={getattr(test_config,'gpu_memory_utilization',None)}", 'info')
-        except Exception:
-            pass
+            import inspect as _insp, hashlib as _hl, sys as _sys
+            _b = _insp.getsourcefile(type(self.opt)._create_aggregated_config)
+            _bsrc = open(_b, 'rb').read()
+            _mk = _insp.getsourcefile(type(test_config))
+            self.opt.log(
+                f"[DBG] builder={_b} sha={_hl.sha1(_bsrc).hexdigest()[:8]} "
+                f"model={_mk} mns={getattr(test_config,'max_num_seqs',None)} "
+                f"gmu={getattr(test_config,'gpu_memory_utilization',None)} "
+                f"pypath={_sys.path[:3]}", 'info')
+        except Exception as _e:
+            self.opt.log(f"[DBG] failed: {_e}", 'info')
         cfg_dir = _os.path.join(out_dir, name)
         _os.makedirs(cfg_dir, exist_ok=True)
         arch = test_config.architecture
