@@ -1476,14 +1476,15 @@ class ReportAnalyzer:
                 pass
         return None
 
-    def build_all_results_table(self, results):
-        """Build the all-results table data for the frontend."""
+    def build_all_results_table(self, results, include_all=False):
+        """Build the all-results table data for the frontend.
+
+        include_all=True keeps metric-less rows (config_gen has none by
+        design — the Generated Configs tab reads the index from the API,
+        but the report still needs rows to render).
+        """
         import json
-        # config_gen runs have no latency metrics by design — include
-        # their rows so the report renders (the Generated Configs tab
-        # reads the config index from the API)
-        successful = [r for r in results if r.is_successful or (
-            getattr(r, 'service_endpoint', None) == 'config-generator')]
+        successful = list(results) if include_all else [r for r in results if r.is_successful]
         all_results = []
         # Preserve test-execution order (DB id order from the loader) —
         # charts and tables should follow the run sequence, not metric rank
@@ -1668,7 +1669,11 @@ class ReportAnalyzer:
         charts = self.build_chart_data(
             test_results, pareto, stats, calibration_results
         )
-        all_results = self.build_all_results_table(results)
+        _run_goal = (loader.conn.execute(
+            'SELECT goal FROM optimization_runs WHERE id = ?', (run_id,)
+        ).fetchone() or [None])[0]
+        all_results = self.build_all_results_table(
+            results, include_all=(str(_run_goal).lower() == 'config_gen'))
         recommendation = self.build_recommendation(run_id, results, loader.conn)
 
         # Load calibrated concurrency and capacity info from optimal_config JSON

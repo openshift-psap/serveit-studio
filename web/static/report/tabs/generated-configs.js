@@ -86,9 +86,9 @@
                 '<td style="text-align:center;">' + pods + '</td>' +
                 '<td style="text-align:center;">' + (c.gpus || '—') + '</td>' +
                 '<td>' + (c.max_model_len || '—') + '</td>' +
-                '<td>' + (c.max_num_seqs || '—') + '</td>' +
+                '<td>' + (c.max_num_seqs != null ? c.max_num_seqs : 'auto') + '</td>' +
                 '<td>' + (c.gpu_memory_utilization != null ? c.gpu_memory_utilization : 'auto') + '</td>' +
-                '<td>' + (c.block_size || '—') + '</td>' +
+                '<td>' + (c.block_size != null ? c.block_size : 'auto') + '</td>' +
                 '<td><button onclick="window.open(\'/api/runs/' + runId + '/configs/' + c.name + '\', \'_blank\')" ' +
                 'style="padding:3px 10px;background:#f0f9ff;color:#0284c7;border:1px solid #bae6fd;border-radius:4px;cursor:pointer;font-size:0.85em;">&#11015; zip</button></td>' +
                 '</tr>';
