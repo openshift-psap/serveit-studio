@@ -1239,7 +1239,7 @@ class ConfigGenStrategy(OptimizationStrategy):
         _dc_tp = (getattr(test_config, "decode_tp", None)
                   or test_config.tensor_parallelism or 1)
         _rep = getattr(test_config, "replicas", 1) or 1
-        if arch == "pd":
+        if arch in ("pd", "ep"):
             _gpus = _pf_pods * _pf_tp + _dc_pods * _dc_tp
             _replicas = _pf_pods + _dc_pods
         else:
@@ -1251,10 +1251,10 @@ class ConfigGenStrategy(OptimizationStrategy):
             "tp": test_config.tensor_parallelism,
             "pp": getattr(test_config, "pipeline_parallel_size", None) or 1,
             "replicas": _replicas,
-            "prefill_tp": _pf_tp if arch == "pd" else None,
-            "decode_tp": _dc_tp if arch == "pd" else None,
-            "prefill_pods": _pf_pods if arch == "pd" else None,
-            "decode_pods": _dc_pods if arch == "pd" else None,
+            "prefill_tp": _pf_tp if arch in ("pd", "ep") else None,
+            "decode_tp": _dc_tp if arch in ("pd", "ep") else None,
+            "prefill_pods": _pf_pods if arch in ("pd", "ep") else None,
+            "decode_pods": _dc_pods if arch in ("pd", "ep") else None,
             "gpus": _gpus,
             "max_model_len": _arg("--max-model-len") or getattr(test_config, "max_model_len", None),
             "max_num_seqs": _arg("--max-num-seqs"),
@@ -1331,6 +1331,7 @@ class ConfigGenStrategy(OptimizationStrategy):
         prefill_cost = cfg.isl * active_fraction
         decode_cost = cfg.osl
         n_pd = 0
+        pd_splits = []
         for ptp, dtp in tp_pairs:
             # enumerate all valid splits for this pair (VRAM/budget-filtered)
             usable = total_gpus
@@ -1360,34 +1361,45 @@ class ConfigGenStrategy(OptimizationStrategy):
                     name, n = self._render_config(tc, out_dir, cfg, recorded_cache)
                     configs.append(name)
                     n_pd += 1
+                    pd_splits.append((ptp, dtp, pp_pods, dp_pods, pg, dg, split))
                 except Exception as e:
                     errors.append(f"pd-{ptp}/{dtp}: {e}")
 
         # ── 3. EP: MoE models only ──
+        # EP reuses the PD split shape with expert-parallel flags. EPLB
+        # requires num_experts % ep_ranks == 0 for BOTH roles, so only
+        # splits whose per-role GPU counts divide the expert count are
+        # deployable (128 experts on 16 GPUs → 8/8 is the only split).
         n_ep = 0
-        is_moe = bool((self.opt._model_config or {}).get("num_experts") or
-                      (self.opt._model_config or {}).get("n_routed_experts"))
-        if is_moe:
-            self.opt.log(f"   EP (MoE): {len(agg_tp)} TP option(s)", 'info')
-            from core.optimizer.config import FeasibleSplit
-            for tp in agg_tp:
-                replicas = max(1, total_gpus // tp)
-                split = FeasibleSplit(
-                    prefill_pods=replicas, decode_pods=0,
-                    prefill_tp=tp, decode_tp=tp,
-                    prefill_gpus=tp * replicas, decode_gpus=0,
-                    total_gpus=tp * replicas,
-                    prefill_pct=100.0)
+        is_moe = bool(getattr(self.opt, "_is_moe", False))
+        num_experts = int(getattr(self.opt, "_num_experts", 0) or 0)
+        if not is_moe:
+            self.opt.log("   EP: skipped (not a MoE model)", 'info')
+        elif num_experts <= 0:
+            self.opt.log("   EP: skipped (expert count unknown)", 'info')
+        else:
+            # EPLB divisibility: experts % ep_ranks == 0 in both roles
+            valid_eps = [(ptp, dtp, pp, dp, pg, dg, sp)
+                         for (ptp, dtp, pp, dp, pg, dg, sp) in pd_splits
+                         if dg > 0 and num_experts % pg == 0 and num_experts % dg == 0]
+            self.opt.log(
+                f"   EP: {len(valid_eps)} deployable split(s) from "
+                f"{len(pd_splits)} PD splits ({num_experts} experts — "
+                f"both role rank counts must divide it)", 'info')
+            if not valid_eps:
+                self.opt.log(
+                    f"   EP: no valid split — {total_gpus} GPUs across two roles "
+                    f"cannot both divide {num_experts} experts (need GPUs per "
+                    f"role ∈ divisors of {num_experts})", 'warn')
+            for ptp, dtp, pp_pods, dp_pods, pg, dg, split in valid_eps:
                 try:
-                    tc = self.opt._create_ep_config(
-                        tp=tp, num_gpus=tp * replicas,
-                        isl=cfg.isl, osl=cfg.osl,
-                        test_id=f"ep-tp{tp}-{replicas}r")
+                    tc = self.opt._create_ep_config(split)
+                    tc.test_id = f"ep-{pp_pods}p{dp_pods}d-ptp{ptp}-dtp{dtp}"
                     name, n = self._render_config(tc, out_dir, cfg, recorded_cache)
                     configs.append(name)
                     n_ep += 1
                 except Exception as e:
-                    errors.append(f"ep-tp{tp}: {e}")
+                    errors.append(f"ep-{ptp}/{dtp}-{pp_pods}p{dp_pods}d: {e}")
 
         # ── Index + DB placeholder rows ──
         index = {"configs": configs, "total": len(configs),

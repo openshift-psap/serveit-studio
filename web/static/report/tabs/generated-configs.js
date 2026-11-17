@@ -78,13 +78,13 @@
                 prefill_pods: c.prefill_pods, decode_pods: c.decode_pods,
                 replicas: c.replicas
             };
-            var m = /^pd-(\d+)p(\d+)d-ptp(\d+)-dtp(\d+)/.exec(o.name || '');
+            var m = /^(pd|ep)-(\d+)p(\d+)d-ptp(\d+)-dtp(\d+)/.exec(o.name || '');
             if (m) {
-                o.arch = 'pd';
-                o.prefill_pods = o.prefill_pods != null ? o.prefill_pods : parseInt(m[1], 10);
-                o.decode_pods = o.decode_pods != null ? o.decode_pods : parseInt(m[2], 10);
-                o.prefill_tp = o.prefill_tp != null ? o.prefill_tp : parseInt(m[3], 10);
-                o.decode_tp = o.decode_tp != null ? o.decode_tp : parseInt(m[4], 10);
+                o.arch = m[1];
+                o.prefill_pods = o.prefill_pods != null ? o.prefill_pods : parseInt(m[2], 10);
+                o.decode_pods = o.decode_pods != null ? o.decode_pods : parseInt(m[3], 10);
+                o.prefill_tp = o.prefill_tp != null ? o.prefill_tp : parseInt(m[4], 10);
+                o.decode_tp = o.decode_tp != null ? o.decode_tp : parseInt(m[5], 10);
                 o.gpus = o.prefill_pods * o.prefill_tp + o.decode_pods * o.decode_tp;
             } else if (o.gpus == null) {
                 o.gpus = (o.tp || 1) * (o.replicas || 1);
@@ -104,7 +104,7 @@
         s += '</tr>';
 
         rows.forEach(function(c) {
-            var isPD = c.arch === 'pd';
+            var isPD = (c.arch === 'pd' || c.arch === 'ep');
             var tp = isPD
                 ? (c.prefill_tp === c.decode_tp
                     ? 'TP' + c.prefill_tp
@@ -115,7 +115,7 @@
                 : (c.replicas || 1) + '&#215;';
             s += '<tr>' +
                 '<td style="font-weight:600;color:#0e7490;">' + c.name + '</td>' +
-                '<td>' + (isPD ? 'PD' : 'AGGREGATED') + '</td>' +
+                '<td>' + (c.arch === 'ep' ? 'EP' : (c.arch === 'pd' ? 'PD' : 'AGGREGATED')) + '</td>' +
                 '<td style="text-align:center;">' + tp + '</td>' +
                 '<td style="text-align:center;">' + (c.pp > 1 ? c.pp : '&#8212;') + '</td>' +
                 '<td style="text-align:center;">' + pods + '</td>' +
