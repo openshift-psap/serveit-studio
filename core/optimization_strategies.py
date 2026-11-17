@@ -1215,16 +1215,6 @@ class ConfigGenStrategy(OptimizationStrategy):
             with open(_os.path.join(cfg_dir, "endpoint-picker-config.yaml"), "w") as f:
                 f.write(raw)
 
-        # DEBUG (temporary): dump the live attrs to correlate with the YAML
-        try:
-            with open('/tmp/render-debug.log', 'a') as _dbg:
-                _dbg.write(f"RENDER id={id(test_config)} {test_config.test_id} arch={arch} mns={getattr(test_config,'max_num_seqs',None)} "
-                           f"pf_mns={getattr(test_config,'prefill_max_num_seqs',None)} "
-                           f"gmu={getattr(test_config,'gpu_memory_utilization',None)} "
-                           f"pf_gmu={getattr(test_config,'prefill_gpu_memory_utilization',None)}\n")
-        except Exception:
-            pass
-
         # 4. Config summary — auto-tuned params from the rendered YAML
         #    (computed during template rendering, not on the TestConfig)
         import re as _re
@@ -1386,14 +1376,6 @@ class ConfigGenStrategy(OptimizationStrategy):
                     prefill_pct=pg / usable * 100)
                 try:
                     tc = self.opt._create_pd_config(split)
-                    try:
-                        with open('/tmp/ctor-debug.log', 'a') as _d:
-                            _d.write(f"CREATED-PD id={id(tc)} mns={getattr(tc,'max_num_seqs',None)} "
-                                     f"pf_mns={getattr(tc,'prefill_max_num_seqs',None)} "
-                                     f"gmu={getattr(tc,'gpu_memory_utilization',None)} "
-                                     f"pf_gmu={getattr(tc,'prefill_gpu_memory_utilization',None)}\n")
-                    except Exception:
-                        pass
                     tc.test_id = f"pd-{pp_pods}p{dp_pods}d-ptp{ptp}-dtp{dtp}"
                     name, n = self._render_config(tc, out_dir, cfg, recorded_cache)
                     configs.append(name)

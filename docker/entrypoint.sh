@@ -47,6 +47,10 @@ while true; do
     cd "$APP_DIR"
     git fetch origin 2>/dev/null && git reset --hard "origin/$BRANCH" 2>/dev/null || true
     find "$APP_DIR" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+    # Never persist bytecode: a .pyc compiled from an older checkout has
+    # caused the server to run stale code after a git reset (config_gen
+    # summaries came out with null auto-tuned params).
+    export PYTHONDONTWRITEBYTECODE=1
     echo "Commit: $(git log --oneline -1 2>/dev/null || echo 'unknown')"
     cd "$APP_DIR/web"
     python3.11 server.py || true
