@@ -1672,6 +1672,7 @@ class ReportAnalyzer:
         charts = self.build_chart_data(
             test_results, pareto, stats, calibration_results
         )
+        import json as _json
         _run_row = loader.conn.execute(
             'SELECT goal, config_json FROM optimization_runs WHERE id = ?', (run_id,)
         ).fetchone()
@@ -1679,7 +1680,7 @@ class ReportAnalyzer:
         _run_cfg = {}
         try:
             if _run_row and _run_row[1]:
-                _run_cfg = json.loads(_run_row[1])
+                _run_cfg = _json.loads(_run_row[1])
         except (ValueError, TypeError):
             _run_cfg = {}
         _report_goal = (_run_cfg.get('objective') or _run_cfg.get('goal') or _run_goal)
@@ -1696,7 +1697,7 @@ class ReportAnalyzer:
                     _sp = _os.path.join(_cg_dir, _nm, 'config-summary.json')
                     if _os.path.isfile(_sp):
                         with open(_sp) as _f:
-                            _generated_configs.append(json.load(_f))
+                            _generated_configs.append(_json.load(_f))
             except (OSError, ValueError):
                 _generated_configs = []
         recommendation = self.build_recommendation(run_id, results, loader.conn)
