@@ -123,6 +123,12 @@
         });
         s += '</tr>';
 
+        function esc(v) {
+            return String(v == null ? '' : v).replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
         rows.forEach(function(c) {
             var isPD = (c.arch === 'pd' || c.arch === 'ep');
             var tp = isPD
@@ -134,7 +140,7 @@
                 ? c.prefill_pods + 'P + ' + c.decode_pods + 'D'
                 : (c.replicas || 1) + '&#215;';
             s += '<tr>' +
-                '<td style="font-weight:600;color:#0e7490;">' + c.name + '</td>' +
+                '<td style="font-weight:600;color:#0e7490;">' + esc(c.name) + '</td>' +
                 '<td>' + (c.arch === 'ep' ? 'EP' : (c.arch === 'pd' ? 'PD' : 'AGGREGATED')) + '</td>' +
                 '<td style="text-align:center;">' + tp + '</td>' +
                 '<td style="text-align:center;">' + (c.pp > 1 ? c.pp : '&#8212;') + '</td>' +
@@ -143,7 +149,7 @@
                 '<td style="text-align:center;">' + splitPair(c, 'gpu_memory_utilization') + '</td>' +
                 '<td style="text-align:center;">' + splitPair(c, 'max_num_seqs') + '</td>' +
                 '<td>' + (c.max_model_len || '&#8212;') + '</td>' +
-                '<td><button onclick="window.open(\'/api/runs/' + runId + '/configs/' + c.name + '\', \'_blank\')" ' +
+                '<td><button onclick="window.open(\'/api/runs/' + runId + '/configs/' + encodeURIComponent(c.name) + '\', \'_blank\')" ' +
                 'style="padding:3px 10px;background:#f0f9ff;color:#0284c7;border:1px solid #bae6fd;border-radius:4px;cursor:pointer;font-size:0.85em;">&#11015; zip</button></td>' +
                 '</tr>';
         });

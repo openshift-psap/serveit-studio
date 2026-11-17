@@ -539,7 +539,14 @@
                     const borderStyle = mi === 0 && idx > 0 ? ' border-top:2px solid #cbd5e1;' : '';
                     const _tputMean = (d.p90 != null ? d.p90
                         : (d.p50 != null ? d.p50 : null));
-                    const onlyMean = m.key === 'throughput' && _tputMean != null;
+                    // Collapse only when there is no real distribution: all
+                    // percentiles absent or identical (guidellm's window
+                    // mean is copied into every slot by some parsers)
+                    const _tputVals = [d.p50, d.p90, d.p95, d.p99];
+                    const _tputDistinct = _tputVals.filter(function(v) { return v != null; });
+                    const _tputSame = _tputDistinct.every(function(v) { return v === _tputDistinct[0]; });
+                    const onlyMean = m.key === 'throughput' && _tputMean != null
+                        && (_tputDistinct.length <= 1 || _tputSame);
                     let p90Style = '';
                     if (a) {
                         const other = (idx === 0 ? a[m.key] : p[m.key]) || {};

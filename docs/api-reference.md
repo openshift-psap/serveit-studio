@@ -363,8 +363,9 @@ curl -s $BASE_URL/api/runs/42/configs -o configs.zip
 #### `GET /api/runs/<run_id>/configs/<config_name>`
 
 Download a single generated configuration as a zip. Contains
-`inference-deployment.yaml`, `epp-prereq-manifests.yaml`,
-`rdma-discovery-script.yaml`, and `config-summary.json`.
+`inference-deployment.yaml` and `config-summary.json`, plus
+`epp-prereq-manifests.yaml` and `rdma-discovery-script.yaml` when the
+prerequisite render succeeded.
 
 ```bash
 curl -s $BASE_URL/api/runs/42/configs/pd-2p8d-ptp4-dtp1 -o pd-2p8d-ptp4-dtp1.zip

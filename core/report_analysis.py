@@ -1629,9 +1629,8 @@ class ReportAnalyzer:
                         all_results[-1]['pprof'] = _pp_lite
                 except Exception:
                     pass
-            # Raw profile files (base64) for report downloads
-            if getattr(r, 'profiles_blob', None):
-                all_results[-1]['profiles_blob'] = r.profiles_blob
+            # profiles_blob (raw base64 pprof) is deliberately not copied:
+            # no tab renders it and both exporters delete it on read
         return all_results
 
     def build_full_report_data(self, run_id, loader):

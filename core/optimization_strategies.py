@@ -1186,8 +1186,18 @@ class ConfigGenStrategy(OptimizationStrategy):
                         recorded.append(kw.get("input_data") or "")
                         return _Rec(0)
                     if args and args[0] == "get":
+                        # report everything missing so the manager applies it
                         return _Rec(1)
                     return _Rec(0)
+                def run_json(self, args, **kw):
+                    # Readiness polling: report ready so the recording run
+                    # finishes instead of erroring on a missing method
+                    if args and args[0] == "get":
+                        return {"status": {"replicas": 1, "readyReplicas": 1,
+                                           "availableReplicas": 1,
+                                           "conditions": [{"type": "Available",
+                                                           "status": "True"}]}}
+                    return {}
             try:
                 prereq_mgr = PrereqManager(
                     namespace=cfg.namespace,
@@ -1195,23 +1205,27 @@ class ConfigGenStrategy(OptimizationStrategy):
                     scheduler_image=getattr(cfg, "scheduler_image", None),
                     gateway_class=getattr(cfg, "gateway_class", "istio"),
                 )
-                prereq_mgr.deploy_prereqs(
+                _ok = prereq_mgr.deploy_prereqs(
                     architecture=arch,
                     log_callback=lambda msg: None,
                     epp_config=self.opt._build_epp_config(),
                     optimizer_config=cfg,
                 )
+                if not _ok:
+                    self.opt.log(
+                        f"   ⚠️  prereq render for {arch} reported failure — "
+                        f"the bundle may be incomplete", 'warning')
             except Exception as _e:
                 # An empty prereq bundle would ship a config that cannot
                 # be applied — surface it instead of failing silently
                 self.opt.log(
-                    f"   ⚠️  prereq render failed for {arch}: {_e}", 'warn')
+                    f"   ⚠️  prereq render failed for {arch}: {_e}", 'warning')
             if recorded:
                 recorded_cache[arch_key] = "\n---\n".join(recorded)
             else:
                 # Don't cache a failed render — the next config retries
                 self.opt.log(
-                    f"   ⚠️  no prereq manifests rendered for {arch}", 'warn')
+                    f"   ⚠️  no prereq manifests rendered for {arch}", 'warning')
 
         _bundle = recorded_cache.get(arch_key, "")
         _prereq_path = _os.path.join(cfg_dir, "epp-prereq-manifests.yaml")
@@ -1221,7 +1235,7 @@ class ConfigGenStrategy(OptimizationStrategy):
         else:
             self.opt.log(
                 f"   ⚠️  {name}: no prereq bundle available — "
-                f"apply the EPP/RDMA manifests separately", 'warn')
+                f"apply the EPP/RDMA manifests separately", 'warning')
 
         # The RDMA discovery ConfigMap is mounted into every model-server pod
         # (/scripts/discover_ib_hca.sh); emit it as its own file so users who
@@ -1238,7 +1252,7 @@ class ConfigGenStrategy(OptimizationStrategy):
                     break
         except Exception as _e:
             self.opt.log(
-                f"   ⚠️  could not extract rdma-discovery-script.yaml: {_e}", 'warn')
+                f"   ⚠️  could not extract rdma-discovery-script.yaml: {_e}", 'warning')
 
         # 3. Raw EndpointPickerConfig
         epp = self.opt._build_epp_config() or {}
@@ -1338,7 +1352,8 @@ class ConfigGenStrategy(OptimizationStrategy):
         agg_tp = self.opt._get_valid_tp_options("aggregated")
         self.opt.log(f"   Aggregated: {len(agg_tp)} valid TP option(s): {agg_tp}", 'info')
         pp_supported = self.opt._load_pp_supported_architectures() if hasattr(self.opt, "_load_pp_supported_architectures") else []
-        model_arch = (self.opt._model_config or {}).get("architectures", [""])[0] if self.opt._model_config else ""
+        model_arch = (((self.opt._model_config or {}).get("architectures") or [""])[0]
+                      if self.opt._model_config else "")
         can_pp = model_arch in pp_supported if pp_supported else False
 
         for tp in agg_tp:

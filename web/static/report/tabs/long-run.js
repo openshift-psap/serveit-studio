@@ -370,7 +370,8 @@
                     }
                     // Preempt: BLIS count OR real vLLM preemption rate
                     var preempt = (am.blis_preemptions != null) ? am.blis_preemptions
-                        : (pm.vllm_preemptions_rate ? (pm.vllm_preemptions_rate.avg || 0) : null);
+                        : (pm.vllm_preemptions_rate && pm.vllm_preemptions_rate.avg != null
+                            ? pm.vllm_preemptions_rate.avg : null);
                     // Cache %: BLIS engine report OR real hits/queries ratio
                     var cache = am.blis_cache_hit_rate;
                     if (cache == null && pm.vllm_prefix_cache_hits_rate && pm.vllm_prefix_cache_queries_rate) {
