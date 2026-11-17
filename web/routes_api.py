@@ -811,6 +811,12 @@ def get_run_charts(run_id):
             data = analyzer.build_full_report_data(run_id, loader)
             if not data:
                 return jsonify({'error': 'No results found for this run'}), 404
+            # Raw base64 pprof blobs are only consumed by the offline
+            # exporter (which deletes them too) — no live tab reads them.
+            # ~55KB/row of base64 that compresses poorly.
+            for _r in data.get('all_results') or []:
+                if 'profiles_blob' in _r:
+                    _r.pop('profiles_blob', None)
             resp = jsonify(data)
             # report data is regenerated per request and must never be
             # served from browser heuristic cache
