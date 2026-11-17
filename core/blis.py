@@ -145,6 +145,9 @@ class BlisRunner:
         self.kubectl = kubectl
         self.namespace = namespace
         self.pod_name = pod_name
+        # Last command line handed to the simulator (populated by run /
+        # run_replay). Callers record it in the report; no monkeypatching.
+        self.last_command = None
 
     @property
     def remote(self):
@@ -514,6 +517,7 @@ pools:
         if int(_rep) > 1:
             args += ["--num-instances", str(int(_rep))]
 
+        self.last_command = " ".join(str(a) for a in args)
         try:
             r = self._exec(args, timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -886,6 +890,7 @@ pools:
         if self.remote:
             args += ["--saturation-report", f"{pod_scenarios_dir}/saturation.json"]
 
+        self.last_command = " ".join(str(a) for a in args)
         try:
             r = self._exec(args, timeout=timeout)
         except subprocess.TimeoutExpired:

@@ -491,7 +491,14 @@
 
         // Build a combined table when we have both primary and Aggregated percentiles
         const hasPrimary = primaryRec && primaryRec.config.percentiles;
-        const hasAgg = aggBase && aggBase.percentiles && (!primaryRec || aggBase.config_name !== primaryRec.config.config_name);
+        // A comparison only makes sense against a DIFFERENT architecture:
+        // aggregated-vs-aggregated is the same deployment shape, and the
+        // baseline may simply be another config of the same family
+        const _primaryArchKey = (primaryRec && primaryRec.architecture ? primaryRec.architecture : 'aggregated').toLowerCase();
+        const _baselineArchKey = (aggBase && aggBase.architecture ? aggBase.architecture : 'aggregated').toLowerCase();
+        const hasAgg = aggBase && aggBase.percentiles
+            && _baselineArchKey !== _primaryArchKey
+            && (!primaryRec || aggBase.config_name !== primaryRec.config.config_name);
 
         if (hasPrimary) {
             const p = primaryRec.config.percentiles;
@@ -530,8 +537,9 @@
                 metricDefs.forEach((m, mi) => {
                     const d = pctl[m.key] || {};
                     const borderStyle = mi === 0 && idx > 0 ? ' border-top:2px solid #cbd5e1;' : '';
-                    const onlyMean = m.key === 'throughput'
-                        && d.p90 != null && d.p50 == null && d.p95 == null && d.p99 == null;
+                    const _tputMean = (d.p90 != null ? d.p90
+                        : (d.p50 != null ? d.p50 : null));
+                    const onlyMean = m.key === 'throughput' && _tputMean != null;
                     let p90Style = '';
                     if (a) {
                         const other = idx === 0 ? a[m.key] : p[m.key];
@@ -542,9 +550,10 @@
                     if (mi === 0) s += `<td rowspan="3" style="vertical-align:middle; font-weight:700;${borderStyle}">${label}</td>`;
                     s += `<td style="color:#64748b;${borderStyle}">${m.name}</td>`;
                     if (onlyMean) {
-                        // Throughput is a window mean in guidellm — no
-                        // per-request percentiles exist to show
-                        s += `<td colspan="4" style="${p90Style}${borderStyle}">${d.p90} <span style="color:#94a3b8; font-size:0.9em;">(mean; a rate has no per-request percentiles)</span></td>`;
+                        // Throughput is a window mean in guidellm — a rate
+                        // has no per-request percentiles, and some parsers
+                        // fill every percentile with the same mean
+                        s += `<td colspan="4" style="${p90Style}${borderStyle}">${_tputMean} <span style="color:#94a3b8; font-size:0.9em;">(mean; a rate has no per-request percentiles)</span></td>`;
                     } else {
                         s += `<td style="${borderStyle}">${d.p50 ?? '-'}</td>`;
                         s += `<td style="${p90Style}${borderStyle}">${d.p90 ?? '-'}</td>`;

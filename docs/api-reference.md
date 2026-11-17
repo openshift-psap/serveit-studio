@@ -342,6 +342,34 @@ Pod error logs for a run.
 curl -s $BASE_URL/api/runs/42/pod_errors | jq
 ```
 
+#### `GET /api/runs/<run_id>/generated_configs`
+
+Index of configurations rendered by a `config_gen` run. Each entry carries the
+deployable parameters (architecture, TP, pods, GPUs, `max_model_len`, and the
+auto-tuned vLLM values when custom settings were enabled).
+
+```bash
+curl -s $BASE_URL/api/runs/42/generated_configs | jq '.configs[0]'
+```
+
+#### `GET /api/runs/<run_id>/configs`
+
+Download every generated configuration as one zip (one folder per config).
+
+```bash
+curl -s $BASE_URL/api/runs/42/configs -o configs.zip
+```
+
+#### `GET /api/runs/<run_id>/configs/<config_name>`
+
+Download a single generated configuration as a zip. Contains
+`inference-deployment.yaml`, `epp-prereq-manifests.yaml`,
+`rdma-discovery-script.yaml`, and `config-summary.json`.
+
+```bash
+curl -s $BASE_URL/api/runs/42/configs/pd-2p8d-ptp4-dtp1 -o pd-2p8d-ptp4-dtp1.zip
+```
+
 ---
 
 ### Models & Templates

@@ -1211,71 +1211,70 @@ function _startEverythingDownload() {
 
 function _showDatasetCmd() {
     document.getElementById('download-choice-modal').classList.remove('active');
-    fetch('/api/runs').then(r => r.json()).then(runs => {
-        if (!runs || !runs.length) { alert('No run config found'); return; }
-        // Runs API no longer ships config_json — fetch the latest run's config
-        return fetch('/api/runs/' + runs[0].id + '/config')
-            .then(function(res) { return res.json(); })
-            .then(function(payload) {
-        var cfg = payload && (payload.config || payload);
-        if (!cfg || typeof cfg !== 'object' || !Object.keys(cfg).length) {
-            alert('No run config found'); return;
-        }
-        var isl = cfg.isl || 2000;
-        var osl = cfg.osl || 100;
-        var model = cfg.model_name || cfg.model || 'unknown';
-        var islStd = cfg.isl_stdev || 0;
-        var oslStd = cfg.osl_stdev || 0;
-        var mode = cfg.prefix_cache_mode || 'identical';
-        var hitPct = cfg.prefix_cache_hit_pct || 0;
-        var groups = cfg.prefix_cache_groups || 5;
-        var prefixTokens = cfg.prefix_tokens || 0;
-        var prefixCount = cfg.prefix_count || 1;
-        var turns = cfg.turns || 1;
-        var firstPrompt = cfg.first_prompt_tokens || 0;
-        var firstPromptStd = cfg.first_prompt_tokens_stdev || 0;
-        var firstPromptMin = cfg.first_prompt_tokens_min || 0;
-        var firstPromptMax = cfg.first_prompt_tokens_max || 0;
-        var useCorpus = cfg.use_corpus || false;
-        var structuredPrefix = cfg.structured_prefix || false;
+    var showError = function (msg) { alert(msg || 'No run config found'); };
+    fetch('/api/runs')
+        .then(function (r) { return r.json(); })
+        .then(function (runs) {
+            if (!runs || !runs.length) { showError('No runs found'); return; }
+            // /api/runs no longer ships config_json — fetch the latest run's
+            // full UI config (the authoritative snapshot) instead
+            return fetch('/api/runs/' + runs[0].id + '/config')
+                .then(function (res) {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
+                .then(function (payload) {
+                    var cfg = payload && (payload.config || payload);
+                    if (!cfg || typeof cfg !== 'object' || !Object.keys(cfg).length) {
+                        showError(); return;
+                    }
+                    _renderDatasetCmd(cfg);
+                });
+        })
+        .catch(function (err) {
+            console.warn('dataset cmd failed:', err);
+            showError('Could not build the dataset command: ' + err.message);
+        });
+}
 
-        // Build seed config object with ALL workload parameters
-        var seedConfig = {
-            model: model, isl: isl, osl: osl,
-            isl_stdev: islStd || null, osl_stdev: oslStd || null,
-            turns: turns, use_corpus: useCorpus,
-            hit_pct: hitPct, prefix_cache_mode: mode,
-            prefix_cache_groups: groups,
-            prefix_tokens: cfg.prefix_tokens || 0,
-            prefix_count: cfg.prefix_count || 1,
-            structured_prefix: structuredPrefix,
-        };
-        if (firstPrompt > 0) {
-            seedConfig.first_prompt_tokens = firstPrompt;
-            if (firstPromptStd > 0) seedConfig.first_prompt_tokens_stdev = firstPromptStd;
-            if (firstPromptMin > 0) seedConfig.first_prompt_tokens_min = firstPromptMin;
-            if (firstPromptMax > 0) seedConfig.first_prompt_tokens_max = firstPromptMax;
-        }
-        // Remove null/zero values for compactness
-        Object.keys(seedConfig).forEach(function(k) { if (seedConfig[k] === null || seedConfig[k] === 0 || seedConfig[k] === false) delete seedConfig[k]; });
-        var seedB64 = btoa(JSON.stringify(seedConfig));
-        {
-            var cmd = '# Workload Seed\n';
-            cmd += '# Paste into "Import from Seed" on any ServeIt Studio instance,\n';
-            cmd += '# or use directly with the CLI to generate the dataset:\n\n';
-            if (turns > 1) {
-                cmd += 'generate_turn_dataset \\\n';
-            } else {
-                cmd += 'generate_dataset \\\n';
-            }
-            cmd += '  --reproduce ' + seedB64 + ' \\\n';
-            cmd += '  --output <dataset.jsonl>';
-
-            document.getElementById('dataset-cmd-text').textContent = cmd;
-            document.getElementById('dataset-cmd-modal').classList.add('active');
-        }
-            });
+function _renderDatasetCmd(cfg) {
+    var isl = cfg.isl || 2000;
+    var osl = cfg.osl || 100;
+    var model = cfg.model_name || cfg.model || 'unknown';
+    var turns = cfg.turns || 1;
+    var seedConfig = {
+        model: model, isl: isl, osl: osl,
+        isl_stdev: cfg.isl_stdev || null,
+        osl_stdev: cfg.osl_stdev || null,
+        turns: turns,
+        use_corpus: cfg.use_corpus || false,
+        hit_pct: cfg.prefix_cache_hit_pct || 0,
+        prefix_cache_mode: cfg.prefix_cache_mode || 'identical',
+        prefix_cache_groups: cfg.prefix_cache_groups || 5,
+        prefix_tokens: cfg.prefix_tokens || 0,
+        prefix_count: cfg.prefix_count || 1,
+        structured_prefix: cfg.structured_prefix || false,
+    };
+    var firstPrompt = cfg.first_prompt_tokens || 0;
+    if (firstPrompt > 0) {
+        seedConfig.first_prompt_tokens = firstPrompt;
+        if (cfg.first_prompt_tokens_stdev > 0) seedConfig.first_prompt_tokens_stdev = cfg.first_prompt_tokens_stdev;
+        if (cfg.first_prompt_tokens_min > 0) seedConfig.first_prompt_tokens_min = cfg.first_prompt_tokens_min;
+        if (cfg.first_prompt_tokens_max > 0) seedConfig.first_prompt_tokens_max = cfg.first_prompt_tokens_max;
+    }
+    // Remove null/zero values for compactness
+    Object.keys(seedConfig).forEach(function (k) {
+        if (seedConfig[k] === null || seedConfig[k] === 0 || seedConfig[k] === false) delete seedConfig[k];
     });
+    var seedB64 = btoa(JSON.stringify(seedConfig));
+    var cmd = '# Workload Seed\n';
+    cmd += '# Paste into "Import from Seed" on any ServeIt Studio instance,\n';
+    cmd += '# or use directly with the CLI to generate the dataset:\n\n';
+    cmd += (turns > 1 ? 'generate_turn_dataset \\\n' : 'generate_dataset \\\n');
+    cmd += '  --reproduce ' + seedB64 + ' \\\n';
+    cmd += '  --output <dataset.jsonl>';
+    document.getElementById('dataset-cmd-text').textContent = cmd;
+    document.getElementById('dataset-cmd-modal').classList.add('active');
 }
 
 document.getElementById('dl-database-btn').addEventListener('click', _startDbDownload);

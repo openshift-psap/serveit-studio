@@ -1825,14 +1825,6 @@ class RecipeOptimizer(
                 error_message=f"model not in BLIS catalog: {self.config.model_name}",
             )
 
-        # Capture the full BLIS command line for the report
-        _blis_cmd_capture = []
-        _orig_blis_exec = runner_scenario._exec
-        def _capture_exec(args, timeout=600):
-            _blis_cmd_capture.append(' '.join(str(a) for a in args))
-            return _orig_blis_exec(args, timeout=timeout)
-        runner_scenario._exec = _capture_exec
-
         # Workload: WekaTrace sessions replay through blis replay (real
         # request sequence, prefix structure and burstiness); synthetic
         # shapes go through blis run. Same definition guidellm would run.
@@ -1863,8 +1855,11 @@ class RecipeOptimizer(
                 self.log(f"   BLIS: replaying WekaTrace sessions "
                          f"(max {max_traces}, compressed to {duration}s"
                          f"{f', input budget {max_input}' if max_input else ''})", "info")
-                _rep = int(getattr(test_config, "prefill_pods", None)
-                           or getattr(test_config, "replicas", 1)
+                # TestConfig carries replicas (= prefill_replicas +
+                # decode_replicas for PD/EP); there is no `prefill_pods`.
+                # BLIS takes a single instance count, so a split
+                # deployment simulates its total pod count.
+                _rep = int(getattr(test_config, "replicas", None)
                            or getattr(test_config, "num_pods", 1) or 1)
                 _slo = None
                 if getattr(self.config, "latency_constraint_enabled", False):
@@ -1875,8 +1870,8 @@ class RecipeOptimizer(
                 self.log("   BLIS: WekaTrace conversion failed — falling back "
                          "to the synthetic workload shape", "warn")
         if sim is None and not getattr(self.config, "dataset_source_mode", "") == "wekatrace":
-            _instances = int(getattr(test_config, "prefill_pods", None)
-                             or getattr(test_config, "replicas", 1) or 1)
+            _instances = int(getattr(test_config, "replicas", None)
+                             or getattr(test_config, "num_pods", 1) or 1)
             sim = runner_scenario.run(scenario, name, self.config, seed=42,
                                       instances=_instances)
         summary = BlisRunner.summarize(sim)
@@ -2085,10 +2080,10 @@ class RecipeOptimizer(
             _v = summary.get(_k)
             if _v is not None:
                 setattr(result, _attr, _v)
-        # Restore the original exec and record the command line
-        runner_scenario._exec = _orig_blis_exec
-        if _blis_cmd_capture:
-            blis_metrics['blis_command'] = _blis_cmd_capture[0]
+        # The simulator records the exact command line it ran (no
+        # monkeypatching, so an early return cannot leave it patched)
+        if getattr(runner_scenario, "last_command", None):
+            blis_metrics['blis_command'] = runner_scenario.last_command
         result.blis_metrics = blis_metrics
         # itl_mean feeds the DB saver's metrics_json.itl_mean field (the
         # saver reads this attribute; tpot_mean lands nowhere)

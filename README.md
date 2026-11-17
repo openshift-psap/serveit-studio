@@ -113,6 +113,7 @@ The optimizer selects which architectures to test based on the goal:
 | PD Only | `pd_only` | Only test prefill/decode disaggregated configs. |
 | EP Only | `ep_only` | Only test expert parallel configs (MoE models). |
 | Single Test | `single_test` | Run one exact user-specified config (architecture, TP, pods). |
+| Config Generator | `config_gen` | Render every deployable config's YAMLs (aggregated/PD/EP) for download. Runs no tests. |
 
 ### The 11-Step Pipeline
 

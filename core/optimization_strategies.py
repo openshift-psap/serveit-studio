@@ -1201,8 +1201,11 @@ class ConfigGenStrategy(OptimizationStrategy):
                     epp_config=self.opt._build_epp_config(),
                     optimizer_config=cfg,
                 )
-            except Exception:
-                pass
+            except Exception as _e:
+                # An empty prereq bundle would ship a config that cannot
+                # be applied — surface it instead of failing silently
+                self.opt.log(
+                    f"   ⚠️  prereq render failed for {arch}: {_e}", 'warn')
             recorded_cache[arch_key] = "\n---\n".join(recorded)
 
         _prereq_path = _os.path.join(cfg_dir, "epp-prereq-manifests.yaml")
@@ -1304,7 +1307,6 @@ class ConfigGenStrategy(OptimizationStrategy):
     def execute(self):
         import os as _os
         import json as _json
-        import math as _math
         import datetime as _dt
         from core.orchestrator.result import TestResult as _TR
 
@@ -1414,10 +1416,15 @@ class ConfigGenStrategy(OptimizationStrategy):
         elif num_experts <= 0:
             self.opt.log("   EP: skipped (expert count unknown)", 'info')
         else:
-            # EPLB divisibility: experts % ep_ranks == 0 in both roles
+            # EPLB divisibility: experts % ep_ranks == 0 in both roles.
+            # The template passes ONE num_redundant_experts (= decode
+            # ranks) to both roles, so the redundancy must divide the
+            # prefill ranks too, i.e. the smaller rank count divides the
+            # larger one.
             valid_eps = [(ptp, dtp, pp, dp, pg, dg, sp)
                          for (ptp, dtp, pp, dp, pg, dg, sp) in pd_splits
-                         if dg > 0 and num_experts % pg == 0 and num_experts % dg == 0]
+                         if dg > 0 and num_experts % pg == 0 and num_experts % dg == 0
+                         and (max(pg, dg) % min(pg, dg) == 0)]
             self.opt.log(
                 f"   EP: {len(valid_eps)} deployable split(s) from "
                 f"{len(pd_splits)} PD splits ({num_experts} experts — "
@@ -1448,8 +1455,6 @@ class ConfigGenStrategy(OptimizationStrategy):
         # (the report route 404s with zero test_configurations rows).
         # The generated-configs tab reads from the API; these rows just
         # make the report shell render.
-        import datetime as _dt
-        from core.orchestrator.result import TestResult as _TR
         from core.config_generator import TestConfig as _TC
         for name in configs:
             _sp = _os.path.join(out_dir, name, "config-summary.json")

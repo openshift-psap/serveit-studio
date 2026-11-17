@@ -378,26 +378,24 @@ def get_runs():
     """Get all optimization runs from database."""
     try:
         with get_db() as conn:
+            # config_json is read here but stripped from the response: the
+            # dropdown needs only four display fields, not the ~6KB blob
             runs = conn.execute('''
                 SELECT id, run_name, model, isl, osl, num_users, status,
                        created_at, completed_at, notes, goal, test_duration,
                        max_gpus, isl_stdev, osl_stdev, turns, rate_type,
-                       workload_mode, prefix_cache_hit_pct, stop_mode
+                       workload_mode, prefix_cache_hit_pct, stop_mode,
+                       config_json
                 FROM optimization_runs
                 ORDER BY created_at DESC
             ''').fetchall()
             out = []
             for run in runs:
                 d = dict(run)
-                # Small config-derived display fields (chars conversion,
-                # image tag) — avoids shipping the whole 6KB config blob
-                # just to render the dropdown label.
                 try:
-                    cfg = conn.execute(
-                        'SELECT config_json FROM optimization_runs WHERE id = ?',
-                        (d['id'],)).fetchone()
-                    c = json.loads(cfg['config_json']) if cfg and cfg['config_json'] else {}
+                    c = json.loads(d.pop('config_json') or '{}')
                 except (ValueError, TypeError):
+                    d.pop('config_json', None)
                     c = {}
                 d['chars_per_token'] = c.get('chars_per_token')
                 d['isl_original_chars'] = c.get('isl_original_chars')
@@ -1060,44 +1058,40 @@ def get_generated_configs(run_id):
                      'run_id': run_id})
 
 
+def _zip_directory(dir_path, arc_root=''):
+    """Zip the files in dir_path (optionally nested under arc_root)."""
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        for f in sorted(os.listdir(dir_path)):
+            fp = os.path.join(dir_path, f)
+            if os.path.isfile(fp):
+                z.write(fp, os.path.join(arc_root, f) if arc_root else f)
+    buf.seek(0)
+    return buf
+
+
 @app.route('/api/runs/<int:run_id>/configs/<config_name>')
 def download_run_config(run_id, config_name):
     """Download one generated configuration's YAMLs as a zip."""
-    import zipfile
-    import io
     # sanitize: no path traversal
     config_name = config_name.replace('/', '').replace('..', '')
     cfg_dir = f'/mnt/storage/generated-configs/{run_id}/{config_name}'
     if not os.path.isdir(cfg_dir):
         return jsonify({'success': False, 'error': f'Config {config_name} not found'}), 404
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
-        for f in sorted(os.listdir(cfg_dir)):
-            fp = os.path.join(cfg_dir, f)
-            if os.path.isfile(fp):
-                z.write(fp, f)
-    buf.seek(0)
-    return send_file(buf, mimetype='application/zip', as_attachment=True,
-                     download_name=f'{config_name}.zip')
+    return send_file(_zip_directory(cfg_dir), mimetype='application/zip',
+                     as_attachment=True, download_name=f'{config_name}.zip')
 
 
 @app.route('/api/runs/<int:run_id>/configs')
 def download_run_configs(run_id):
     """Download the generated configuration YAMLs (config-gen goal) as a zip."""
-    import zipfile
     cfg_dir = f'/mnt/storage/generated-configs/{run_id}'
     if not os.path.isdir(cfg_dir):
         return jsonify({'success': False, 'error': f'No generated configs for run {run_id}'}), 404
-    import tempfile
-    import io
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
-        for f in sorted(os.listdir(cfg_dir)):
-            fp = os.path.join(cfg_dir, f)
-            if os.path.isfile(fp):
-                z.write(fp, f)
-    buf.seek(0)
-    return send_file(buf, mimetype='application/zip', as_attachment=True,
+    return send_file(_zip_directory(cfg_dir), mimetype='application/zip',
+                     as_attachment=True,
                      download_name=f'serveit-configs-run{run_id}.zip')
 
 

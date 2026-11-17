@@ -1476,17 +1476,17 @@ class ReportAnalyzer:
                 pass
         return None
 
-    def build_all_results_table(self, results, include_all=False):
+    def build_all_results_table(self, results):
         """Build the all-results table data for the frontend.
 
-        include_all=True keeps metric-less rows (config_gen has none by
-        design — the Generated Configs tab reads the index from the API,
-        but the report still needs rows to render).
+        Only successful rows are included; config_gen rows carry no
+        metrics by design and are rendered by the Generated Configs tab
+        from the embedded index instead.
         """
         import json
         def _r2(v):
             return round(v, 2) if v is not None else None
-        successful = list(results) if include_all else [r for r in results if r.is_successful]
+        successful = [r for r in results if r.is_successful]
         all_results = []
         # Preserve test-execution order (DB id order from the loader) —
         # charts and tables should follow the run sequence, not metric rank
@@ -1684,11 +1684,13 @@ class ReportAnalyzer:
         except (ValueError, TypeError):
             _run_cfg = {}
         _report_goal = (_run_cfg.get('objective') or _run_cfg.get('goal') or _run_goal)
+        # One resolved goal drives both the config_gen gating and the
+        # emitted run_config.goal (they previously diverged)
+        _run_goal = _report_goal or _run_goal
         # config_gen rows carry no metrics — they are shown by the
         # Generated Configs tab from the embedded index, not as a results
         # table (rows would render with every metric null)
-        all_results = self.build_all_results_table(
-            results, include_all=False)
+        all_results = self.build_all_results_table(results)
 
         # Embed generated configs so downloaded (offline) reports render too
         _generated_configs = []

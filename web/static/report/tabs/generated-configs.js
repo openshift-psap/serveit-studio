@@ -112,9 +112,12 @@
         var s = '<table class="results-table" id="' + tblId + '" style="font-size:0.82em;width:100%">';
         var headers = ['Configuration', 'Architecture', 'TP', 'PP', 'Pods',
                        'GPUs', 'gpu_mem_util', 'max_num_seqs', 'max_model_len', 'Download'];
+        // text columns must sort as text; numeric ones as numbers
+        var sortTypes = ['str', 'str', 'str', 'num', 'num', 'num',
+                         'num', 'num', 'num', 'str'];
         s += '<tr>';
         headers.forEach(function(h, i) {
-            s += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tblId + '\',' + i + ',\'num\')">' + h + ' &#x21C5;</th>';
+            s += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tblId + '\',' + i + ',\'' + sortTypes[i] + '\')">' + h + ' &#x21C5;</th>';
         });
         s += '</tr>';
 

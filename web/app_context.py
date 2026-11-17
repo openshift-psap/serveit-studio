@@ -94,7 +94,14 @@ def _gzip_api_response(resp):
         resp.set_data(comp)
         resp.headers['Content-Encoding'] = 'gzip'
         resp.headers['Content-Length'] = str(len(comp))
-        resp.headers['Vary'] = 'Accept-Encoding'
+        # Preserve any existing Vary (e.g. Cookie) and drop the stale ETag:
+        # it was computed over the uncompressed body
+        _vary = resp.headers.get('Vary')
+        if _vary and 'accept-encoding' not in _vary.lower():
+            resp.headers['Vary'] = _vary + ', Accept-Encoding'
+        else:
+            resp.headers['Vary'] = 'Accept-Encoding'
+        resp.headers.pop('ETag', None)
     except Exception:
         pass
     return resp

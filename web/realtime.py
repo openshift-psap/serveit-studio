@@ -1141,19 +1141,12 @@ def handle_scan_cluster(data):
 
 def read_config_from_pvc(pvc_name: str, model_name: str, namespace: Optional[str] = None,
                          quiet: bool = False) -> Optional[Dict]:
-    """Read a model's config.json from a PVC.
+    """Read model config.json from existing PVC by deploying a temporary pod.
 
     quiet=True is used by the auto-scan loop that probes every PVC: misses
-    are expected there and must not surface as errors in the UI.
-    """
-    def _log(msg, level='info'):
-        # Quiet mode (PVC scanning) suppresses everything — a miss on one
-        # PVC is expected and the caller reports the aggregate outcome.
-        if not quiet:
-            log_to_ui(msg, level)
-
-    """
-    Read model config.json from existing PVC by deploying a temporary pod.
+    are expected there and must not surface as noise in the UI. Genuine
+    failures (pod cannot be created or never becomes ready) are still
+    reported — they mean "could not check", not "not cached".
 
     Args:
         pvc_name: Name of the PVC containing the model
@@ -1163,6 +1156,10 @@ def read_config_from_pvc(pvc_name: str, model_name: str, namespace: Optional[str
     Returns:
         Model config dict, or None if read fails
     """
+    def _log(msg, level='info'):
+        # Quiet mode suppresses expected misses; errors are always shown
+        if not quiet or level == 'error':
+            log_to_ui(msg, level)
     if namespace is None:
         namespace = TARGET_NAMESPACE
     import json
@@ -1241,36 +1238,48 @@ spec:
         # Search for config.json files in the PVC with retry logic
         find_result = None
         for attempt in range(3):
-            # /models/tmp holds pip-temp dirs owned by root (created by the
-            # model-download job) — find as the reader user hits EACCES there.
-            # Prune it and silence stderr so expected misses stay quiet.
-            # Prune the download job's root-owned dirs (EACCES as the reader
-            # user) and force exit 0 — find returns 1 when any directory is
-            # unreadable, which would discard the matches it already printed.
+            # /models/tmp holds root-owned pip-temp dirs from the download
+            # job: find as the reader user hits EACCES there and exits 1,
+            # which would discard the matches it already printed. Prune that
+            # subtree, silence stderr, and print a sentinel so a genuine
+            # exec failure (no sentinel) stays distinguishable from an
+            # empty PVC (sentinel, no paths).
             find_result = kubectl.run(
                 ['exec', pod_name, '-n', namespace, '--', 'sh', '-c',
                  "find /models -path /models/tmp -prune -o "
-                 "-name config.json -print 2>/dev/null; exit 0"],
+                 "-name config.json -print 2>/dev/null; "
+                 "echo __SERVEIT_FIND_DONE__"],
                 check=False
             )
 
-            if find_result.returncode == 0 and find_result.stdout.strip():
+            _found = (find_result.stdout or '').replace('__SERVEIT_FIND_DONE__', '').strip()
+            if find_result.returncode == 0 and _found:
                 break
 
             if attempt < 2:
                 _log(f'   Retry {attempt + 1}/3: Searching for config.json files...', 'info')
                 time.sleep(2)
 
-        if not find_result or find_result.returncode != 0 or not find_result.stdout.strip():
+        _out = (find_result.stdout or '') if find_result else ''
+        _exec_ok = '__SERVEIT_FIND_DONE__' in _out
+        _paths = [ln for ln in _out.replace('__SERVEIT_FIND_DONE__', '').split('\n') if ln.strip()]
+
+        if not _exec_ok:
+            # Could not even run find — this is a failure to inspect the
+            # PVC, not evidence that the model is absent
+            _log(f'❌ Could not search PVC {pvc_name}: '
+                 f'{(find_result.stderr or "exec failed").strip()[:200]}', 'error')
+            kubectl.run(['delete', 'pod', pod_name, '-n', namespace], check=False)
+            return None
+
+        if not _paths:
             # An empty PVC is a normal outcome when probing every PVC
             _log(f'   No config.json files in PVC {pvc_name}', 'info')
-            if find_result and find_result.stderr:
-                _log(f'   Find error: {find_result.stderr}', 'debug')
             kubectl.run(['delete', 'pod', pod_name, '-n', namespace], check=False)
             return None
 
         # Get all config.json paths
-        all_config_paths = find_result.stdout.strip().split('\n')
+        all_config_paths = _paths
 
         # Filter for paths containing the model name
         # Support both formats: "RedHatAI/Model-Name" and "RedHatAI--Model-Name"
