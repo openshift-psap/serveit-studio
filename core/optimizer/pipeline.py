@@ -1825,6 +1825,14 @@ class RecipeOptimizer(
                 error_message=f"model not in BLIS catalog: {self.config.model_name}",
             )
 
+        # Capture the full BLIS command line for the report
+        _blis_cmd_capture = []
+        _orig_blis_exec = runner_scenario._exec
+        def _capture_exec(args, timeout=600):
+            _blis_cmd_capture.append(' '.join(str(a) for a in args))
+            return _orig_blis_exec(args, timeout=timeout)
+        runner_scenario._exec = _capture_exec
+
         # Workload: WekaTrace sessions replay through blis replay (real
         # request sequence, prefix structure and burstiness); synthetic
         # shapes go through blis run. Same definition guidellm would run.
@@ -2077,6 +2085,10 @@ class RecipeOptimizer(
             _v = summary.get(_k)
             if _v is not None:
                 setattr(result, _attr, _v)
+        # Restore the original exec and record the command line
+        runner_scenario._exec = _orig_blis_exec
+        if _blis_cmd_capture:
+            blis_metrics['blis_command'] = _blis_cmd_capture[0]
         result.blis_metrics = blis_metrics
         # itl_mean feeds the DB saver's metrics_json.itl_mean field (the
         # saver reads this attribute; tpot_mean lands nowhere)

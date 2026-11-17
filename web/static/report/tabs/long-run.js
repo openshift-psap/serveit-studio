@@ -256,6 +256,15 @@
                 s += '<div style="margin:0 20px 10px; padding:8px 14px; background:#f0fdf4; border:1px solid #bbf7d0; ' +
                     'border-radius:8px; color:#166534; font-size:0.85em;">Engine: ' + engBits.join(' &middot; ') + '</div>';
             }
+            // BLIS command line (collapsible)
+            var blisCmd = blisTel(rows[rows.length - 1]) || {};
+            if (blisCmd.blis_command) {
+                s += '<details style="margin:10px 20px;"><summary style="cursor:pointer;color:#475569;font-size:0.85em;font-weight:600;">&#9001;/&#9002; BLIS command line</summary>' +
+                    '<pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;font-size:0.78em;overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin-top:6px;">' +
+                    blisCmd.blis_command.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') +
+                    '</pre></details>';
+            }
+
             // TTFT composition headline: queue wait vs prefill compute
             var t0 = blisTel(rows[rows.length - 1]) || {};
             if (t0.queue_share_pct != null) {
