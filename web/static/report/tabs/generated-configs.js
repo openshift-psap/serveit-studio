@@ -67,34 +67,60 @@
             };
         }
 
+        // Normalise a config entry — older summaries lack PD pod/tp
+        // fields, so derive them from the name (pd-13p3d-ptp1-dtp1)
+        function norm(c) {
+            var o = {
+                name: c.name, arch: (c.architecture || '').toLowerCase(),
+                tp: c.tp, pp: c.pp, gpus: c.gpus,
+                max_model_len: c.max_model_len,
+                prefill_tp: c.prefill_tp, decode_tp: c.decode_tp,
+                prefill_pods: c.prefill_pods, decode_pods: c.decode_pods,
+                replicas: c.replicas
+            };
+            var m = /^pd-(\d+)p(\d+)d-ptp(\d+)-dtp(\d+)/.exec(o.name || '');
+            if (m) {
+                o.arch = 'pd';
+                o.prefill_pods = o.prefill_pods != null ? o.prefill_pods : parseInt(m[1], 10);
+                o.decode_pods = o.decode_pods != null ? o.decode_pods : parseInt(m[2], 10);
+                o.prefill_tp = o.prefill_tp != null ? o.prefill_tp : parseInt(m[3], 10);
+                o.decode_tp = o.decode_tp != null ? o.decode_tp : parseInt(m[4], 10);
+                o.gpus = o.prefill_pods * o.prefill_tp + o.decode_pods * o.decode_tp;
+            } else if (o.gpus == null) {
+                o.gpus = (o.tp || 1) * (o.replicas || 1);
+            }
+            return o;
+        }
+
+        var rows = configs.map(norm);
         var tblId = 'gen-configs-tbl';
         var s = '<table class="results-table" id="' + tblId + '" style="font-size:0.82em;width:100%">';
-        var headers = ['Configuration', 'Architecture', 'TP', 'PP', 'Pods', 'GPUs',
-                       'max_model_len', 'max_num_seqs', 'gpu_mem_util', 'block_size', 'Download'];
+        var headers = ['Configuration', 'Architecture', 'TP', 'PP', 'Pods',
+                       'GPUs', 'max_model_len', 'Download'];
         s += '<tr>';
         headers.forEach(function(h, i) {
             s += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tblId + '\',' + i + ',\'num\')">' + h + ' &#x21C5;</th>';
         });
         s += '</tr>';
 
-        configs.forEach(function(c) {
-            var archLabel = c.architecture === 'PD'
-                ? 'PD (' + c.prefill_pods + 'P/' + c.decode_pods + 'D)'
-                : c.architecture;
-            var pods = c.architecture === 'PD'
-                ? (c.prefill_pods + c.decode_pods)
-                : c.replicas;
+        rows.forEach(function(c) {
+            var isPD = c.arch === 'pd';
+            var tp = isPD
+                ? (c.prefill_tp === c.decode_tp
+                    ? 'TP' + c.prefill_tp
+                    : 'TP' + c.prefill_tp + ' / TP' + c.decode_tp)
+                : 'TP' + (c.tp || 1);
+            var pods = isPD
+                ? c.prefill_pods + 'P + ' + c.decode_pods + 'D'
+                : (c.replicas || 1) + '&#215;';
             s += '<tr>' +
                 '<td style="font-weight:600;color:#0e7490;">' + c.name + '</td>' +
-                '<td>' + archLabel + '</td>' +
-                '<td style="text-align:center;">' + (c.tp || '—') + '</td>' +
-                '<td style="text-align:center;">' + (c.pp > 1 ? c.pp : '—') + '</td>' +
+                '<td>' + (isPD ? 'PD' : 'AGGREGATED') + '</td>' +
+                '<td style="text-align:center;">' + tp + '</td>' +
+                '<td style="text-align:center;">' + (c.pp > 1 ? c.pp : '&#8212;') + '</td>' +
                 '<td style="text-align:center;">' + pods + '</td>' +
-                '<td style="text-align:center;">' + (c.gpus || '—') + '</td>' +
-                '<td>' + (c.max_model_len || '—') + '</td>' +
-                '<td>' + (c.max_num_seqs != null ? c.max_num_seqs : 'auto') + '</td>' +
-                '<td>' + (c.gpu_memory_utilization != null ? c.gpu_memory_utilization : 'auto') + '</td>' +
-                '<td>' + (c.block_size != null ? c.block_size : 'auto') + '</td>' +
+                '<td style="text-align:center;">' + (c.gpus != null ? c.gpus : '&#8212;') + '</td>' +
+                '<td>' + (c.max_model_len || '&#8212;') + '</td>' +
                 '<td><button onclick="window.open(\'/api/runs/' + runId + '/configs/' + c.name + '\', \'_blank\')" ' +
                 'style="padding:3px 10px;background:#f0f9ff;color:#0284c7;border:1px solid #bae6fd;border-radius:4px;cursor:pointer;font-size:0.85em;">&#11015; zip</button></td>' +
                 '</tr>';
