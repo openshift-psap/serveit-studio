@@ -1484,6 +1484,8 @@ class ReportAnalyzer:
         but the report still needs rows to render).
         """
         import json
+        def _r2(v):
+            return round(v, 2) if v is not None else None
         successful = list(results) if include_all else [r for r in results if r.is_successful]
         all_results = []
         # Preserve test-execution order (DB id order from the loader) —
@@ -1543,21 +1545,22 @@ class ReportAnalyzer:
                 'test_id': r.config_name,
                 'architecture': (r.architecture or 'unknown').upper(),
                 'epp_deployed': epp_deployed,
-                'ttft_p50': round(r.ttft_p50, 2) if r.ttft_p50 else None,
-                'ttft_p90': round(r.ttft_p90, 2),
-                'ttft_p95': round(r.ttft_p95, 2) if r.ttft_p95 else None,
-                'ttft_p99': round(r.ttft_p99, 2) if r.ttft_p99 else None,
+                'ttft_p50': _r2(r.ttft_p50),
+                'ttft_p90': _r2(r.ttft_p90),
+                'ttft_p95': _r2(r.ttft_p95),
+                'ttft_p99': _r2(r.ttft_p99),
                 'e2e_latency_p90': round(r.e2e_latency_p90 * 1000, 1) if getattr(r, 'e2e_latency_p90', None) else None,
-                'itl_p90': round(r.itl_p90, 2) if r.itl_p90 else None,
-                'itl_p95': round(r.itl_p95, 2) if r.itl_p95 else None,
-                'itl_p99': round(r.itl_p99, 2) if r.itl_p99 else None,
-                'throughput_p50': round(r.throughput_p50, 2) if r.throughput_p50 else None,
-                'throughput_mean': round(r.throughput_mean, 2) if r.throughput_mean else None,
-                'throughput_p90': round(r.throughput_p90, 2),
-                'throughput_p95': round(r.throughput_p95, 2) if r.throughput_p95 else None,
-                'throughput_p99': round(r.throughput_p99, 2) if r.throughput_p99 else None,
+                'itl_p90': _r2(r.itl_p90),
+                'itl_p95': _r2(r.itl_p95),
+                'itl_p99': _r2(r.itl_p99),
+                'throughput_p50': _r2(r.throughput_p50),
+                'throughput_mean': _r2(r.throughput_mean),
+                'throughput_p90': _r2(r.throughput_p90),
+                'throughput_p95': _r2(r.throughput_p95),
+                'throughput_p99': _r2(r.throughput_p99),
                 'gpus': r.total_gpus,
-                'efficiency': round(r.throughput_p90 / r.total_gpus, 3),
+                'efficiency': (round(r.throughput_p90 / r.total_gpus, 3)
+                               if (r.throughput_p90 and r.total_gpus) else None),
                 'output_tps_mean': self._get_output_tps(r),
                 'prefill_pods': r.prefill_pods,
                 'decode_pods': r.decode_pods,
