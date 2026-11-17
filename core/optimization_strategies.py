@@ -1158,6 +1158,15 @@ class ConfigGenStrategy(OptimizationStrategy):
         from core import PrereqManager
 
         name = test_config.test_id
+        try:
+            import inspect as _insp, hashlib as _hl
+            _f = _insp.getsourcefile(type(self))
+            _src = open(_f, 'rb').read()
+            self.opt.log(f"[DBG] strat={_f} sha={_hl.sha1(_src).hexdigest()[:8]} "
+                         f"mns={getattr(test_config,'max_num_seqs',None)} "
+                         f"gmu={getattr(test_config,'gpu_memory_utilization',None)}", 'info')
+        except Exception:
+            pass
         cfg_dir = _os.path.join(out_dir, name)
         _os.makedirs(cfg_dir, exist_ok=True)
         arch = test_config.architecture
