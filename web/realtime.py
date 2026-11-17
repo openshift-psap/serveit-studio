@@ -1139,7 +1139,19 @@ def handle_scan_cluster(data):
         traceback.print_exc()
         emit('error', {'message': error_msg})
 
-def read_config_from_pvc(pvc_name: str, model_name: str, namespace: Optional[str] = None) -> Optional[Dict]:
+def read_config_from_pvc(pvc_name: str, model_name: str, namespace: Optional[str] = None,
+                         quiet: bool = False) -> Optional[Dict]:
+    """Read a model's config.json from a PVC.
+
+    quiet=True is used by the auto-scan loop that probes every PVC: misses
+    are expected there and must not surface as errors in the UI.
+    """
+    def _log(msg, level='info'):
+        # Quiet mode (PVC scanning) suppresses everything — a miss on one
+        # PVC is expected and the caller reports the aggregate outcome.
+        if not quiet:
+            log_to_ui(msg, level)
+
     """
     Read model config.json from existing PVC by deploying a temporary pod.
 
@@ -1159,7 +1171,7 @@ def read_config_from_pvc(pvc_name: str, model_name: str, namespace: Optional[str
     pod_name = f"config-reader-{int(time.time())}"
 
     try:
-        log_to_ui(f'📖 Reading model config from PVC: {pvc_name}', 'info')
+        _log(f'📖 Reading model config from PVC: {pvc_name}', 'info')
 
         # Create temporary pod manifest
         pod_manifest = f"""
@@ -1187,10 +1199,10 @@ spec:
         # Deploy pod
         result = kubectl.run(['apply', '-f', '-', '-n', namespace], input_data=pod_manifest)
         if result.returncode != 0:
-            log_to_ui(f'❌ Failed to create config reader pod: {result.stderr}', 'error')
+            _log(f'❌ Failed to create config reader pod: {result.stderr}', 'error')
             return None
 
-        log_to_ui('⏳ Waiting for config reader pod to be ready...', 'info')
+        _log('⏳ Waiting for config reader pod to be ready...', 'info')
 
         # Wait for pod to be ready (max 180 seconds)
         pod_ready = False
@@ -1203,13 +1215,13 @@ spec:
             container_statuses = status.get('containerStatuses', [])
             if phase == 'Running' and container_statuses:
                 if all(cs.get('ready', False) for cs in container_statuses):
-                    log_to_ui('✅ Config reader pod ready', 'success')
+                    _log('✅ Config reader pod ready', 'success')
                     pod_ready = True
                     break
             time.sleep(1)
 
         if not pod_ready:
-            log_to_ui('❌ Config reader pod did not become ready', 'error')
+            _log('❌ Config reader pod did not become ready', 'error')
             kubectl.run(['delete', 'pod', pod_name, '-n', namespace], check=False)
             return None
 
@@ -1221,18 +1233,20 @@ spec:
             ['exec', pod_name, '-n', namespace, '--', 'ls', '-la', '/models'],
             check=False
         )
-        if ls_result.returncode == 0:
+        if ls_result.returncode == 0 and not quiet:
             log_to_ui('📂 /models directory contents:', 'info')
             for line in ls_result.stdout.strip().split('\n')[:10]:  # Show first 10 items
                 log_to_ui(f'   {line}', 'info')
-        else:
-            log_to_ui(f'⚠️  Could not list /models directory: {ls_result.stderr}', 'warning')
 
         # Search for config.json files in the PVC with retry logic
         find_result = None
         for attempt in range(3):
+            # /models/tmp holds pip-temp dirs owned by root (created by the
+            # model-download job) — find as the reader user hits EACCES there.
+            # Prune it and silence stderr so expected misses stay quiet.
             find_result = kubectl.run(
-                ['exec', pod_name, '-n', namespace, '--', 'find', '/models', '-name', 'config.json'],
+                ['exec', pod_name, '-n', namespace, '--', 'sh', '-c',
+                 "find /models -name config.json -not -path '/models/tmp/*' 2>/dev/null"],
                 check=False
             )
 
@@ -1240,13 +1254,14 @@ spec:
                 break
 
             if attempt < 2:
-                log_to_ui(f'   Retry {attempt + 1}/3: Searching for config.json files...', 'info')
+                _log(f'   Retry {attempt + 1}/3: Searching for config.json files...', 'info')
                 time.sleep(2)
 
         if not find_result or find_result.returncode != 0 or not find_result.stdout.strip():
-            log_to_ui('❌ No config.json files found in PVC', 'error')
+            # An empty PVC is a normal outcome when probing every PVC
+            _log(f'   No config.json files in PVC {pvc_name}', 'info')
             if find_result and find_result.stderr:
-                log_to_ui(f'   Find error: {find_result.stderr}', 'error')
+                _log(f'   Find error: {find_result.stderr}', 'debug')
             kubectl.run(['delete', 'pod', pod_name, '-n', namespace], check=False)
             return None
 
@@ -1267,14 +1282,17 @@ spec:
                 matching_paths.append(path)
 
         if not matching_paths:
-            log_to_ui(f'⚠️  No config.json found for model "{model_name}"', 'warning')
-            log_to_ui(f'   Available configs: {", ".join(all_config_paths)}', 'info')
+            # Expected while scanning PVCs — only surfaced when the caller
+            # explicitly asks about this PVC (quiet=False)
+            _log(f'   Model "{model_name}" is not cached in {pvc_name}', 'info')
+            if not quiet:
+                log_to_ui(f'   Available configs: {", ".join(all_config_paths)}', 'info')
             kubectl.run(['delete', 'pod', pod_name, '-n', namespace], check=False)
             return None
 
         # Use the first matching path
         config_path = matching_paths[0]
-        log_to_ui(f'✅ Found config.json for {model_name}', 'success')
+        _log(f'✅ Found config.json for {model_name}', 'success')
 
         # Read the config file
         config_content = None
@@ -1284,25 +1302,25 @@ spec:
         )
         if result.returncode == 0:
             config_content = result.stdout
-            log_to_ui('✅ Successfully read config.json', 'success')
+            _log('✅ Successfully read config.json', 'success')
         else:
-            log_to_ui(f'❌ Failed to read {config_path}', 'error')
+            _log(f'❌ Failed to read {config_path}', 'error')
 
         # Cleanup pod
-        log_to_ui('🧹 Cleaning up config reader pod...', 'info')
+        _log('🧹 Cleaning up config reader pod...', 'info')
         kubectl.run(['delete', 'pod', pod_name, '-n', namespace], check=False)
 
         if not config_content:
-            log_to_ui('❌ Could not read config.json from PVC', 'error')
+            _log('❌ Could not read config.json from PVC', 'error')
             return None
 
         # Parse JSON
         config = json.loads(config_content)
-        log_to_ui('✅ Successfully read model config from PVC', 'success')
+        _log('✅ Successfully read model config from PVC', 'success')
         return config
 
     except Exception as e:
-        log_to_ui(f'❌ Failed to read config from PVC: {str(e)}', 'error')
+        _log(f'❌ Failed to read config from PVC: {str(e)}', 'error')
         # Cleanup pod if it exists
         kubectl.run(['delete', 'pod', pod_name, '-n', namespace], check=False)
         return None
@@ -1388,12 +1406,12 @@ def handle_generate_test_plan(data):
 
         # Priority 1: Use explicitly specified PVC
         if use_existing_pvc and existing_pvc_name:
-            log_to_ui(f'📦 Using existing PVC: {existing_pvc_name}', 'info')
-            model_config = read_config_from_pvc(existing_pvc_name, model)
+            log_to_ui(f'📦 Checking existing PVC: {existing_pvc_name}', 'info')
+            model_config = read_config_from_pvc(existing_pvc_name, model, quiet=True)
             if model_config:
                 log_to_ui('✅ Model config loaded from PVC', 'success')
             else:
-                log_to_ui('⚠️  Could not read config from PVC, using fallback estimates', 'warning')
+                log_to_ui(f'ℹ️  Model not cached in {existing_pvc_name} — checking other caches', 'info')
 
         # Priority 2: Auto-detect PVC from session state
         if not model_config:
@@ -1409,10 +1427,9 @@ def handle_generate_test_plan(data):
                         if pvc_name and ('local-disk' in str(pvc_name) or 'per-node' in str(pvc_name)):
                             pvc_name = None
                         if pvc_name and not session_config.get('local_disk_path'):
-                            log_to_ui(f'📦 Auto-detected PVC from session: {pvc_name}', 'info')
-                            model_config = read_config_from_pvc(pvc_name, model)
+                            model_config = read_config_from_pvc(pvc_name, model, quiet=True)
                             if model_config:
-                                log_to_ui('✅ Model config loaded from PVC', 'success')
+                                log_to_ui(f'✅ Model config loaded from PVC: {pvc_name}', 'success')
             except Exception as _e:
                 # If PVC auto-detection fails, continue without it
                 pass
@@ -1428,7 +1445,8 @@ def handle_generate_test_plan(data):
                         pvc_name = pvc_line.replace('persistentvolumeclaim/', '').strip()
                         if pvc_name:
                             # Try to read config from this PVC
-                            temp_config = read_config_from_pvc(pvc_name, model, namespace=scanner_ns)
+                            temp_config = read_config_from_pvc(
+                                pvc_name, model, namespace=scanner_ns, quiet=True)
                             if temp_config:
                                 log_to_ui(f'📦 Found model in PVC: {pvc_name}', 'info')
                                 model_config = temp_config
