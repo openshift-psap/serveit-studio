@@ -1867,7 +1867,10 @@ class RecipeOptimizer(
                 self.log("   BLIS: WekaTrace conversion failed — falling back "
                          "to the synthetic workload shape", "warn")
         if sim is None and not getattr(self.config, "dataset_source_mode", "") == "wekatrace":
-            sim = runner_scenario.run(scenario, name, self.config, seed=42)
+            _instances = int(getattr(test_config, "prefill_pods", None)
+                             or getattr(test_config, "replicas", 1) or 1)
+            sim = runner_scenario.run(scenario, name, self.config, seed=42,
+                                      instances=_instances)
         summary = BlisRunner.summarize(sim)
         if not summary:
             return TestResult(
@@ -1954,6 +1957,12 @@ class RecipeOptimizer(
                         blis_metrics["blis_" + _k] = _ec[_k]
             # per-instance engine report: admission/drop/latency per instance
             _inst_rep = _eng.get("instances") or {}
+            if not _inst_rep:
+                # run-mode Results key per-instance reports under the pool
+                # name (e.g. 'colocated') instead of 'instances'
+                for _pool in _eng.values():
+                    if isinstance(_pool, dict) and _pool.get("instance_id"):
+                        _inst_rep[_pool["instance_id"]] = _pool
             if _inst_rep:
                 blis_metrics["instance_report"] = {
                     k: {kk: v[kk] for kk in (

@@ -384,7 +384,7 @@ pools:
     # -- execution --------------------------------------------------------
 
     def run(self, scenario_path: str, scenario_name: str, cfg,
-            seed: int = 42, timeout: int = 900):
+            seed: int = 42, timeout: int = 900, instances: int = None):
         """Run the simulator with the workload derived from cfg.
 
         Returns the parsed Result dict, or None on failure (with the
@@ -501,13 +501,17 @@ pools:
                 args += ["--rate", str(qps)]
         if prefix_tokens > 0:
             args += ["--prefix-tokens", str(prefix_tokens)]
-        # instance count: multiple replicas pack onto the scenario's nodes
-        _tp = int(getattr(cfg, "tensor_parallelism", 1) or 1)
-        _rep = int(getattr(cfg, "prefill_pods", None)
-                   or getattr(cfg, "replicas", 1)
-                   or getattr(cfg, "single_test_replicas", 1) or 1)
-        if _rep > 1:
-            args += ["--num-instances", str(_rep)]
+        # instance count: multiple replicas pack onto the scenario's nodes.
+        # Explicit param wins; the attribute chain is a fallback with None
+        # defaults (a truthy default like 1 short-circuits the or-chain
+        # when the recipe config lacks the field — run 253 simulated a
+        # single instance because getattr(cfg, "replicas", 1) returned the
+        # default 1 and single_test_replicas was never reached).
+        _rep = instances or getattr(cfg, "prefill_pods", None) \
+            or getattr(cfg, "replicas", None) \
+            or getattr(cfg, "single_test_replicas", None) or 1
+        if int(_rep) > 1:
+            args += ["--num-instances", str(int(_rep))]
 
         try:
             r = self._exec(args, timeout=timeout)
