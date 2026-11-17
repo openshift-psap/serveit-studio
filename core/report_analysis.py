@@ -2358,7 +2358,11 @@ class ReportAnalyzer:
             'calibrated_qps': calibrated_qps_data,
             'latency_search': latency_search_data,
             'gpu_sizing': gpu_sizing,
-            'run_config': {**run_config, 'goal': goal},
+            'run_config': {**run_config, 'goal': (
+                run_config.get('objective') or run_config.get('goal')
+                or (loader.conn.execute(
+                    'SELECT goal FROM optimization_runs WHERE id = ?', (run_id,)
+                ).fetchone() or [None])[0])},
             'infra_versions': infra_versions,
             'epp_tuning': epp_tuning_data,
             'concurrency_sweep': concurrency_sweep,
