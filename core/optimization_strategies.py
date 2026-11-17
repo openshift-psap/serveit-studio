@@ -1215,6 +1215,16 @@ class ConfigGenStrategy(OptimizationStrategy):
             with open(_os.path.join(cfg_dir, "endpoint-picker-config.yaml"), "w") as f:
                 f.write(raw)
 
+        # DEBUG (temporary): dump the live attrs to correlate with the YAML
+        try:
+            with open('/tmp/render-debug.log', 'a') as _dbg:
+                _dbg.write(f"{test_config.test_id} arch={arch} mns={getattr(test_config,'max_num_seqs',None)} "
+                           f"pf_mns={getattr(test_config,'prefill_max_num_seqs',None)} "
+                           f"gmu={getattr(test_config,'gpu_memory_utilization',None)} "
+                           f"pf_gmu={getattr(test_config,'prefill_gpu_memory_utilization',None)}\n")
+        except Exception:
+            pass
+
         # 4. Config summary — auto-tuned params from the rendered YAML
         #    (computed during template rendering, not on the TestConfig)
         import re as _re
