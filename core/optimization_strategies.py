@@ -1215,9 +1215,19 @@ class ConfigGenStrategy(OptimizationStrategy):
             with open(_os.path.join(cfg_dir, "endpoint-picker-config.yaml"), "w") as f:
                 f.write(raw)
 
-        # 4. Config summary (auto-tuned params for the tab table) — read
-        #    from the TestConfig OBJECT (test_config_json isn't populated
-        #    until the DB saver runs)
+        # 4. Config summary — auto-tuned params from the rendered YAML
+        #    (computed during template rendering, not on the TestConfig)
+        import re as _re
+        rendered = ""
+        _ip = _os.path.join(cfg_dir, "inference-deployment.yaml")
+        if _os.path.isfile(_ip):
+            with open(_ip) as f:
+                rendered = f.read()
+
+        def _arg(flag):
+            m = _re.search(flag + r"[= ]([\d.]+)", rendered)
+            return float(m.group(1)) if m else None
+
         summary = {
             "name": name,
             "architecture": arch,
@@ -1227,10 +1237,10 @@ class ConfigGenStrategy(OptimizationStrategy):
                 or getattr(test_config, "replicas", 1) or 1,
             "gpus": (getattr(test_config, "prefill_gpus", 0) or 0) or
                 (test_config.tensor_parallelism * (getattr(test_config, "replicas", 1) or 1)),
-            "max_model_len": getattr(test_config, "max_model_len", None),
-            "max_num_seqs": getattr(test_config, "max_num_seqs", None),
-            "gpu_memory_utilization": getattr(test_config, "gpu_memory_utilization", None),
-            "block_size": getattr(test_config, "block_size", None),
+            "max_model_len": _arg("--max-model-len") or getattr(test_config, "max_model_len", None),
+            "max_num_seqs": _arg("--max-num-seqs"),
+            "gpu_memory_utilization": _arg("--gpu-memory-utilization"),
+            "block_size": _arg("--block-size"),
             "decode_tp": getattr(test_config, "decode_tp", None),
             "prefill_pods": getattr(test_config, "prefill_pods", None),
             "decode_pods": getattr(test_config, "decode_pods", None),
