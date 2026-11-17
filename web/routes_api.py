@@ -1046,6 +1046,46 @@ def get_console_logs():
 
 # --- MLflow Integration ---
 
+@app.route('/api/runs/<int:run_id>/generated_configs')
+def get_generated_configs(run_id):
+    """Index of generated configurations (config_gen goal) for the report tab."""
+    cfg_dir = f'/mnt/storage/generated-configs/{run_id}'
+    if not os.path.isdir(cfg_dir):
+        return jsonify({'success': False, 'error': f'No generated configs for run {run_id}'}), 404
+    configs = []
+    for name in sorted(os.listdir(cfg_dir)):
+        sp = os.path.join(cfg_dir, name, 'config-summary.json')
+        if os.path.isfile(sp):
+            try:
+                with open(sp) as f:
+                    configs.append(json.load(f))
+            except (OSError, json.JSONDecodeError):
+                pass
+    return jsonify({'success': True, 'configs': configs,
+                     'run_id': run_id})
+
+
+@app.route('/api/runs/<int:run_id>/configs/<config_name>')
+def download_run_config(run_id, config_name):
+    """Download one generated configuration's YAMLs as a zip."""
+    import zipfile
+    import io
+    # sanitize: no path traversal
+    config_name = config_name.replace('/', '').replace('..', '')
+    cfg_dir = f'/mnt/storage/generated-configs/{run_id}/{config_name}'
+    if not os.path.isdir(cfg_dir):
+        return jsonify({'success': False, 'error': f'Config {config_name} not found'}), 404
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        for f in sorted(os.listdir(cfg_dir)):
+            fp = os.path.join(cfg_dir, f)
+            if os.path.isfile(fp):
+                z.write(fp, f)
+    buf.seek(0)
+    return send_file(buf, mimetype='application/zip', as_attachment=True,
+                     download_name=f'{config_name}.zip')
+
+
 @app.route('/api/runs/<int:run_id>/configs')
 def download_run_configs(run_id):
     """Download the generated configuration YAMLs (config-gen goal) as a zip."""

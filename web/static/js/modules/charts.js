@@ -253,7 +253,13 @@ function _renderChartsImpl(data, runId, content) {
     if (typeof ReportTabs !== 'undefined') {
         const _liveCtx = (typeof ReportCtx !== 'undefined') ? ReportCtx.live(runId) : null;
         if (_liveCtx) {
+            // config_gen runs show exactly two tabs: Test Settings +
+            // Generated Configs (the tab's build() returns '' for other
+            // goals, but here we also DROP non-relevant tabs entirely)
+            var _goal = ((data.run_config || {}).goal || '').toLowerCase();
+            var _cfgGenTabs = _goal === 'config_gen';
             ReportTabs.all().forEach(function(tab) {
+                if (_cfgGenTabs && !['test-settings', 'generated-configs'].includes(tab.id)) return;
                 const tabHtml = ReportTabs.buildTab(tab, data, _liveCtx, chartQueue);
                 if (!tabHtml) return;
                 const def = { id: tab.id, label: tab.label, icon: tab.icon };

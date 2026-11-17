@@ -68,7 +68,7 @@
                         </div>
 
                         <!-- TP Pair Breadth (collapsible) — hidden in single_test mode -->
-                        <div id="sweep-tp-section" style="border:2px solid #8b5cf6;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                        <div id="sweep-tp-section" class="testing-only" style="border:2px solid #8b5cf6;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('tp-search-body');var a=document.getElementById('tp-search-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
                                 <div>
                                     <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">GPU Split Combinations</div>
@@ -126,7 +126,7 @@
                         </div>
 
                         <!-- P/D Split Strategy (collapsible) — hidden in single_test mode -->
-                        <div id="sweep-pd-section" style="border:2px solid #0891b2;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                        <div id="sweep-pd-section" class="testing-only" style="border:2px solid #0891b2;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#ecfeff,#cffafe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('pd-search-body');var a=document.getElementById('pd-search-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='&#9662;';}else{b.style.display='none';a.textContent='&#9656;';}">
                                 <div>
                                     <div style="font-weight:700;color:#155e75;font-size:1.05em;">Prefill / Decode Pod Balance</div>
@@ -148,7 +148,7 @@
                         </div>
 
                         <!-- LoRA Adapters -->
-                        <div id="sweep-lora-section" style="border:2px solid #4f46e5;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                        <div id="sweep-lora-section" class="testing-only" style="border:2px solid #4f46e5;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div id="lora-header" style="background:linear-gradient(135deg,#eef2ff,#e0e7ff);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('lora-enabled').checked;document.getElementById('lora-enabled').checked=on;config.lora_enabled=on;var sw=document.getElementById('lora-enabled-switch');sw.style.background=on?'#4f46e5':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';document.getElementById('lora-body').style.display=on?'block':'none';saveConfig();">
                                 <div>
                                     <div style="font-weight:700;color:#3730a3;font-size:1.05em;">🎛️ LoRA Adapters</div>
@@ -340,7 +340,7 @@
                         </div>
 
                         <!-- Response Time Guarantee — hidden in single_test mode -->
-                        <div id="sweep-latency-section" style="border:2px solid #d97706;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                        <div id="sweep-latency-section" class="testing-only" style="border:2px solid #d97706;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div id="latency-sla-toggle" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('latency-constraint-enabled').checked;document.getElementById('latency-constraint-enabled').checked=on;config.latency_constraint_enabled=on;document.getElementById('latency-sla-body').style.display=on?'block':'none';document.getElementById('latency-sla-inner').style.opacity=on?'1':'0.4';var sw=document.getElementById('latency-sla-switch');sw.style.background=on?'#d97706':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
                                 <div>
                                     <div style="font-weight:700;color:#92400e;font-size:1.05em;">⚡ Response Time Guarantee</div>
@@ -373,7 +373,7 @@
                         </div>
 
                         <!-- Calibrated Load / Concurrency Sweep -->
-                        <div id="sweep-calibrated-section" style="border:2px solid #059669;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                        <div id="sweep-calibrated-section" class="testing-only" style="border:2px solid #059669;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('calibrated-body');var a=document.getElementById('calibrated-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='&#9662;';}else{b.style.display='none';a.textContent='&#9656;';}">
                                 <div>
                                     <div style="font-weight:700;color:#065f46;font-size:1.05em;">📊 Calibrated Load Testing</div>

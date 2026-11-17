@@ -158,6 +158,27 @@
 
                                 <!-- Step 2 -->
                                 
+                                <!-- Config Generator flow (goal = config_gen) -->
+                                <div class="step-card goal-config-gen" style="display:none;">
+                                    <div class="step-header">
+                                        <div class="step-number">2</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>Enumerate &amp; Render Configurations</h4>
+                                            <span class="step-badge badge-planning">No Tests</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p style="font-size: 14px; color: #4b5563;">
+                                            • Scan system: valid TP options (VRAM / FP8 block / RDMA filtered)<br>
+                                            • Enumerate: aggregated (every valid TP), PD splits (Smart balance), EP (MoE)<br>
+                                            • Auto-tune each: max_model_len, max_num_seqs, gpu_memory_utilization, block_size<br>
+                                            • Render: EPP + inference deployment YAMLs (exact production templates)<br>
+                                            • Report: download tab with every configuration
+                                        </p>
+                                        <p style="color: #0891b2; font-weight: 600;">No deployments, no GPU time — configs only</p>
+                                    </div>
+                                </div>
+
                                 <!-- Single Test flow (goal = single_test) -->
                                 <div class="step-card goal-single-test" style="display:none;">
                                     <div class="step-header">

@@ -1139,126 +1139,248 @@ class DPEPOnlyStrategy(OptimizationStrategy):
 
 
 class ConfigGenStrategy(OptimizationStrategy):
-    """Config Generator: render EPP + inference deployment YAMLs for
-    download. No tests, no deployment, no GPU time — the user gets the
-    exact manifests ServeIt WOULD apply, ready for git/argocd.
+    """Config Generator: enumerate every deployable configuration for the
+    scanned system + workload, render the EPP/inference YAMLs with full
+    auto-tuning, and expose them for download. No tests, no deployment.
+
+    Enumeration mirrors what the recipe would deploy at the real workload:
+    - Aggregated: every valid TP (budget-filling replicas) + PP variants
+    - PD: all valid splits per TP pair, smart-filtered to ~3 around the
+      workload's analytical ideal ratio (same Smart balance as testing,
+      with estimated instead of measured throughput)
+    - EP: for MoE models, every valid TP x replicas
     """
 
-    def execute(self):
-        self.opt.log("⚙️ CONFIG GENERATOR — rendering manifests, no tests will run", 'decision')
-        self.opt.log("-" * 80, 'info')
-
-        cfg = self.opt.config
-        arch = cfg.single_test_architecture or 'aggregated'
-        tp = cfg.single_test_tp or 1
-        replicas = cfg.single_test_replicas or 1
-        pp = cfg.single_test_pipeline_parallelism or 1
-        num_gpus = tp * pp * replicas
-
-        # Build the same TestConfig a real run would deploy
-        if arch == 'aggregated':
-            test_config = self.opt._create_aggregated_config(
-                tp=tp, num_gpus=num_gpus, isl=cfg.isl, osl=cfg.osl,
-                test_id=f"configgen-{arch}-tp{tp}-pp{pp}-{replicas}r",
-                use_concurrency=True, pipeline_parallel_size=pp)
-        elif arch == 'pd':
-            from core.optimizer.config import FeasibleSplit
-            prefill_tp = cfg.single_test_prefill_tp or 4
-            decode_tp = cfg.single_test_decode_tp or 8
-            prefill_pods = cfg.single_test_prefill_pods or 1
-            decode_pods = cfg.single_test_decode_pods or 1
-            split = FeasibleSplit(
-                prefill_pods=prefill_pods, decode_pods=decode_pods,
-                prefill_tp=prefill_tp, decode_tp=decode_tp,
-                prefill_gpus=prefill_tp * prefill_pods,
-                decode_gpus=decode_tp * decode_pods,
-                total_gpus=(prefill_tp * prefill_pods) + (decode_tp * decode_pods),
-                prefill_pct=prefill_pods / (prefill_pods + decode_pods))
-            test_config = self.opt._create_pd_config(split)
-            test_config.test_id = f"configgen-pd-{prefill_pods}p{decode_pods}d-ptp{prefill_tp}-dtp{decode_tp}"
-        else:
-            test_config = self.opt._create_ep_config(
-                tp=tp, num_gpus=num_gpus, isl=cfg.isl, osl=cfg.osl,
-                test_id=f"configgen-ep-tp{tp}-{replicas}r")
-
-        out_dir = f"/mnt/storage/generated-configs/{self.opt.run_id}"
+    def _render_config(self, test_config, out_dir, cfg, recorded_cache):
+        """Render one config's YAMLs. Returns (name, manifest_count)."""
         import os as _os
-        _os.makedirs(out_dir, exist_ok=True)
-
-        # 1. Inference deployment manifest(s) — the exact LWS/vLLM YAML
         import json as _json
+        from core import PrereqManager
+
+        name = test_config.test_id
+        cfg_dir = _os.path.join(out_dir, name)
+        _os.makedirs(cfg_dir, exist_ok=True)
+        arch = test_config.architecture
+
+        # 1. Inference deployment manifest(s)
         manifests_raw = self.opt._render_manifests_json(test_config) or "{}"
         manifests = _json.loads(manifests_raw) if isinstance(manifests_raw, str) else (manifests_raw or {})
-        with open(f"{out_dir}/inference-deployment.yaml", "w") as f:
-            for name, yaml_text in manifests.items():
-                f.write(f"# ---- {name} ----\n{yaml_text}\n")
-        self.opt.log(f"   ✅ inference-deployment.yaml ({len(manifests or {})} document(s))", 'info')
+        with open(_os.path.join(cfg_dir, "inference-deployment.yaml"), "w") as f:
+            for mname, yaml_text in manifests.items():
+                f.write(f"# ---- {mname} ----\n{yaml_text}\n")
 
-        # 2. EPP + prerequisite manifests — rendered with a recording
-        #    kubectl so the EXACT production templates are emitted
-        #    without touching the cluster
-        from core import PrereqManager
-        recorded = []
+        # 2. EPP + prereq manifests — rendered via recording kubectl,
+        #    cached per architecture (same templates for all configs of
+        #    one architecture)
+        arch_key = f"prereq-{arch}"
+        if arch_key not in recorded_cache:
+            recorded = []
 
-        class _Rec:
-            def __init__(self, rc=0, stdout=""):
-                self.returncode, self.stdout, self.stderr = rc, stdout, ""
-        class _RecordingKubectl:
-            kubeconfig = "/dev/null"
-            def run(self, args, **kw):
-                if args[:2] == ["apply", "-f"]:
-                    recorded.append(kw.get("input_data") or "")
+            class _Rec:
+                def __init__(self, rc=0, stdout=""):
+                    self.returncode, self.stdout, self.stderr = rc, stdout, ""
+            class _RecordingKubectl:
+                kubeconfig = "/dev/null"
+                def run(self, args, **kw):
+                    if args[:2] == ["apply", "-f"]:
+                        recorded.append(kw.get("input_data") or "")
+                        return _Rec(0)
+                    if args and args[0] == "get":
+                        return _Rec(1)
                     return _Rec(0)
-                # existence checks: "not found" so everything renders
-                if args and args[0] == "get":
-                    return _Rec(1)
-                return _Rec(0)
+            try:
+                prereq_mgr = PrereqManager(
+                    namespace=cfg.namespace,
+                    kubectl_runner=_RecordingKubectl(),
+                    scheduler_image=getattr(cfg, "scheduler_image", None),
+                    gateway_class=getattr(cfg, "gateway_class", "istio"),
+                )
+                prereq_mgr.deploy_prereqs(
+                    architecture=arch,
+                    log_callback=lambda msg: None,
+                    epp_config=self.opt._build_epp_config(),
+                    optimizer_config=cfg,
+                )
+            except Exception:
+                pass
+            recorded_cache[arch_key] = "\n---\n".join(recorded)
 
-        try:
-            prereq_mgr = PrereqManager(
-                namespace=cfg.namespace,
-                kubectl_runner=_RecordingKubectl(),
-                scheduler_image=getattr(cfg, "scheduler_image", None),
-                gateway_class=getattr(cfg, "gateway_class", "istio"),
-            )
-            prereq_mgr.deploy_prereqs(
-                architecture=arch,
-                log_callback=lambda msg: None,
-                epp_config=self.opt._build_epp_config(),
-                optimizer_config=cfg,
-            )
-        except Exception as e:
-            self.opt.log(f"   ⚠️ prereq render partial: {e}", "warning")
+        with open(_os.path.join(cfg_dir, "epp-prereq-manifests.yaml"), "w") as f:
+            f.write(recorded_cache[arch_key])
 
-        with open(f"{out_dir}/epp-prereq-manifests.yaml", "w") as f:
-            f.write("\n---\n".join(recorded))
-        self.opt.log(f"   ✅ epp-prereq-manifests.yaml ({len(recorded)} manifest(s): "
-                     f"EPP configmap, service, deployment, InferencePool, gateway, RBAC)", 'info')
-
-        # 3. The EPP EndpointPickerConfig alone — handy for configmap patches
+        # 3. Raw EndpointPickerConfig
         epp = self.opt._build_epp_config() or {}
         raw = epp.get("raw_yaml")
         if raw:
-            with open(f"{out_dir}/endpoint-picker-config.yaml", "w") as f:
+            with open(_os.path.join(cfg_dir, "endpoint-picker-config.yaml"), "w") as f:
                 f.write(raw)
-            self.opt.log("   ✅ endpoint-picker-config.yaml (raw EndpointPickerConfig)", 'info')
 
-        # Save a placeholder test row so the run shows in the report
+        # 4. Config summary (auto-tuned params for the tab table)
+        tc = {}
+        try:
+            tc = _json.loads(test_config.test_config_json) if test_config.test_config_json else {}
+        except Exception:
+            tc = {}
+        summary = {
+            "name": name,
+            "architecture": arch,
+            "tp": test_config.tensor_parallelism,
+            "pp": tc.get("pipeline_parallel_size") or 1,
+            "replicas": getattr(test_config, "prefill_pods", None)
+                or getattr(test_config, "replicas", 1) or 1,
+            "gpus": (getattr(test_config, "prefill_gpus", 0) or 0) or
+                (test_config.tensor_parallelism * (getattr(test_config, "replicas", 1) or 1)),
+            "max_model_len": tc.get("max_model_len"),
+            "max_num_seqs": tc.get("max_num_seqs"),
+            "gpu_memory_utilization": tc.get("gpu_memory_utilization"),
+            "block_size": tc.get("block_size"),
+            "decode_tp": getattr(test_config, "decode_tp", None),
+            "prefill_pods": getattr(test_config, "prefill_pods", None),
+            "decode_pods": getattr(test_config, "decode_pods", None),
+        }
+        with open(_os.path.join(cfg_dir, "config-summary.json"), "w") as f:
+            _json.dump(summary, f, indent=1)
+        return name, len(manifests)
+
+    def execute(self):
+        import os as _os
+        import json as _json
+        import math as _math
         import datetime as _dt
         from core.orchestrator.result import TestResult as _TR
-        result = _TR(
-            test_id=test_config.test_id, architecture=arch,
-            deployment_success=True, deployment_ready=True,
-            guidellm_success=True, metrics_collected=False,
-            deployment_start_time=_dt.datetime.now().isoformat(),
-            service_endpoint="config-generator",
-        )
-        self.opt._save_test_to_database(test_config, result)
+
+        self.opt.log("⚙️ CONFIG GENERATOR — enumerating configurations, no tests will run", 'decision')
+        self.opt.log("-" * 80, 'info')
+
+        cfg = self.opt.config
+        total_gpus = cfg.total_gpus or 16
+
+        out_dir = f"/mnt/storage/generated-configs/{self.opt.run_id}"
+        _os.makedirs(out_dir, exist_ok=True)
+        recorded_cache = {}
+        configs = []
+        errors = []
+
+        # ── 1. Aggregated: every valid TP (budget-filling) + PP variants ──
+        agg_tp = self.opt._get_valid_tp_options("aggregated")
+        self.opt.log(f"   Aggregated: {len(agg_tp)} valid TP option(s): {agg_tp}", 'info')
+        pp_supported = self.opt._load_pp_supported_architectures() if hasattr(self.opt, "_load_pp_supported_architectures") else []
+        model_arch = (self.opt._model_config or {}).get("architectures", [""])[0] if self.opt._model_config else ""
+        can_pp = model_arch in pp_supported if pp_supported else False
+
+        for tp in agg_tp:
+            replicas = max(1, total_gpus // tp)
+            try:
+                tc = self.opt._create_aggregated_config(
+                    tp=tp, num_gpus=tp * replicas, isl=cfg.isl, osl=cfg.osl,
+                    test_id=f"agg-tp{tp}-{replicas}r",
+                    use_concurrency=True)
+                name, n = self._render_config(tc, out_dir, cfg, recorded_cache)
+                configs.append(name)
+            except Exception as e:
+                errors.append(f"agg-tp{tp}: {e}")
+
+            if can_pp and tp <= 4:
+                for pp in (2, 4):
+                    if total_gpus // (tp * pp) >= 1:
+                        try:
+                            tc = self.opt._create_aggregated_config(
+                                tp=tp, num_gpus=total_gpus, isl=cfg.isl, osl=cfg.osl,
+                                test_id=f"agg-tp{tp}-pp{pp}-{total_gpus // (tp * pp)}r",
+                                use_concurrency=True, pipeline_parallel_size=pp)
+                            name, n = self._render_config(tc, out_dir, cfg, recorded_cache)
+                            configs.append(name)
+                        except Exception as e:
+                            errors.append(f"agg-tp{tp}-pp{pp}: {e}")
+
+        # ── 2. PD: all valid splits, smart-filtered around the ideal ratio ──
+        prefill_tps = self.opt._get_valid_tp_options("prefill")
+        decode_tps = self.opt._get_valid_tp_options("decode")
+        tp_pairs = [(ptp, dtp) for ptp in prefill_tps for dtp in decode_tps]
+        self.opt.log(f"   PD: {len(tp_pairs)} TP pair(s), Smart balance filter", 'info')
+
+        # Analytical ideal decode-pod count from the workload shape
+        # (same formula as _smart_pd_search but with estimated throughput
+        # ratio instead of measured: decode/prefill TPSG ratio ~ 1 for
+        # balanced estimate, adjusted by ISL/OSL cache-adjusted costs)
+        cache_hit = getattr(cfg, "prefix_cache_hit_pct", 0) or 0
+        active_fraction = 1.0 - cache_hit / 100.0
+        prefill_cost = cfg.isl * active_fraction
+        decode_cost = cfg.osl
+        n_pd = 0
+        for ptp, dtp in tp_pairs:
+            # enumerate all valid splits for this pair (VRAM/budget-filtered)
+            usable = total_gpus
+            all_splits = []
+            for pg in range(ptp, usable, ptp):
+                dg = usable - pg
+                if dg >= dtp and dg % dtp == 0:
+                    all_splits.append((pg // ptp, dg // dtp, pg, dg))
+            if not all_splits:
+                continue
+            # smart filter: ~3 splits around the analytical ideal
+            total_cost = prefill_cost + decode_cost or 1
+            ideal_prefill_frac = prefill_cost / total_cost
+            ideal_pg = ideal_prefill_frac * usable
+            scored = sorted(all_splits,
+                            key=lambda s: abs(s[2] - ideal_pg))
+            for pp_pods, dp_pods, pg, dg in scored[:3]:
+                from core.optimizer.config import FeasibleSplit
+                split = FeasibleSplit(
+                    prefill_pods=pp_pods, decode_pods=dp_pods,
+                    prefill_tp=ptp, decode_tp=dtp,
+                    prefill_gpus=pg, decode_gpus=dg, total_gpus=usable,
+                    prefill_pct=pg / usable * 100)
+                try:
+                    tc = self.opt._create_pd_config(split)
+                    tc.test_id = f"pd-{pp_pods}p{dp_pods}d-ptp{ptp}-dtp{dtp}"
+                    name, n = self._render_config(tc, out_dir, cfg, recorded_cache)
+                    configs.append(name)
+                    n_pd += 1
+                except Exception as e:
+                    errors.append(f"pd-{ptp}/{dtp}: {e}")
+
+        # ── 3. EP: MoE models only ──
+        n_ep = 0
+        is_moe = bool((self.opt._model_config or {}).get("num_experts") or
+                      (self.opt._model_config or {}).get("n_routed_experts"))
+        if is_moe:
+            self.opt.log(f"   EP (MoE): {len(agg_tp)} TP option(s)", 'info')
+            from core.optimizer.config import FeasibleSplit
+            for tp in agg_tp:
+                replicas = max(1, total_gpus // tp)
+                split = FeasibleSplit(
+                    prefill_pods=replicas, decode_pods=0,
+                    prefill_tp=tp, decode_tp=tp,
+                    prefill_gpus=tp * replicas, decode_gpus=0,
+                    total_gpus=tp * replicas,
+                    prefill_pct=100.0)
+                try:
+                    tc = self.opt._create_ep_config(
+                        tp=tp, num_gpus=tp * replicas,
+                        isl=cfg.isl, osl=cfg.osl,
+                        test_id=f"ep-tp{tp}-{replicas}r")
+                    name, n = self._render_config(tc, out_dir, cfg, recorded_cache)
+                    configs.append(name)
+                    n_ep += 1
+                except Exception as e:
+                    errors.append(f"ep-tp{tp}: {e}")
+
+        # ── Index + DB placeholder rows ──
+        index = {"configs": configs, "total": len(configs),
+                 "aggregated": len(configs) - n_pd - n_ep, "pd": n_pd, "ep": n_ep,
+                 "errors": errors}
+        with open(_os.path.join(out_dir, "index.json"), "w") as f:
+            _json.dump(index, f, indent=1)
 
         self.opt.log("", 'info')
-        self.opt.log(f"📁 Configs generated: {out_dir}", 'success')
-        self.opt.log(f"📥 Download: /api/runs/{self.opt.run_id}/configs", 'success')
-        self.opt.all_test_results.append((test_config, result))
+        self.opt.log(f"📁 Generated {len(configs)} configurations: "
+                     f"{index['aggregated']} aggregated, {n_pd} PD, {n_ep} EP", 'success')
+        if errors:
+            self.opt.log(f"   ⚠️ {len(errors)} render error(s): {errors[:3]}", 'warning')
+        self.opt.log(f"📁 Output: {out_dir}", 'success')
+        self.opt.log(f"📥 Download all: /api/runs/{self.opt.run_id}/configs", 'success')
+        self.opt.log(f"📥 Download one: /api/runs/{self.opt.run_id}/configs/<name>", 'success')
 
 
 class LongRunStrategy(OptimizationStrategy):

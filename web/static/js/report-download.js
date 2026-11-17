@@ -29,6 +29,7 @@ async function downloadHTMLReport(runId, data) {
         '/static/report/tabs/pareto.js',
         '/static/report/tabs/deploy-timing.js',
         '/static/report/tabs/test-settings.js',
+        '/static/report/tabs/generated-configs.js',
         '/static/report/tabs/estimator.js',
         '/static/report/tabs/vllm-metrics.js',
         '/static/report/tabs/workloads.js',
@@ -170,7 +171,10 @@ ${scripts}
     // Build all tabs (same iteration as _renderChartsImpl in charts.js)
     var subtabDefs = [];
     var sectionMap = {};
+    var _goal = ((data.run_config || {}).goal || '').toLowerCase();
+    var _cfgGenTabs = _goal === 'config_gen';
     ReportTabs.all().forEach(function(tab) {
+        if (_cfgGenTabs && !['test-settings', 'generated-configs'].includes(tab.id)) return;
         try {
             var tabHtml = ReportTabs.buildTab(tab, data, ctx, []);
             if (!tabHtml) return;

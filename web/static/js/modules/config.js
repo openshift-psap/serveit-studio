@@ -1206,14 +1206,18 @@ function restoreConfigSummary() {
     // cards and show the goal-specific flow card instead.
     const isSingle = config.goal === 'single_test';
     const isLongRun = config.goal === 'long_run';
+    const isCfgGen = config.goal === 'config_gen';
     document.querySelectorAll('.step-card.sweep-only').forEach(el => {
-        el.style.display = (isSingle || isLongRun) ? 'none' : '';
+        el.style.display = (isSingle || isLongRun || isCfgGen) ? 'none' : '';
     });
     document.querySelectorAll('.step-card.goal-single-test').forEach(el => {
         el.style.display = isSingle ? '' : 'none';
     });
     document.querySelectorAll('.step-card.goal-long-run').forEach(el => {
         el.style.display = isLongRun ? '' : 'none';
+    });
+    document.querySelectorAll('.step-card.goal-config-gen').forEach(el => {
+        el.style.display = isCfgGen ? '' : 'none';
     });
     if (isSingle) {
         const shape = document.getElementById('st-single-shape');
@@ -1412,6 +1416,13 @@ function updateSingleTestVisibility() {
     _singleTestVisLock = true;
     // long_run reuses the single-test deployment spec section
     var isSingle = config.goal === 'single_test' || config.goal === 'long_run' || config.goal === 'config_gen';
+    // config_gen: hide testing-only wizard sections (sweeps, profiling,
+    // EPP calibrate/benchmark) — the generator renders configs, it runs
+    // no tests
+    var isCfgGen = config.goal === 'config_gen';
+    document.querySelectorAll('.testing-only').forEach(function(el) {
+        el.style.display = isCfgGen ? 'none' : '';
+    });
     var el = document.getElementById('single-test-config');
     if (el) {
         el.style.display = isSingle ? 'block' : 'none';
