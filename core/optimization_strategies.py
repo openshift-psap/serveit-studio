@@ -1228,22 +1228,38 @@ class ConfigGenStrategy(OptimizationStrategy):
             m = _re.search(flag + r"[= ]([\d.]+)", rendered)
             return float(m.group(1)) if m else None
 
+        # PD test configs carry prefill_replicas/decode_replicas (the
+        # *_pods aliases are not populated by _create_pd_config)
+        _pf_pods = (getattr(test_config, "prefill_pods", None)
+                    or getattr(test_config, "prefill_replicas", None) or 0)
+        _dc_pods = (getattr(test_config, "decode_pods", None)
+                    or getattr(test_config, "decode_replicas", None) or 0)
+        _pf_tp = (getattr(test_config, "prefill_tp", None)
+                  or test_config.tensor_parallelism or 1)
+        _dc_tp = (getattr(test_config, "decode_tp", None)
+                  or test_config.tensor_parallelism or 1)
+        _rep = getattr(test_config, "replicas", 1) or 1
+        if arch == "pd":
+            _gpus = _pf_pods * _pf_tp + _dc_pods * _dc_tp
+            _replicas = _pf_pods + _dc_pods
+        else:
+            _gpus = test_config.tensor_parallelism * _rep
+            _replicas = _rep
         summary = {
             "name": name,
             "architecture": arch,
             "tp": test_config.tensor_parallelism,
             "pp": getattr(test_config, "pipeline_parallel_size", None) or 1,
-            "replicas": getattr(test_config, "prefill_pods", None)
-                or getattr(test_config, "replicas", 1) or 1,
-            "gpus": (getattr(test_config, "prefill_gpus", 0) or 0) or
-                (test_config.tensor_parallelism * (getattr(test_config, "replicas", 1) or 1)),
+            "replicas": _replicas,
+            "prefill_tp": _pf_tp if arch == "pd" else None,
+            "decode_tp": _dc_tp if arch == "pd" else None,
+            "prefill_pods": _pf_pods if arch == "pd" else None,
+            "decode_pods": _dc_pods if arch == "pd" else None,
+            "gpus": _gpus,
             "max_model_len": _arg("--max-model-len") or getattr(test_config, "max_model_len", None),
             "max_num_seqs": _arg("--max-num-seqs"),
             "gpu_memory_utilization": _arg("--gpu-memory-utilization"),
             "block_size": _arg("--block-size"),
-            "decode_tp": getattr(test_config, "decode_tp", None),
-            "prefill_pods": getattr(test_config, "prefill_pods", None),
-            "decode_pods": getattr(test_config, "decode_pods", None),
         }
         with open(_os.path.join(cfg_dir, "config-summary.json"), "w") as f:
             _json.dump(summary, f, indent=1)

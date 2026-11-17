@@ -1684,8 +1684,11 @@ class ReportAnalyzer:
         except (ValueError, TypeError):
             _run_cfg = {}
         _report_goal = (_run_cfg.get('objective') or _run_cfg.get('goal') or _run_goal)
+        # config_gen rows carry no metrics — they are shown by the
+        # Generated Configs tab from the embedded index, not as a results
+        # table (rows would render with every metric null)
         all_results = self.build_all_results_table(
-            results, include_all=(str(_run_goal).lower() == 'config_gen'))
+            results, include_all=False)
 
         # Embed generated configs so downloaded (offline) reports render too
         _generated_configs = []
