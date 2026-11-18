@@ -2070,7 +2070,15 @@ class RecipeOptimizer(
         _otps = (sim or {}).get("metrics", {}).get("output_tok_s") or {}
         if isinstance(_otps, dict) and _otps.get("value") is not None:
             result.output_tps_mean = _otps["value"]
-            result.tokens_per_second = _otps["value"]
+            # tokens_per_second is the *total* token rate (prompt + output):
+            # real runs report it that way, so an output-only value here made
+            # the soak table look ~40x off
+            _prompt_rate = None
+            _ec_tok = ((sim or {}).get("reports") or {}).get("engine", {}).get("cluster") or {}
+            if _ec_tok.get("total_input_tokens") is not None:
+                _dur_sim = _ec_tok.get("simulated_duration_s") or duration or 1
+                _prompt_rate = _ec_tok["total_input_tokens"] / _dur_sim
+            result.tokens_per_second = (_prompt_rate or 0) + _otps["value"]
             for _p in (50, 90, 95, 99):
                 setattr(result, f"output_tps_p{_p}", _otps["value"])
         _tpot = summary.get("itl_mean_ms")

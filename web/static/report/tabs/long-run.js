@@ -114,6 +114,14 @@
 
     function tokPerSec(r) {
         var m = mj(r);
+        // Prefer server-side prompt+generation rates: they exist for both
+        // real (vLLM histogram) and simulated (engine report) runs, so the
+        // column compares like with like. tokens_per_second is the fallback
+        // for older rows (real runs store guidellm's client-side total there).
+        var pm = m.prometheus_metrics || (m.additional_metrics || {}).prometheus_metrics || {};
+        var p = (pm.vllm_prompt_tokens_rate || {}).avg;
+        var g = (pm.vllm_generation_tokens_rate || {}).avg;
+        if (p != null || g != null) return (p || 0) + (g || 0);
         return m.tokens_per_second != null ? m.tokens_per_second : m.output_tps_mean;
     }
 
