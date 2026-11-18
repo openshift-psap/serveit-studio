@@ -418,7 +418,17 @@
                 }], {
                     margin: { l: 55, r: 15, t: 30, b: 30 },
                     title: { text: title, font: { size: 12 } },
-                    xaxis: { title: 'cycle' },
+                    // one tick per cycle — Plotly thins labels by default
+                    // (2, 4, 6 …) which hides individual data points
+                    xaxis: {
+                        title: 'cycle',
+                        tickmode: 'array',
+                        tickvals: xs,
+                        ticktext: xs.map(function (v) { return String(v).replace('#', ''); }),
+                        tickangle: xs.length > 12 ? -45 : 0,
+                        tickfont: { size: xs.length > 12 ? 9 : 11 },
+                        automargin: true
+                    },
                     yaxis: { title: unit },
                     plot_bgcolor: '#fff', height: 240
                 }, { displayModeBar: false, responsive: true });
