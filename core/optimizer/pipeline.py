@@ -2086,6 +2086,10 @@ class RecipeOptimizer(
             blis_metrics['blis_command'] = runner_scenario.last_command
         if getattr(runner_scenario, "last_workload_spec", None):
             blis_metrics['blis_workload_spec'] = runner_scenario.last_workload_spec
+        if getattr(runner_scenario, "last_epp_config", None):
+            blis_metrics['blis_epp_config'] = runner_scenario.last_epp_config
+            blis_metrics['blis_epp_config_name'] = getattr(
+                runner_scenario, "last_epp_config_name", None)
         result.blis_metrics = blis_metrics
         # itl_mean feeds the DB saver's metrics_json.itl_mean field (the
         # saver reads this attribute; tpot_mean lands nowhere)

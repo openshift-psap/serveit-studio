@@ -149,8 +149,11 @@ class BlisRunner:
         # run_replay). Callers record it in the report; no monkeypatching.
         self.last_command = None
         # Text of the workload spec used, when one was generated (parallel
-        # shapes); shown alongside the command in the report.
+        # shapes) and of the EPP router config the scenario references.
+        # Both are shown alongside the command in the report.
         self.last_workload_spec = None
+        self.last_epp_config = None
+        self.last_epp_config_name = None
 
     @property
     def remote(self):
@@ -390,6 +393,23 @@ pools:
 
     # -- execution --------------------------------------------------------
 
+    def _record_scenario_epp(self, scenario_path):
+        """Store the EndpointPickerConfig the scenario points at (post-fallback)."""
+        try:
+            with open(scenario_path) as f:
+                _scn = f.read()
+            import re as _re
+            m = _re.search(r"endpoint_picker_config:\s*(\S+)", _scn)
+            if not m:
+                return
+            ref = m.group(1)
+            path = os.path.join(os.path.dirname(scenario_path), ref)
+            with open(path) as f:
+                self.last_epp_config = f.read()
+            self.last_epp_config_name = ref
+        except OSError:
+            self.last_epp_config = None
+
     def run(self, scenario_path: str, scenario_name: str, cfg,
             seed: int = 42, timeout: int = 900, instances: int = None):
         """Run the simulator with the workload derived from cfg.
@@ -525,6 +545,7 @@ pools:
         if int(_rep) > 1:
             args += ["--num-instances", str(int(_rep))]
 
+        self._record_scenario_epp(scenario_path)
         self.last_command = " ".join(str(a) for a in args)
         try:
             r = self._exec(args, timeout=timeout)
@@ -898,6 +919,7 @@ pools:
         if self.remote:
             args += ["--saturation-report", f"{pod_scenarios_dir}/saturation.json"]
 
+        self._record_scenario_epp(scenario_path)
         self.last_command = " ".join(str(a) for a in args)
         try:
             r = self._exec(args, timeout=timeout)

@@ -23,13 +23,14 @@ const advToggle = (key, fallback) => { const s = adv[key]; return s ? (s.mode ==
 // BLIS runs: dedicated section with the simulator command line AND the
 // workload spec it executed (parallel shapes run through that spec)
 try {
-    var _blis = { cmd: null, spec: null, note: null };
+    var _blis = { cmd: null, spec: null, epp: null, eppName: null };
     (data.all_results || []).forEach(function (r) {
         var mj = r.metrics_json;
         try { mj = typeof mj === 'string' ? JSON.parse(mj) : mj; } catch (e) { return; }
         var am = (mj && mj.additional_metrics) || {};
         if (!_blis.cmd && am.blis_command) _blis.cmd = am.blis_command;
         if (!_blis.spec && am.blis_workload_spec) _blis.spec = am.blis_workload_spec;
+        if (!_blis.epp && am.blis_epp_config) { _blis.epp = am.blis_epp_config; _blis.eppName = am.blis_epp_config_name || 'router config'; }
 
     });
     if (_blis.cmd) {
@@ -49,6 +50,12 @@ try {
             html += '<div style="font-weight:800;color:#0e7490;font-size:0.95em;margin-top:18px;">Workload spec' +
                 ' <span style="font-weight:400;color:#64748b;font-size:0.85em;">(serveit-workload-spec.yaml — one closed-loop client per workload shape)</span></div>' +
                 '<pre style="' + _pre + '">' + _esc(_blis.spec) + '</pre>';
+        }
+        if (_blis.epp) {
+            html += '<div style="font-weight:800;color:#0e7490;font-size:0.95em;margin-top:18px;">EPP config' +
+                ' <span style="font-weight:400;color:#64748b;font-size:0.85em;">(' + _esc(_blis.eppName) +
+                ' — the EndpointPickerConfig the simulator routed with)</span></div>' +
+                '<pre style="' + _pre + '">' + _esc(_blis.epp) + '</pre>';
         }
         html += '</div></div>';
     }

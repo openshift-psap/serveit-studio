@@ -256,10 +256,6 @@
                 s += '<div style="margin:0 20px 10px; padding:8px 14px; background:#f0fdf4; border:1px solid #bbf7d0; ' +
                     'border-radius:8px; color:#166534; font-size:0.85em;">Engine: ' + engBits.join(' &middot; ') + '</div>';
             }
-            // The full command line + workload spec live in Test Settings
-            s += '<div style="margin:0 20px 10px; color:#64748b; font-size:0.85em;">' +
-                'The exact BLIS command line and workload spec for this run are in the <strong>Test Settings</strong> tab.</div>';
-
             // TTFT composition headline: queue wait vs prefill compute
             var t0 = blisTel(rows[rows.length - 1]) || {};
             if (t0.queue_share_pct != null) {
