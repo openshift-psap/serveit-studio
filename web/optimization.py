@@ -1184,6 +1184,22 @@ data:
                     "UPDATE optimization_runs SET config_json = ? WHERE id = ?", (json.dumps(cfg_dict2), run_id)
                 )
 
+            # Fresh runs start from a clean slate: leftover deployments from a
+            # previous run would otherwise be reused (same LWS name → pods not
+            # recreated), which makes deploy timings look like a soak and can
+            # carry stale settings into a new test. Resume keeps its pods.
+            _blis = bool(getattr(recipe_config, "use_blis", False))
+            _objective = str(getattr(recipe_config, "objective", "") or "")
+            if not resume_run_id and not _blis and _objective != "config_gen":
+                log_to_ui("🧹 Removing deployments from previous runs before a fresh start...", "info")
+                try:
+                    from core import CleanupManager
+                    CleanupManager(namespace=TARGET_NAMESPACE).cleanup_all_test_deployments(
+                        log_callback=lambda m: log_to_ui(f"   {m}", "info")
+                    )
+                except Exception as _ce:
+                    log_to_ui(f"   ⚠️ Cleanup failed (continuing): {_ce}", "warning")
+
             try:
                 results = optimizer.optimize(resume=bool(resume_run_id))
 
