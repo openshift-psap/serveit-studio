@@ -1,125 +1,118 @@
                     <!-- Step 1: Optimization Goal -->
                     <div class="step-section" id="step1-section" style="display: block;">
-                        <h3>What's your priority?</h3>
+                        <h3>What do you want to optimize?</h3>
                         <p class="description">
-                            ServeIt Studio benchmarks real deployments on your cluster and
-                            recommends the best configuration for your model and workload.
-                            Start from what you want to optimize — or jump straight to a
-                            known architecture below.
+                            ServeIt benchmarks real deployments on your cluster and recommends
+                            the best configuration for your model and workload. Pick the outcome
+                            you care about — or go straight to an architecture.
                         </p>
 
-                        <div class="architecture-grid">
-                            <div class="arch-card" data-goal="throughput">
-                                <h4>Maximize Throughput</h4>
-                                <p>Find the configuration that serves the most requests
-                                per second. Best when serving many concurrent users.</p>
-                                <div class="best-for">
-                                    <strong>Tests:</strong> <span>Aggregated vs Expert Parallel (EP), including multi-node when available — the winner is recommended</span>
+                        <div class="goal-zone">
+                            <div class="goal-grid">
+                                <div class="arch-card goal-card" data-goal="throughput">
+                                    <div class="goal-kicker">Maximize throughput</div>
+                                    <h4>Serve more users</h4>
+                                    <p>Most requests per second — best for many concurrent users.</p>
+                                    <div class="goal-chips">
+                                        <span class="chip">Aggregated</span>
+                                        <span class="chip">EP</span>
+                                        <span class="cost-badge">Moderate</span>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div class="arch-card" data-goal="ttft">
-                                <h4>Minimize Response Time</h4>
-                                <p>Find the configuration with the fastest time-to-first-token.
-                                Best for interactive and agentic workloads where users wait
-                                for the first reply.</p>
-                                <div class="best-for">
-                                    <strong>Tests:</strong> <span>Aggregated vs Prefill/Decode split (PD) — the winner is recommended</span>
+                                <div class="arch-card goal-card" data-goal="ttft">
+                                    <div class="goal-kicker">Minimize response time</div>
+                                    <h4>Fastest first token</h4>
+                                    <p>Lowest time-to-first-token — best for interactive and agentic workloads.</p>
+                                    <div class="goal-chips">
+                                        <span class="chip">Aggregated</span>
+                                        <span class="chip">PD</span>
+                                        <span class="cost-badge">Moderate</span>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div class="arch-card" data-goal="full_coverage">
-                                <h4>Full Coverage</h4>
-                                <p>Test every TP-based architecture and compare them all —
-                                the most thorough (and longest) option.</p>
-                                <div class="best-for">
-                                    <strong>Tests:</strong> <span>Aggregated, PD, and EP — three-way comparison picks the overall winner. DPEP is tested separately (below)</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style="text-align: center; margin: 24px 0 16px; color: var(--rh-gray-500); font-weight: 700; font-size: 0.95em;">— OR if you already know which architecture to use —</div>
-
-                        <div class="architecture-grid">
-                            <div class="arch-card" data-goal="aggregated_only">
-                                <h4>Aggregated Only</h4>
-                                <p>One engine replicated across all GPUs — the simplest
-                                architecture. Fastest option to test: no architecture
-                                comparison, just the best TP size.</p>
-                                <div class="best-for">
-                                    <strong>Architecture:</strong> <span>Aggregated</span>
-                                </div>
-                            </div>
-
-                            <div class="arch-card" data-goal="pd_only">
-                                <h4>Prefill/Decode Only</h4>
-                                <p>Separate GPU groups for input processing (prefill) and
-                                token generation (decode), with KV-cache transfer between
-                                them. Skips the Aggregated baseline.</p>
-                                <div class="best-for">
-                                    <strong>Architecture:</strong> <span>Prefill/Decode (PD)</span>
-                                </div>
-                            </div>
-
-                            <div class="arch-card" data-goal="ep_only">
-                                <h4>Expert Parallelism Only</h4>
-                                <p>PD split with MoE expert layers distributed across GPUs
-                                instead of replicated. For Mixture-of-Experts models only.</p>
-                                <div class="best-for">
-                                    <strong>Architecture:</strong> <span>Expert Parallelism (EP)</span>
-                                </div>
-                            </div>
-
-                            <div class="arch-card" data-goal="dpep_only">
-                                <h4>DPEP Only</h4>
-                                <p>Independent GPU workers, each holding the full attention
-                                weights and a slice of the MoE experts (TP=1). No TP
-                                all-reduce. Matches production deployments for large MLA
-                                MoE models (e.g. GLM-5.3).</p>
-                                <div class="best-for">
-                                    <strong>Architecture:</strong> <span>Data Parallel + Expert Parallel (DPEP)</span>
+                                <div class="arch-card goal-card" data-goal="full_coverage">
+                                    <div class="goal-kicker">Most thorough</div>
+                                    <h4>Compare everything</h4>
+                                    <p>Tests every TP-based architecture and picks the overall winner.</p>
+                                    <div class="goal-chips">
+                                        <span class="chip">Aggregated</span>
+                                        <span class="chip">PD</span>
+                                        <span class="chip">EP</span>
+                                        <span class="cost-badge cost-long">Long</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div style="text-align: center; margin: 24px 0 16px; color: var(--rh-gray-500); font-weight: 700; font-size: 0.95em;">— OR run a specific configuration —</div>
-
-                        <div class="architecture-grid">
-                            <div class="arch-card" data-goal="config_gen">
-                                <h4>⚙️ Config Generator</h4>
-                                <p>Render the EPP and inference deployment YAMLs for your exact
-                                configuration and download them. No tests run, no GPUs used —
-                                the same manifests ServeIt would deploy, ready for Git or ArgoCD.</p>
-                                <div class="best-for">
-                                    <strong>Best For:</strong> <span>GitOps workflows, config reviews, pipeline integration</span>
+                        <div class="goal-zone">
+                            <div class="zone-head">
+                                <span class="zone-title">I know which architecture I want</span>
+                                <span class="zone-caption">No comparison — only the best split for that architecture.</span>
+                            </div>
+                            <div class="arch-list">
+                                <div class="arch-card arch-row" data-goal="aggregated_only">
+                                    <div class="arch-row-main">
+                                        <span class="arch-row-name">Aggregated</span>
+                                        <span class="arch-row-desc">One engine replicated across all GPUs. Just the best TP size.</span>
+                                    </div>
+                                    <div class="arch-row-meta"><span class="cost-badge">Fast</span></div>
+                                </div>
+                                <div class="arch-card arch-row" data-goal="pd_only">
+                                    <div class="arch-row-main">
+                                        <span class="arch-row-name">Prefill / Decode</span>
+                                        <span class="arch-row-desc">Separate GPU groups for input and generation, with KV-cache transfer.</span>
+                                    </div>
+                                    <div class="arch-row-meta"><span class="cost-badge">Moderate</span></div>
+                                </div>
+                                <div class="arch-card arch-row" data-goal="ep_only">
+                                    <div class="arch-row-main">
+                                        <span class="arch-row-name">Expert Parallel</span>
+                                        <span class="arch-row-desc">PD split with MoE expert layers spread across GPUs instead of replicated.</span>
+                                    </div>
+                                    <div class="arch-row-meta">
+                                        <span class="tag-moe">MoE only</span>
+                                        <span class="cost-badge">Moderate</span>
+                                    </div>
+                                </div>
+                                <div class="arch-card arch-row" data-goal="dpep_only">
+                                    <div class="arch-row-main">
+                                        <span class="arch-row-name">DP/EP</span>
+                                        <span class="arch-row-desc">TP=1 workers, each holding a slice of experts. Matches large MLA MoE deployments.</span>
+                                    </div>
+                                    <div class="arch-row-meta">
+                                        <span class="tag-moe">MoE only</span>
+                                        <span class="cost-badge">Moderate</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="architecture-grid">
-                            <div class="arch-card" data-goal="single_test">
-                                <h4>Single Test</h4>
-                                <p>Deploy one exact configuration — architecture, TP, and
-                                pod count — benchmark it, and report. No sweeps, no
-                                optimization.</p>
-                                <div class="best-for">
-                                    <strong>Best For:</strong> <span>Validating a known-good config or re-testing a recommendation</span>
-                                </div>
+                        <div class="goal-zone">
+                            <div class="zone-head">
+                                <span class="zone-title">Run a specific job</span>
+                                <span class="zone-caption">Not an optimization — a fixed task.</span>
                             </div>
-
-                            <div class="arch-card" data-goal="long_run">
-                                <h4>Soak Test</h4>
-                                <p>Deploy once and run the same workload N times — pods are
-                                never restarted. Catches memory leaks, CPU drift, and
-                                degradation over time. Per-cycle GPU profiles (torch traces),
-                                EPP CPU/heap profiles, and pod resource snapshots track drift
-                                across cycles; long tests use two-pass profiling so trace
-                                exports never contaminate the measurement.</p>
-                                <div class="best-for">
-                                    <strong>Best For:</strong> <span>Stability validation, leak detection, pre-release soak testing</span>
+                            <div class="job-grid">
+                                <div class="arch-card job-card" data-goal="config_gen">
+                                    <h4>Generate configs</h4>
+                                    <p>Render the EPP and inference YAMLs for this configuration.</p>
+                                    <span class="cost-badge">No GPUs</span>
+                                </div>
+                                <div class="arch-card job-card" data-goal="single_test">
+                                    <h4>Single test</h4>
+                                    <p>Deploy one exact architecture, TP, and pod count; benchmark it.</p>
+                                    <span class="cost-badge">Moderate</span>
+                                </div>
+                                <div class="arch-card job-card" data-goal="long_run">
+                                    <h4>Soak test</h4>
+                                    <p>One deployment, N cycles, never restarted. Catches leaks and drift.</p>
+                                    <span class="cost-badge cost-long">Long</span>
                                 </div>
                             </div>
                         </div>
+
+                        <p class="goal-summary" id="goal-summary"></p>
 
                         <button class="action-button" id="next-step1">Continue to Model Selection →</button>
                     </div>
