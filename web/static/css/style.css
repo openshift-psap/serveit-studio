@@ -1269,19 +1269,6 @@
         }
         .cost-long { background: #FDF2E3; color: #8A5A12; border-color: #F0D4A8; }
 
-        .arch-list { display: flex; flex-direction: column; gap: 8px; }
-        .arch-card.arch-row {
-            flex-direction: row; align-items: center; gap: 18px;
-            padding: 24px 24px; border-width: 1.5px; border-radius: 6px;
-            min-height: 124px;
-        }
-        .arch-card.arch-row:hover { transform: none; }
-        .arch-card.arch-row::after { top: 50%; transform: translateY(-50%); }
-        .arch-row-main { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
-        .arch-row-name { font-weight: 700; color: var(--rh-black); font-size: 1.38em; }
-        .arch-row-desc { color: var(--rh-gray-700); font-size: 1.05em; line-height: 1.55; }
-        .arch-row-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-        .arch-row-meta .cost-badge { margin-left: 0; }
         .tag-moe {
             background: #F3E8FF; color: #6B21A8; border: 1px solid #E4D3FA;
             border-radius: 999px; padding: 5px 12px; font-size: 0.88em; font-weight: 700;

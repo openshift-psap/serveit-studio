@@ -50,37 +50,36 @@
                                 <span class="zone-title">I know which architecture I want</span>
                                 <span class="zone-caption">No comparison — only the best split for that architecture.</span>
                             </div>
-                            <div class="arch-list">
-                                <div class="arch-card arch-row" data-goal="aggregated_only">
-                                    <div class="arch-row-main">
-                                        <span class="arch-row-name">Aggregated</span>
-                                        <span class="arch-row-desc">One engine replicated across all GPUs. Just the best TP size.</span>
+                            <div class="goal-grid">
+                                <div class="arch-card goal-card" data-goal="aggregated_only">
+                                    <h4>Aggregated</h4>
+                                    <p>One engine replicated across all GPUs. Just the best TP size.</p>
+                                    <div class="goal-chips">
+                                        <span class="cost-badge">Fast</span>
                                     </div>
-                                    <div class="arch-row-meta"><span class="cost-badge">Fast</span></div>
                                 </div>
-                                <div class="arch-card arch-row" data-goal="pd_only">
-                                    <div class="arch-row-main">
-                                        <span class="arch-row-name">Prefill / Decode</span>
-                                        <span class="arch-row-desc">Separate GPU groups for input and generation, with KV-cache transfer.</span>
+
+                                <div class="arch-card goal-card" data-goal="pd_only">
+                                    <h4>Prefill / Decode</h4>
+                                    <p>Separate GPU groups for input and generation, with KV-cache transfer.</p>
+                                    <div class="goal-chips">
+                                        <span class="cost-badge">Moderate</span>
                                     </div>
-                                    <div class="arch-row-meta"><span class="cost-badge">Moderate</span></div>
                                 </div>
-                                <div class="arch-card arch-row" data-goal="ep_only">
-                                    <div class="arch-row-main">
-                                        <span class="arch-row-name">Expert Parallel</span>
-                                        <span class="arch-row-desc">PD split with MoE expert layers spread across GPUs instead of replicated.</span>
-                                    </div>
-                                    <div class="arch-row-meta">
+
+                                <div class="arch-card goal-card" data-goal="ep_only">
+                                    <h4>Expert Parallel</h4>
+                                    <p>PD split with MoE expert layers spread across GPUs instead of replicated.</p>
+                                    <div class="goal-chips">
                                         <span class="tag-moe">MoE only</span>
                                         <span class="cost-badge">Moderate</span>
                                     </div>
                                 </div>
-                                <div class="arch-card arch-row" data-goal="dpep_only">
-                                    <div class="arch-row-main">
-                                        <span class="arch-row-name">DP/EP</span>
-                                        <span class="arch-row-desc">TP=1 workers, each holding a slice of experts. Matches large MLA MoE deployments.</span>
-                                    </div>
-                                    <div class="arch-row-meta">
+
+                                <div class="arch-card goal-card" data-goal="dpep_only">
+                                    <h4>DP/EP</h4>
+                                    <p>TP=1 workers, each holding a slice of experts. Matches large MLA MoE deployments.</p>
+                                    <div class="goal-chips">
                                         <span class="tag-moe">MoE only</span>
                                         <span class="cost-badge">Moderate</span>
                                     </div>
