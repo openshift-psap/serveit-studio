@@ -224,12 +224,14 @@
                 '+' + (((heapSeries[heapSeries.length - 1] / heapSeries[0]) - 1) * 100).toFixed(1) + '%)</div>';
         }
 
-        // Trend charts row
-        s += '<div style="display:flex; gap:10px; flex-wrap:wrap; margin:12px 20px;">';
-        s += '<div id="' + id + '-ttft" style="flex:1; min-width:280px;"></div>';
-        s += '<div id="' + id + '-tps" style="flex:1; min-width:280px;"></div>';
-        s += '<div id="' + id + '-rss" style="flex:1; min-width:280px;"></div>';
-        s += '<div id="' + id + '-heap" style="flex:1; min-width:280px;"></div>';
+        // Trend charts row. A grid keeps the cards equal-width; chart divs
+        // with no data are removed by line() so the remaining charts fill
+        // the row instead of leaving gaps.
+        s += '<div class="longrun-trend-grid">';
+        s += '<div id="' + id + '-ttft"></div>';
+        s += '<div id="' + id + '-tps"></div>';
+        s += '<div id="' + id + '-rss"></div>';
+        s += '<div id="' + id + '-heap"></div>';
         s += '</div>';
 
         var isBlis = rows.some(blisTel);
@@ -405,7 +407,11 @@
                 var el = document.getElementById(elId);
                 if (!el) return;
                 var hasData = ys.some(function(v) { return v !== null; });
-                if (!hasData) return;
+                if (!hasData) {
+                    // drop the empty cell so the others fill the row
+                    if (el.parentNode) el.parentNode.removeChild(el);
+                    return;
+                }
                 Plotly.newPlot(el, [{
                     x: xs, y: ys, type: 'scatter', mode: 'lines+markers',
                     marker: { color: color }, line: { color: color }
@@ -416,6 +422,11 @@
                     yaxis: { title: unit },
                     plot_bgcolor: '#fff', height: 240
                 }, { displayModeBar: false, responsive: true });
+                // Charts built in a hidden pane get a 0/odd width; resize
+                // once layout settles and again on the next frame
+                requestAnimationFrame(function() {
+                    try { Plotly.Plots.resize(el); } catch (e) {}
+                });
             }
 
             line(id + '-ttft', rs.map(function(r) { return r.ttft_p90 || null; }),
