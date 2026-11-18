@@ -528,7 +528,7 @@
             const metricDefs = [
                 { name: 'TTFT (ms)', key: 'ttft', lowerBetter: true },
                 { name: 'ITL (ms)', key: 'itl', lowerBetter: true },
-                { name: 'Throughput (req/s)', key: 'throughput', lowerBetter: false },
+                { name: 'Throughput (req/s mean)', key: 'throughput', lowerBetter: false },
             ];
 
             const entries = [{label: primaryArch, pctl: p}];
@@ -569,8 +569,8 @@
                         // `white-space: nowrap` on every td, which would
                         // push the table past the card width.
                         _sawThroughputMean = true;
-                        // the row label already carries the unit — don't repeat it
-                        s += `<td colspan="4" style="white-space:normal;${p90Style}${borderStyle}">${_tputMean} <span style="color:#94a3b8; font-size:0.9em;">· mean</span></td>`;
+                        // values only in the table — the row label says "mean"
+                        s += `<td colspan="4" style="${p90Style}${borderStyle}">${_tputMean}</td>`;
                     } else {
                         s += `<td style="${borderStyle}">${d.p50 ?? '-'}</td>`;
                         s += `<td style="${p90Style}${borderStyle}">${d.p90 ?? '-'}</td>`;
@@ -584,7 +584,7 @@
             s += '</table>';
             if (_sawThroughputMean) {
                 s += '<div style="padding:8px 16px 14px; color:#94a3b8; font-size:0.82em; line-height:1.5;">' +
-                     'Percentiles are per-request. Throughput is a single window mean, so it has no P50/P90/P95/P99.' +
+                     'Throughput is a single window mean; it has no per-request percentiles.' +
                      '</div>';
             }
             s += '</div></div>';
