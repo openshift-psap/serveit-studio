@@ -1364,7 +1364,7 @@ var GOAL_SUMMARY = {
     pd_only: 'You will test Prefill/Decode splits only — no Aggregated baseline.',
     ep_only: 'You will test Expert Parallel splits only (Mixture-of-Experts models).',
     dpep_only: 'You will test DP/EP only: TP=1 workers with distributed experts.',
-    config_gen: 'You will render deployment YAMLs only — no tests, no GPUs.',
+    config_gen: 'You will scan the cluster and render every deployable configuration — nothing is deployed or benchmarked.',
     single_test: 'You will deploy and benchmark one exact configuration.',
     long_run: 'You will run one deployment for N cycles to catch leaks and drift.'
 };
