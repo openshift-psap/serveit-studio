@@ -1293,6 +1293,8 @@
             .longrun-trend-grid { grid-template-columns: 1fr; }
         }
         .longrun-trend-grid > div { min-width: 0; }
+        /* a single surviving series should use the full row */
+        .longrun-trend-grid > div:only-child { grid-column: 1 / -1; }
 
         .goal-summary {
             display: none;
