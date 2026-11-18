@@ -148,6 +148,9 @@ class BlisRunner:
         # Last command line handed to the simulator (populated by run /
         # run_replay). Callers record it in the report; no monkeypatching.
         self.last_command = None
+        # Text of the workload spec used, when one was generated (parallel
+        # shapes); shown alongside the command in the report.
+        self.last_workload_spec = None
 
     @property
     def remote(self):
@@ -455,6 +458,11 @@ pools:
                 duration_s=duration,
                 out_dir=os.path.dirname(scenario_path))
             if spec_path:
+                try:
+                    with open(spec_path) as _f:
+                        self.last_workload_spec = _f.read()
+                except OSError:
+                    self.last_workload_spec = None
                 if self.remote:
                     self.kubectl.run(
                         ["cp", spec_path,

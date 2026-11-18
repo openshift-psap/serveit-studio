@@ -20,37 +20,41 @@ const adv = rc.advanced_vllm || {};
 const advVal = (key, fallback) => { const s = adv[key]; return s && s.mode === 'custom' && s.value != null ? s.value : (fallback != null ? fallback : 'auto'); };
 const advToggle = (key, fallback) => { const s = adv[key]; return s ? (s.mode === 'on' ? 'On' : s.mode === 'off' ? 'Off' : fallback) : fallback; };
 
-// BLIS runs: show the exact simulator command line (any goal, not just soak)
+// BLIS runs: dedicated section with the simulator command line AND the
+// workload spec it executed (parallel shapes run through that spec)
 try {
-    var _blisCmd = null;
+    var _blis = { cmd: null, spec: null, note: null };
     (data.all_results || []).forEach(function (r) {
-        if (_blisCmd) return;
         var mj = r.metrics_json;
-        try { mj = typeof mj === 'string' ? JSON.parse(mj) : mj; } catch (e) { mj = null; }
+        try { mj = typeof mj === 'string' ? JSON.parse(mj) : mj; } catch (e) { return; }
         var am = (mj && mj.additional_metrics) || {};
-        if (am.blis_command) _blisCmd = am.blis_command;
+        if (!_blis.cmd && am.blis_command) _blis.cmd = am.blis_command;
+        if (!_blis.spec && am.blis_workload_spec) _blis.spec = am.blis_workload_spec;
+        if (!_blis.note && am.blis_command_reconstructed) _blis.note = am.blis_command_note || 'Reconstructed command.';
     });
-    var _isSoak = String((data.run_config || {}).goal || '').toLowerCase() === 'long_run';
-    if (_blisCmd && !_isSoak) {
+    if (_blis.cmd) {
         var _esc = function (t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
-        var _note = (data.all_results || []).reduce(function (acc, r) {
-            if (acc) return acc;
-            var mj = r.metrics_json;
-            try { mj = typeof mj === 'string' ? JSON.parse(mj) : mj; } catch (e) { return acc; }
-            var am = (mj && mj.additional_metrics) || {};
-            return am.blis_command_reconstructed ? (am.blis_command_note || 'Reconstructed command.') : acc;
-        }, null);
+        var _pre = 'background:#0f172a;color:#e2e8f0;border-radius:6px;padding:12px 14px;' +
+                   'font-size:0.78em;line-height:1.5;overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin:8px 0 0;';
         html += '<div class="chart-card" style="border-left:6px solid #0891b2;">' +
             '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee);">BLIS Simulation</div>' +
-            '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+            '<div style="padding:12px 20px 0; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
             'This run simulated the workload in the Blackbox Inference Simulator instead of deploying GPU pods. ' +
-            'The exact command line executed in the workload pod is shown below.' +
-            '</div>' +
-            '<details style="margin:6px 20px 16px;"><summary style="cursor:pointer;color:#0e7490;font-size:0.88em;font-weight:700;">Show BLIS command line</summary>' +
-            '<pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;font-size:0.78em;overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin-top:6px;">' +
-            _esc(_blisCmd) + '</pre>' +
-            (_note ? '<div style="margin-top:8px;padding:8px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e;font-size:0.84em;">&#9888; ' + _esc(_note) + '</div>' : '') +
-            '</details></div>';
+            'The exact invocation and the workload specification it executed are shown below.' +
+            '</div>';
+        if (_blis.note) {
+            html += '<div style="margin:12px 20px 0;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;' +
+                'border-radius:6px;color:#92400e;font-size:0.86em;line-height:1.5;">&#9888; ' + _esc(_blis.note) + '</div>';
+        }
+        html += '<div style="padding:6px 20px 20px;">' +
+            '<div style="font-weight:800;color:#0e7490;font-size:0.95em;margin-top:12px;">Command line</div>' +
+            '<pre style="' + _pre + '">' + _esc(_blis.cmd) + '</pre>';
+        if (_blis.spec) {
+            html += '<div style="font-weight:800;color:#0e7490;font-size:0.95em;margin-top:18px;">Workload spec' +
+                ' <span style="font-weight:400;color:#64748b;font-size:0.85em;">(serveit-workload-spec.yaml — one closed-loop client per workload shape)</span></div>' +
+                '<pre style="' + _pre + '">' + _esc(_blis.spec) + '</pre>';
+        }
+        html += '</div></div>';
     }
 } catch (e) { /* no BLIS telemetry — nothing to show */ }
 
