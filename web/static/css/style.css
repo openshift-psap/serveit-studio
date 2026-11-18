@@ -1286,8 +1286,11 @@
         .job-card .cost-badge { margin-left: 0; }
 
         .longrun-trend-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 12px; margin: 12px 20px;
+        }
+        @media (max-width: 760px) {
+            .longrun-trend-grid { grid-template-columns: 1fr; }
         }
         .longrun-trend-grid > div { min-width: 0; }
 

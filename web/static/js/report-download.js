@@ -311,8 +311,9 @@ ${scripts}
 // Report CSS — extracted from style.css (the classes the tab modules use)
 const REPORT_CSS = `
 /* Long-run trend charts: equal-width grid (mirrors style.css) */
-.longrun-trend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin: 12px 20px; }
+.longrun-trend-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 20px; }
 .longrun-trend-grid > div { min-width: 0; }
+@media (max-width: 760px) { .longrun-trend-grid { grid-template-columns: 1fr; } }
 
 .report-subtabs-container { margin-top: 0; }
 .report-subtabs-container .report-subtab-pane { display: none; }
