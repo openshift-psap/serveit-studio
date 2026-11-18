@@ -118,11 +118,11 @@
         // real (vLLM histogram) and simulated (engine report) runs, so the
         // column compares like with like. tokens_per_second is the fallback
         // for older rows (real runs store guidellm's client-side total there).
-        // Offline reports strip prometheus_metrics but keep the flat
-        // equivalents (_prompt_tps_avg / _gen_tps_avg)
-        if (m._prompt_tps_avg != null || m._gen_tps_avg != null) {
-            return (m._prompt_tps_avg || 0) + (m._gen_tps_avg || 0);
-        }
+        // Offline reports strip prometheus_metrics but keep flat
+        // equivalents on the row (_prompt_tps_avg / _gen_tps_avg)
+        var fp = r._prompt_tps_avg != null ? r._prompt_tps_avg : m._prompt_tps_avg;
+        var fg = r._gen_tps_avg != null ? r._gen_tps_avg : m._gen_tps_avg;
+        if (fp != null || fg != null) return (fp || 0) + (fg || 0);
         var pm = m.prometheus_metrics || (m.additional_metrics || {}).prometheus_metrics || {};
         var p = (pm.vllm_prompt_tokens_rate || {}).avg;
         var g = (pm.vllm_generation_tokens_rate || {}).avg;
