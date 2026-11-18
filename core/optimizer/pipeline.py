@@ -279,7 +279,7 @@ class RecipeOptimizer(
                     "Qwen3_5ForConditionalGeneration",
                     "Qwen3_5ForCausalLM",
                 ]
-                model_archs = self._model_config.get("architectures", [])
+                model_archs = self._model_config.get("architectures") or []
                 if any(a in mtp_archs for a in model_archs):
                     self._supports_mtp = True
                     self.log(f"MTP support detected (architecture: {model_archs[0]})")

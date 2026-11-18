@@ -149,12 +149,20 @@
                 '<td style="text-align:center;">' + splitPair(c, 'gpu_memory_utilization') + '</td>' +
                 '<td style="text-align:center;">' + splitPair(c, 'max_num_seqs') + '</td>' +
                 '<td>' + (c.max_model_len || '&#8212;') + '</td>' +
-                '<td><button onclick="window.open(\'/api/runs/' + runId + '/configs/' + encodeURIComponent(c.name) + '\', \'_blank\')" ' +
+                '<td><button class="gen-cfg-zip" data-url="/api/runs/' + runId +
+                '/configs/' + encodeURIComponent(c.name) + '" ' +
                 'style="padding:3px 10px;background:#f0f9ff;color:#0284c7;border:1px solid #bae6fd;border-radius:4px;cursor:pointer;font-size:0.85em;">&#11015; zip</button></td>' +
                 '</tr>';
         });
         s += '</table>';
         el.innerHTML = s;
+        // Buttons carry the URL in a data attribute (no inline JS string) so
+        // a config name with quotes cannot break out of the markup
+        el.querySelectorAll('.gen-cfg-zip').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                window.open(btn.getAttribute('data-url'), '_blank');
+            });
+        });
     }
 
     function render(data, ctx) {

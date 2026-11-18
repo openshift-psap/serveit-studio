@@ -543,10 +543,15 @@
                     // percentiles absent or identical (guidellm's window
                     // mean is copied into every slot by some parsers)
                     const _tputVals = [d.p50, d.p90, d.p95, d.p99];
-                    const _tputDistinct = _tputVals.filter(function(v) { return v != null; });
-                    const _tputSame = _tputDistinct.every(function(v) { return v === _tputDistinct[0]; });
+                    const _tputPresent = _tputVals.filter(function(v) { return v != null; });
+                    const _tputSame = _tputPresent.every(function(v) { return v === _tputPresent[0]; });
+                    // guidellm long-run rows carry only p90, and that value
+                    // IS the window mean; a lone p50/p95/p99 is a real
+                    // percentile and must not be relabelled
+                    const _tputLoneP90 = _tputPresent.length === 1
+                        && d.p90 != null && d.p50 == null && d.p95 == null && d.p99 == null;
                     const onlyMean = m.key === 'throughput' && _tputMean != null
-                        && (_tputDistinct.length <= 1 || _tputSame);
+                        && (_tputSame || _tputLoneP90);
                     let p90Style = '';
                     if (a) {
                         const other = (idx === 0 ? a[m.key] : p[m.key]) || {};

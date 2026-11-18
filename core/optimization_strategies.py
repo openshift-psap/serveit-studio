@@ -1205,6 +1205,7 @@ class ConfigGenStrategy(OptimizationStrategy):
                     scheduler_image=getattr(cfg, "scheduler_image", None),
                     gateway_class=getattr(cfg, "gateway_class", "istio"),
                 )
+                _ok = False
                 _ok = prereq_mgr.deploy_prereqs(
                     architecture=arch,
                     log_callback=lambda msg: None,
@@ -1220,12 +1221,13 @@ class ConfigGenStrategy(OptimizationStrategy):
                 # be applied — surface it instead of failing silently
                 self.opt.log(
                     f"   ⚠️  prereq render failed for {arch}: {_e}", 'warning')
-            if recorded:
+            if recorded and _ok:
                 recorded_cache[arch_key] = "\n---\n".join(recorded)
             else:
-                # Don't cache a failed render — the next config retries
+                # Don't cache an incomplete render — the next config retries
                 self.opt.log(
-                    f"   ⚠️  no prereq manifests rendered for {arch}", 'warning')
+                    f"   ⚠️  prereq manifests for {arch} not cached "
+                    f"(rendered={len(recorded)}, ok={_ok})", 'warning')
 
         _bundle = recorded_cache.get(arch_key, "")
         _prereq_path = _os.path.join(cfg_dir, "epp-prereq-manifests.yaml")
@@ -1460,7 +1462,7 @@ class ConfigGenStrategy(OptimizationStrategy):
                 self.opt.log(
                     f"   EP: no valid split — {total_gpus} GPUs across two roles "
                     f"cannot both divide {num_experts} experts (need GPUs per "
-                    f"role ∈ divisors of {num_experts})", 'warn')
+                    f"role ∈ divisors of {num_experts})", 'warning')
             for ptp, dtp, pp_pods, dp_pods, pg, dg, split in valid_eps:
                 try:
                     tc = self.opt._create_ep_config(split)

@@ -8,6 +8,7 @@ Keeping the module list, CSS, and bootstrap in ONE place (report-download.js)
 would be nicer, but the tab modules must be inlined for a standalone file —
 read them from disk here and escape any </script> in their source.
 """
+import html as _html
 import json
 import os
 import re
@@ -247,6 +248,9 @@ def build_offline_report_html(run_id, data, app_root):
     date = datetime.date.today().isoformat()
 
     title = "ServeIt Studio Report — Run #%s" % run_id
+    # model/goal come from run data — escape before interpolating into HTML
+    model = _html.escape(str(model))
+    goal = _html.escape(str(goal))
     header = (
         '<div style="padding:12px 20px;background:linear-gradient(135deg,#b45309,#f59e0b);'
         'color:#fff;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;'
