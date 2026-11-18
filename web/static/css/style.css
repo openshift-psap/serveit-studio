@@ -1234,69 +1234,70 @@
 
         /* Architecture Cards */
         /* ── Goal step: three zones (intent / architecture / job) ───── */
-        .goal-zone { margin-top: 26px; }
+        .goal-zone { margin-top: 30px; }
         .zone-head {
             display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
-            margin-bottom: 12px;
+            margin-bottom: 14px;
         }
-        .zone-title { font-weight: 800; color: var(--rh-black); font-size: 1.02em; }
-        .zone-caption { color: var(--rh-gray-500); font-size: 0.88em; }
+        .zone-title { font-weight: 800; color: var(--rh-black); font-size: 1.15em; }
+        .zone-caption { color: var(--rh-gray-500); font-size: 0.95em; }
 
         .goal-grid {
             display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
             gap: 14px;
         }
-        .arch-card.goal-card { padding: 16px 18px; }
-        .arch-card.goal-card h4 { text-align: left; font-size: 1.08em; margin: 2px 0 6px; }
-        .arch-card.goal-card p { margin-bottom: 12px; font-size: 0.88em; line-height: 1.5; flex: 0; }
+        .arch-card.goal-card { padding: 24px 24px 22px; min-height: 250px; }
+        .arch-card.goal-card h4 { text-align: left; font-size: 1.4em; margin: 4px 0 10px; }
+        .arch-card.goal-card p { margin-bottom: 16px; font-size: 1em; line-height: 1.6; flex: 0; }
         .arch-card .goal-kicker {
-            text-transform: uppercase; letter-spacing: .06em; font-size: 0.68em;
+            text-transform: uppercase; letter-spacing: .06em; font-size: 0.8em;
             font-weight: 700; color: var(--rh-gray-500);
         }
 
         .goal-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: auto; }
         .chip {
             background: #ECECEC; color: var(--rh-gray-700);
-            border-radius: 999px; padding: 3px 10px; font-size: 0.76em; font-weight: 600;
+            border-radius: 999px; padding: 5px 12px; font-size: 0.86em; font-weight: 600;
         }
         .cost-badge {
             margin-left: auto; background: #E8F4F5; color: #1F6672;
             border: 1px solid #B9DDE1; border-radius: 999px;
-            padding: 3px 10px; font-size: 0.76em; font-weight: 700; white-space: nowrap;
+            padding: 5px 12px; font-size: 0.86em; font-weight: 700; white-space: nowrap;
         }
         .cost-long { background: #FDF2E3; color: #8A5A12; border-color: #F0D4A8; }
 
         .arch-list { display: flex; flex-direction: column; gap: 8px; }
         .arch-card.arch-row {
-            flex-direction: row; align-items: center; gap: 14px;
-            padding: 11px 16px; border-width: 1.5px; border-radius: 6px;
+            flex-direction: row; align-items: center; gap: 16px;
+            padding: 18px 20px; border-width: 1.5px; border-radius: 6px;
+            min-height: 92px;
         }
         .arch-card.arch-row:hover { transform: none; }
         .arch-card.arch-row::after { top: 50%; transform: translateY(-50%); }
         .arch-row-main { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
-        .arch-row-name { font-weight: 700; color: var(--rh-black); font-size: 0.98em; }
-        .arch-row-desc { color: var(--rh-gray-700); font-size: 0.88em; line-height: 1.45; }
+        .arch-row-name { font-weight: 700; color: var(--rh-black); font-size: 1.12em; }
+        .arch-row-desc { color: var(--rh-gray-700); font-size: 0.97em; line-height: 1.5; }
         .arch-row-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
         .arch-row-meta .cost-badge { margin-left: 0; }
         .tag-moe {
             background: #F3E8FF; color: #6B21A8; border: 1px solid #E4D3FA;
-            border-radius: 999px; padding: 3px 9px; font-size: 0.72em; font-weight: 700;
+            border-radius: 999px; padding: 4px 10px; font-size: 0.8em; font-weight: 700;
         }
 
         .job-grid {
             display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
             gap: 12px;
         }
-        .arch-card.job-card { padding: 14px 16px; }
-        .arch-card.job-card h4 { text-align: left; font-size: 0.98em; margin-bottom: 5px; }
-        .arch-card.job-card p { margin-bottom: 10px; font-size: 0.85em; line-height: 1.45; flex: 0; }
+        .arch-card.job-card { padding: 22px 20px; min-height: 190px; }
+        .arch-card.job-card h4 { text-align: left; font-size: 1.15em; margin-bottom: 8px; }
+        .arch-card.job-card p { margin-bottom: 14px; font-size: 0.95em; line-height: 1.55; flex: 0; }
         .job-card .cost-badge { margin-left: 0; }
 
         .goal-summary {
             display: none;
-            margin: 18px 0 4px; padding: 9px 14px; border-left: 4px solid #2A7B88;
+            margin: 24px 0 6px; padding: 13px 18px; border-left: 5px solid #2A7B88;
             background: #F0F9FA; border-radius: 4px;
-            color: var(--rh-gray-700); font-size: 0.88em;
+            color: var(--rh-gray-700); font-size: 1em; line-height: 1.5;
         }
         .goal-summary.has-text { display: block; }
 
