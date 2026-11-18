@@ -1372,7 +1372,9 @@ var GOAL_SUMMARY = {
 function updateGoalSummary(goal) {
     var el = document.getElementById('goal-summary');
     if (!el) return;
-    el.textContent = GOAL_SUMMARY[goal] || '';
+    var text = GOAL_SUMMARY[goal] || '';
+    el.textContent = text;
+    el.classList.toggle('has-text', !!text);
 }
 
 // Goal selection
