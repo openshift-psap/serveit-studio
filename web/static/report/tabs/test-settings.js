@@ -33,6 +33,13 @@ try {
     var _isSoak = String((data.run_config || {}).goal || '').toLowerCase() === 'long_run';
     if (_blisCmd && !_isSoak) {
         var _esc = function (t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+        var _note = (data.all_results || []).reduce(function (acc, r) {
+            if (acc) return acc;
+            var mj = r.metrics_json;
+            try { mj = typeof mj === 'string' ? JSON.parse(mj) : mj; } catch (e) { return acc; }
+            var am = (mj && mj.additional_metrics) || {};
+            return am.blis_command_reconstructed ? (am.blis_command_note || 'Reconstructed command.') : acc;
+        }, null);
         html += '<div class="chart-card" style="border-left:6px solid #0891b2;">' +
             '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee);">BLIS Simulation</div>' +
             '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
@@ -41,7 +48,9 @@ try {
             '</div>' +
             '<details style="margin:6px 20px 16px;"><summary style="cursor:pointer;color:#0e7490;font-size:0.88em;font-weight:700;">Show BLIS command line</summary>' +
             '<pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;font-size:0.78em;overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin-top:6px;">' +
-            _esc(_blisCmd) + '</pre></details></div>';
+            _esc(_blisCmd) + '</pre>' +
+            (_note ? '<div style="margin-top:8px;padding:8px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e;font-size:0.84em;">&#9888; ' + _esc(_note) + '</div>' : '') +
+            '</details></div>';
     }
 } catch (e) { /* no BLIS telemetry — nothing to show */ }
 

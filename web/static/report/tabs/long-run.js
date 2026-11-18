@@ -262,7 +262,12 @@
                 s += '<details style="margin:10px 20px;"><summary style="cursor:pointer;color:#475569;font-size:0.85em;font-weight:600;">&#9001;/&#9002; BLIS command line</summary>' +
                     '<pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;font-size:0.78em;overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin-top:6px;">' +
                     blisCmd.blis_command.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') +
-                    '</pre></details>';
+                    '</pre>' +
+                    (blisCmd.blis_command_reconstructed
+                        ? '<div style="margin-top:8px;padding:8px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e;font-size:0.84em;">&#9888; ' +
+                          String(blisCmd.blis_command_note || 'Reconstructed command.').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>'
+                        : '') +
+                    '</details>';
             }
 
             // TTFT composition headline: queue wait vs prefill compute
