@@ -1773,15 +1773,28 @@ class RecipeOptimizer(
                     import yaml as _yaml
                     cm = _yaml.safe_load(cm_yaml) or {}
                     data = cm.get("data") or {}
-                    for key in ("aggregated-config.yaml", "pd-config.yaml", "ep-config.yaml"):
-                        if key in data:
+                    # The rendered ConfigMap's key varies by EPP version
+                    # (observed: 'default-plugins.yaml'; older layouts used
+                    # aggregated/pd/ep-config.yaml). Try the known names,
+                    # then any *.yaml value — otherwise the simulator
+                    # silently ran the router's defaults, which hash by
+                    # prefix and collapse traffic onto a few endpoints.
+                    _keys = [k for k in ("aggregated-config.yaml", "pd-config.yaml",
+                                         "ep-config.yaml") if k in data]
+                    _keys += [k for k in data if k not in _keys
+                              and str(k).lower().endswith((".yaml", ".yml"))]
+                    for key in _keys:
+                        try:
                             doc = _yaml.safe_load(data[key])
-                            if isinstance(doc, dict):
-                                # normalize apiVersion to the simulator's
-                                # pinned router (llm-d v1.0.0)
-                                if str(doc.get("apiVersion", "")).endswith("v1alpha1"):
-                                    doc["apiVersion"] = "llm-d.ai/v1"
-                                epp_doc = doc
+                        except Exception:
+                            continue
+                        if isinstance(doc, dict) and doc.get("kind"):
+                            # normalize apiVersion to the simulator's
+                            # pinned router (llm-d v1.0.0)
+                            if str(doc.get("apiVersion", "")).endswith("v1alpha1"):
+                                doc["apiVersion"] = "llm-d.ai/v1"
+                            epp_doc = doc
+                            self.log(f"   BLIS: EPP config taken from ConfigMap key '{key}'", "info")
                             break
             except Exception as e:
                 self.log(f"   BLIS: EPP config render failed ({e}) — simulator "
@@ -1790,6 +1803,11 @@ class RecipeOptimizer(
         if epp_doc:
             self.log("   BLIS: using ServeIt's rendered EndpointPickerConfig "
                      "(calibrated scorers/affinity)", "info")
+        else:
+            self.log("   ⚠️  BLIS: no ServeIt EPP config available — the simulator "
+                     "will use the router's built-in defaults (prefix hashing; "
+                     "traffic concentrates on a few endpoints and latency is "
+                     "over-predicted)", "warning")
 
         cr = getattr(self.config, "cluster_resources", None) or {}
         gpus_per_node = int(cr.get("gpus_per_node") or cr.get("gpu_count_per_node") or 8)

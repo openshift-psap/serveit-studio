@@ -1714,38 +1714,53 @@ class LongRunStrategy(OptimizationStrategy):
                 f"hit%={getattr(cycle_cfg, 'prefix_cache_hit_pct', None)} "
                 f"turn_delay={getattr(cycle_cfg, 'turn_delay', None)}", 'info')
 
-            try:
-                if getattr(cfg, 'use_blis', False):
-                    # BLIS simulation: no deployment to reuse, no guidellm
-                    # workers — each cycle is an independent simulation of
-                    # the same scenario (deterministic: identical cycles
-                    # prove pipeline stability; there is no drift to catch
-                    # in a DES)
-                    result = self.opt._run_blis_test(cycle_cfg)
-                else:
-                    result = self.opt.orchestrator.run_test(
-                        cycle_cfg,
-                        cleanup=False,
-                        log_callback=lambda msg: self.opt.log(msg, 'info'),
-                        stop_check=self.opt._should_stop,
+            result = None
+            # One retry per cycle: soak runs are long, and a transient
+            # transport error (kubectl exec stream reset) would otherwise
+            # leave a hole in the cycle series.
+            for _attempt in (1, 2):
+                try:
+                    if getattr(cfg, 'use_blis', False):
+                        # BLIS simulation: no deployment to reuse, no guidellm
+                        # workers — each cycle is an independent simulation of
+                        # the same scenario (deterministic: identical cycles
+                        # prove pipeline stability; there is no drift to catch
+                        # in a DES)
+                        result = self.opt._run_blis_test(cycle_cfg)
+                    else:
+                        result = self.opt.orchestrator.run_test(
+                            cycle_cfg,
+                            cleanup=False,
+                            log_callback=lambda msg: self.opt.log(msg, 'info'),
+                            stop_check=self.opt._should_stop,
+                        )
+                except Exception as e:
+                    self.opt.log(f"  ⚠️ Cycle {cycle} raised: {e}", 'warning')
+                    result = None
+                    if _attempt == 1 and not self.opt._should_stop():
+                        self.opt.log(f"  ↻ Retrying cycle {cycle} once", 'info')
+                        continue
+                    # Failure result for the DB save path — a real TestResult
+                    # with defaults (the bare duck-typed object crashed the
+                    # saver, which reads .gpu_utilization and friends)
+                    import datetime as _dt
+                    from core.orchestrator.result import TestResult as _TR
+                    result = _TR(
+                        test_id=cycle_id,
+                        architecture=base.architecture,
+                        deployment_success=False,
+                        deployment_ready=False,
+                        guidellm_success=False,
+                        metrics_collected=False,
+                        deployment_start_time=_dt.datetime.now().isoformat(),
+                        error_message=f"cycle exception: {e}",
                     )
-            except Exception as e:
-                self.opt.log(f"  ⚠️ Cycle {cycle} raised: {e} — recording failure and continuing", 'warning')
-                # Failure result for the DB save path — a real TestResult
-                # with defaults (the bare duck-typed object crashed the
-                # saver, which reads .gpu_utilization and friends)
-                import datetime as _dt
-                from core.orchestrator.result import TestResult as _TR
-                result = _TR(
-                    test_id=cycle_id,
-                    architecture=base.architecture,
-                    deployment_success=False,
-                    deployment_ready=False,
-                    guidellm_success=False,
-                    metrics_collected=False,
-                    deployment_start_time=_dt.datetime.now().isoformat(),
-                    error_message=f"cycle exception: {e}",
-                )
+                    break
+
+                if (result and getattr(result, 'guidellm_success', False)) \
+                        or _attempt == 2 or self.opt._should_stop():
+                    break
+                self.opt.log(f"  ↻ Cycle {cycle} did not complete — retrying once", 'info')
 
             # Leak signal: pod RSS/CPU right after this cycle
             try:
