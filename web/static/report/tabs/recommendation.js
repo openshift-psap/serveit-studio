@@ -569,7 +569,8 @@
                         // `white-space: nowrap` on every td, which would
                         // push the table past the card width.
                         _sawThroughputMean = true;
-                        s += `<td colspan="4" style="white-space:normal;${p90Style}${borderStyle}">${_tputMean} <span style="color:#94a3b8; font-size:0.9em;">req/s · mean</span></td>`;
+                        // the row label already carries the unit — don't repeat it
+                        s += `<td colspan="4" style="white-space:normal;${p90Style}${borderStyle}">${_tputMean} <span style="color:#94a3b8; font-size:0.9em;">· mean</span></td>`;
                     } else {
                         s += `<td style="${borderStyle}">${d.p50 ?? '-'}</td>`;
                         s += `<td style="${p90Style}${borderStyle}">${d.p90 ?? '-'}</td>`;
