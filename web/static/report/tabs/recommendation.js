@@ -516,6 +516,7 @@
 
             s += `<div class="chart-card"><div class="chart-card-header">${title}</div>`;
             s += `<div style="padding:10px 20px 4px; color:#4b5563; font-size:0.9em;">${blurb}</div>`;
+            let _sawThroughputMean = false;
             s += '<div class="chart-card-body" style="padding:0;">';
             s += '<table class="results-table">';
 
@@ -563,9 +564,12 @@
                     s += `<td style="color:#64748b;${borderStyle}">${m.name}</td>`;
                     if (onlyMean) {
                         // Throughput is a window mean in guidellm — a rate
-                        // has no per-request percentiles, and some parsers
-                        // fill every percentile with the same mean
-                        s += `<td colspan="4" style="${p90Style}${borderStyle}">${_tputMean} <span style="color:#94a3b8; font-size:0.9em;">(mean; a rate has no per-request percentiles)</span></td>`;
+                        // has no per-request percentiles. The cell must be
+                        // allowed to wrap: the live stylesheet forces
+                        // `white-space: nowrap` on every td, which would
+                        // push the table past the card width.
+                        _sawThroughputMean = true;
+                        s += `<td colspan="4" style="white-space:normal;${p90Style}${borderStyle}">${_tputMean} <span style="color:#94a3b8; font-size:0.9em;">req/s · mean</span></td>`;
                     } else {
                         s += `<td style="${borderStyle}">${d.p50 ?? '-'}</td>`;
                         s += `<td style="${p90Style}${borderStyle}">${d.p90 ?? '-'}</td>`;
@@ -576,7 +580,13 @@
                 });
             });
 
-            s += '</table></div></div>';
+            s += '</table>';
+            if (_sawThroughputMean) {
+                s += '<div style="padding:8px 16px 14px; color:#94a3b8; font-size:0.82em; line-height:1.5;">' +
+                     'Percentiles are per-request. Throughput is a single window mean, so it has no P50/P90/P95/P99.' +
+                     '</div>';
+            }
+            s += '</div></div>';
         }
     }
 
