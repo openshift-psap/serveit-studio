@@ -30,7 +30,7 @@ try {
         var am = (mj && mj.additional_metrics) || {};
         if (!_blis.cmd && am.blis_command) _blis.cmd = am.blis_command;
         if (!_blis.spec && am.blis_workload_spec) _blis.spec = am.blis_workload_spec;
-        if (!_blis.note && am.blis_command_reconstructed) _blis.note = am.blis_command_note || 'Reconstructed command.';
+
     });
     if (_blis.cmd) {
         var _esc = function (t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
@@ -42,10 +42,6 @@ try {
             'This run simulated the workload in the Blackbox Inference Simulator instead of deploying GPU pods. ' +
             'The exact invocation and the workload specification it executed are shown below.' +
             '</div>';
-        if (_blis.note) {
-            html += '<div style="margin:12px 20px 0;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;' +
-                'border-radius:6px;color:#92400e;font-size:0.86em;line-height:1.5;">&#9888; ' + _esc(_blis.note) + '</div>';
-        }
         html += '<div style="padding:6px 20px 20px;">' +
             '<div style="font-weight:800;color:#0e7490;font-size:0.95em;margin-top:12px;">Command line</div>' +
             '<pre style="' + _pre + '">' + _esc(_blis.cmd) + '</pre>';
