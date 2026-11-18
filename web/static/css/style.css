@@ -1254,7 +1254,10 @@
             font-weight: 700; color: var(--rh-gray-500);
         }
 
-        .goal-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: auto; }
+        .goal-chips {
+            display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+            margin-top: auto; width: 100%;
+        }
         .chip {
             background: #ECECEC; color: var(--rh-gray-700);
             border-radius: 999px; padding: 6px 13px; font-size: 0.95em; font-weight: 600;
