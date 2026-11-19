@@ -1827,6 +1827,19 @@ class RecipeOptimizer(
             epp_config=epp_doc,
             cluster_nodes=int(getattr(self.config, "blis_cluster_nodes", 0) or 0) or None,
         )
+        if scenario:
+            _es = getattr(runner_scenario, "last_engine_settings", None) or {}
+            _sh = _es.get("shared") or {}
+            _role = _es.get("colocated") or _es.get("prefill") or {}
+            self.log(
+                f"   BLIS scenario: arch={getattr(runner_scenario, 'last_scenario_arch', '?')} "
+                f"block={_sh.get('block_size')} kv={_sh.get('kv_cache_dtype')} "
+                f"dtype={_sh.get('dtype', 'auto')} chunked={_sh.get('enable_chunked_prefill')} "
+                f"prefix={_sh.get('enable_prefix_caching')} seqs={_role.get('max_num_seqs')} "
+                f"batched={_role.get('max_num_batched_tokens')} "
+                f"gmu={_role.get('gpu_memory_utilization')}", 'info')
+            for _nm in (getattr(runner_scenario, "last_not_modelled", None) or []):
+                self.log(f"   BLIS: deployment setting not modelled by the simulator: {_nm}", 'warning')
         if not scenario:
             self.log(
                 f"❌ BLIS: model '{self.config.model_name}' is not in the BLIS catalog "
@@ -2116,6 +2129,16 @@ class RecipeOptimizer(
             blis_metrics['blis_epp_config'] = runner_scenario.last_epp_config
             blis_metrics['blis_epp_config_name'] = getattr(
                 runner_scenario, "last_epp_config_name", None)
+        # Mirrored deployment settings (the audit trail for 1:1 comparisons)
+        _es = getattr(runner_scenario, "last_engine_settings", None)
+        if _es:
+            blis_metrics['blis_engine_settings'] = _es
+            blis_metrics['blis_scenario_arch'] = getattr(
+                runner_scenario, "last_scenario_arch", None)
+            _nm = getattr(runner_scenario, "last_not_modelled", None) or []
+            if _nm:
+                blis_metrics['blis_not_modelled'] = _nm
+
         result.blis_metrics = blis_metrics
         # itl_mean feeds the DB saver's metrics_json.itl_mean field (the
         # saver reads this attribute; tpot_mean lands nowhere)

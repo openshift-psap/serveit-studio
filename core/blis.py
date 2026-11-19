@@ -103,6 +103,111 @@ def _quantization_of(model_name: str) -> str:
     return ""
 
 
+# Engine release the pinned simulator models. inference-sim v0.18.1 ships
+# blis-vllm v0.33.0-blis.1 and router v1.0.0-blis.5; a scenario naming any
+# other version is refused by the binary ("this build runs vllm X").
+SIM_ENGINE_VERSION = "0.33.0"
+
+# vLLM 0.31 OpenAI-server batch defaults by device memory (arg_utils
+# get_batch_defaults): the deployment passes neither flag, so these are the
+# values it EFFECTIVELY runs with and the scenario must mirror.
+_VLLM_DEVICE_GB = {
+    "b200": 192, "b300": 192, "gb200": 192, "h200": 141, "h100": 80,
+    "h800": 80, "a100": 80, "l40s": 48, "l4": 24, "mi300x": 192,
+}
+
+
+def _vllm_batch_defaults(gpu_type: str, max_model_len: int, chunked: bool):
+    """(max_num_batched_tokens, max_num_seqs) the deployed vLLM picks."""
+    gb = _VLLM_DEVICE_GB.get((gpu_type or "h200").lower(), 80)
+    if gb >= 160:
+        batched, seqs = 16384, 1024
+    elif gb >= 70 and "a100" not in (gpu_type or "").lower():
+        batched, seqs = 8192, 1024
+    else:
+        batched, seqs = 2048, 256
+    if not chunked:
+        batched = max(max_model_len, batched)
+    return min(seqs * max_model_len, batched), seqs
+
+
+def _engine_settings(cfg, arch: str, gpu_type: str):
+    """Mirror the values the deployment will run with.
+
+    Templates emit a flag only when its TestConfig field is truthy; an unset
+    field means vLLM's own default, which for booleans can be ON (chunked
+    prefill and prefix caching both default on for decoder models). So the
+    effective value is: field if set, else the engine default.
+    """
+    max_model_len = int(getattr(cfg, "max_model_len", 32768) or 32768)
+    prefix = bool(getattr(cfg, "enable_prefix_caching", True))
+    # absent flag -> vLLM default (on for decoder-only models)
+    # An absent --enable-chunked-prefill flag leaves vLLM's default (ON for
+    # decoder-only models); the effective value is True either way.
+    chunked = True
+    batched_def, seqs_def = _vllm_batch_defaults(gpu_type, max_model_len, chunked)
+
+    shared = {
+        "block_size": int(getattr(cfg, "block_size", 0) or 16),
+        "kv_cache_dtype": getattr(cfg, "kv_cache_dtype", None) or "auto",
+        "enable_prefix_caching": prefix,
+        "enable_chunked_prefill": chunked,
+        "max_model_len": max_model_len,
+    }
+    if getattr(cfg, "dtype", None):
+        shared["dtype"] = cfg.dtype
+    if getattr(cfg, "speculative_method", None):
+        spec = {"method": cfg.speculative_method}
+        if getattr(cfg, "speculative_num_tokens", None):
+            spec["num_spec_tokens"] = int(cfg.speculative_num_tokens)
+        if getattr(cfg, "speculative_model", None):
+            spec["model"] = cfg.speculative_model
+        shared["speculative_config"] = spec
+
+    def _role(prefix_attr, default_gmu=0.9):
+        return {
+            "max_num_seqs": int(getattr(cfg, prefix_attr + "max_num_seqs", 0)
+                                or getattr(cfg, "max_num_seqs", 0) or seqs_def),
+            "max_num_batched_tokens": int(getattr(cfg, prefix_attr + "max_num_batched_tokens", 0)
+                                          or getattr(cfg, "max_num_batched_tokens", 0) or batched_def),
+            "gpu_memory_utilization": float(getattr(cfg, prefix_attr + "gpu_memory_utilization", 0)
+                                            or getattr(cfg, "gpu_memory_utilization", 0) or default_gmu),
+        }
+
+    settings = {"shared": shared}
+    if arch == "pd":
+        settings["prefill"] = _role("prefill_")
+        settings["decode"] = _role("decode_", 0.85)
+    else:
+        settings["colocated"] = _role("")
+    if arch == "ep":
+        settings["ep"] = {"enable_expert_parallel": True,
+                          "dp": int(getattr(cfg, "data_parallel_size", 0) or 1),
+                          "enable_eplb": bool(getattr(cfg, "enable_eplb", False))}
+        for k in ("moe_backend", "all2all_backend"):
+            if getattr(cfg, k, None):
+                settings["ep"][k] = getattr(cfg, k)
+    return settings
+
+
+def _not_modelled(cfg):
+    """Deployment settings BLIS does not model (warned, not silently dropped)."""
+    out = []
+    if getattr(cfg, "lora_enabled", False):
+        out.append("lora (--enable-lora/--lora-modules)")
+    if getattr(cfg, "enable_dbo", False):
+        out.append("dbo thresholds")
+    if getattr(cfg, "enable_scale_out", False):
+        out.append("enable_scale_out (kv scale-out)")
+    for attr, label in (("cpu_offload_gb", "cpu offload"),
+                        ("disk_offload_kv_path", "disk KV offload"),
+                        ("decode_attention_config", "attention_config"),
+                        ("decode_compilation_config", "compilation_config")):
+        if getattr(cfg, attr, None):
+            out.append(label)
+    return out
+
+
 class BlisRunner:
     """Thin wrapper around the blis binary for scenario generation and runs.
 
@@ -154,6 +259,12 @@ class BlisRunner:
         self.last_workload_spec = None
         self.last_epp_config = None
         self.last_epp_config_name = None
+        # Mirrored engine settings written into the scenario, deployment
+        # settings BLIS cannot model, and P/D instance counts
+        self.last_engine_settings = None
+        self.last_not_modelled = []
+        self.last_scenario_arch = None
+        self.last_instance_counts = (0, 0)
 
     @property
     def remote(self):
@@ -318,42 +429,127 @@ class BlisRunner:
                 f.write(epp_text)
             router_ref = "router/serveit-epp.yaml"
 
+        arch = (getattr(cfg, "architecture", "aggregated") or "aggregated").lower()
+        self.last_scenario_arch = arch
+        es = _engine_settings(cfg, arch, gpu_type)
+        self.last_engine_settings = es
+        self.last_not_modelled = _not_modelled(cfg)
+        sh = es["shared"]
+        quant = _quantization_of(getattr(cfg, "model_name", ""))
+
+        def engine_block(d, indent=6):
+            pad = " " * indent
+            lines = [f"{pad}quantization: {quant}"]
+            for k in ("dtype", "kv_cache_dtype", "enable_prefix_caching",
+                      "enable_chunked_prefill", "block_size",
+                      "max_num_batched_tokens", "max_num_seqs",
+                      "max_model_len", "gpu_memory_utilization"):
+                if k in d:
+                    lines.append(f"{pad}{k}: {json.dumps(d[k])}")
+            if "enable_eplb" in d:
+                lines.append(f"{pad}enable_eplb: {json.dumps(d['enable_eplb'])}")
+            for k in ("moe_backend", "all2all_backend"):
+                if k in d:
+                    lines.append(f"{pad}{k}: {json.dumps(d[k])}")
+            if "speculative_config" in d:
+                lines.append(f"{pad}speculative_config:")
+                for kk, vv in d["speculative_config"].items():
+                    lines.append(f"{pad}  {kk}: {json.dumps(vv)}")
+            return "\n".join(lines)
+
+        # ── P/D disaggregated: one pool per role, never sharing nodes ──
+        if arch == "pd":
+            tp_p = int(getattr(cfg, "prefill_tp", 0) or getattr(cfg, "tensor_parallelism", 1) or 1)
+            tp_d = int(getattr(cfg, "decode_tp", 0) or getattr(cfg, "tensor_parallelism", 1) or 1)
+            pods_p = int(getattr(cfg, "prefill_replicas", 0) or 0)
+            pods_d = int(getattr(cfg, "decode_replicas", 0) or 0)
+            if pods_p < 1 or pods_d < 1:
+                self._log("BLIS: PD scenario needs prefill/decode replica counts — "
+                          "falling back to a colocated scenario", "warn")
+                arch = "aggregated"
+                self.last_scenario_arch = arch
+            else:
+                nodes_p = max(1, math.ceil(tp_p * pods_p / max(gpus_per_node, 1)))
+                nodes_d = max(1, math.ceil(tp_d * pods_d / max(gpus_per_node, 1)))
+                total_nodes = nodes_p + nodes_d
+                eng_p = {**sh, **es["prefill"]}
+                eng_d = {**sh, **es["decode"]}
+                self.last_instance_counts = (pods_p, pods_d)
+                scenario = f"""\
+kind: Scenario
+name: {name}
+engine:
+  kind: vllm
+  version: "{SIM_ENGINE_VERSION}"
+model: {model}
+coefficients: [{', '.join(_COEFFICIENTS)}]
+cluster:
+  hardware: {gpu_type.lower()}
+  nodes: {total_nodes}
+  gpus_per_node: {gpus_per_node}
+  fabric: {fabric or 'ib-400g'}
+---
+kind: Deployment
+name: {name}
+pools:
+  - role: prefill
+    nodes: {nodes_p}
+    parallel:
+      tp: {tp_p}
+      pp: 1
+      dp: 1
+      enable_expert_parallel: false
+    engine:
+{engine_block(eng_p, 6)}
+  - role: decode
+    nodes: {nodes_d}
+    parallel:
+      tp: {tp_d}
+      pp: 1
+      dp: 1
+      enable_expert_parallel: false
+    engine:
+{engine_block(eng_d, 6)}
+pd_transfer:
+  connector: NixlConnector
+"""
+                if pods_p + pods_d > 1:
+                    scenario += f"\nrouter:\n  endpoint_picker_config: {router_ref}\n"
+                path = os.path.join(out_dir, f"{name}.yaml")
+                with open(path, "w") as f:
+                    f.write(scenario)
+                return path
+
+        # ── colocated (aggregated / EP) ──
         tp = int(getattr(cfg, "tensor_parallelism", 1) or 1)
         replicas = int(getattr(cfg, "prefill_pods", None)
                        or getattr(cfg, "replicas", 1)
                        or getattr(cfg, "single_test_replicas", 1) or 1)
-        # Pool nodes must sum to the cluster's node count (one pool node
-        # per physical node). Multiple instances per node come from the
-        # --num-instances run flag: 8xTP1 on one 8-GPU node = cluster/pool
-        # nodes 1, --num-instances 8. An explicit cluster_nodes override
-        # declares the fleet for capacity planning (e.g. 24 instances on
-        # a 4-node cluster with headroom) instead of the tight packing.
         total_gpus = tp * replicas
         if not cluster_nodes or int(cluster_nodes) < 1:
             cluster_nodes = max(1, math.ceil(total_gpus / max(gpus_per_node, 1)))
         cluster_nodes = int(cluster_nodes)
         nodes = cluster_nodes
+        self.last_instance_counts = (0, 0)
 
-        max_model_len = int(getattr(cfg, "max_model_len", 32768) or 32768)
-        max_num_seqs = int(getattr(cfg, "max_num_seqs", 0) or 256)
-        max_num_batched_tokens = int(getattr(cfg, "max_num_batched_tokens", 0) or 8192)
-        block_size = int(getattr(cfg, "block_size", 0) or 64)
-        quant = _quantization_of(getattr(cfg, "model_name", ""))
-
-        # multi-node clusters need an explicit fabric — cross-node costs
-        # resolve from it, not the chip (single-node scenarios omit it)
         _fabric = f"\n  fabric: {fabric or 'ib-400g'}" if cluster_nodes > 1 else ""
+        ep = es.get("ep") or {}
+        dp = int(ep.get("dp") or 1)
+        if "enable_eplb" in ep:
+            ep["enable_eplb"] = bool(ep["enable_eplb"])
+        parallel_extra = (f"\n      dp: {dp}"
+                          f"\n      enable_expert_parallel: {json.dumps(bool(ep.get('enable_expert_parallel', False)))}")
+        engine = {**sh, **es["colocated"], **{k: v for k, v in ep.items()
+                                              if k in ("enable_eplb", "moe_backend", "all2all_backend")}}
 
         scenario = f"""\
 kind: Scenario
 name: {name}
 engine:
   kind: vllm
-  version: "0.32.0"
-
+  version: "{SIM_ENGINE_VERSION}"
 model: {model}
 coefficients: [{', '.join(_COEFFICIENTS)}]
-
 cluster:
   hardware: {gpu_type.lower()}
   nodes: {cluster_nodes}
@@ -361,25 +557,14 @@ cluster:
 ---
 kind: Deployment
 name: {name}
-
 pools:
   - role: colocated
     nodes: {nodes}
     parallel:
       tp: {tp}
-      pp: 1
-      dp: 1
-      enable_expert_parallel: false
+      pp: 1{parallel_extra}
     engine:
-      quantization: {quant}
-      kv_cache_dtype: fp8
-      enable_prefix_caching: true
-      block_size: {block_size}
-      max_num_batched_tokens: {max_num_batched_tokens}
-      max_num_seqs: {max_num_seqs}
-      max_model_len: {max_model_len}
-      gpu_memory_utilization: 0.9
-      compilation_config: {{cudagraph_mode: PIECEWISE}}
+{engine_block(engine, 6)}
 """
         # Multi-instance deployments route through the embedded llm-d
         # router; single-instance skips it entirely.
@@ -476,7 +661,8 @@ pools:
             spec_path = BlisRunner.build_workload_spec(
                 cfg.parallel_workloads,
                 duration_s=duration,
-                out_dir=os.path.dirname(scenario_path))
+                out_dir=os.path.dirname(scenario_path),
+                max_model_len=int(getattr(cfg, "max_model_len", 0) or 0) or None)
             if spec_path:
                 try:
                     with open(spec_path) as _f:
@@ -509,7 +695,7 @@ pools:
         ]
         if workload_spec_flag:
             args += ["--workload-spec", workload_spec_flag,
-                     "--horizon", str((duration + 60) * 1_000_000)]
+                     "--horizon", str(duration * 1_000_000)]
         else:
             args += [
                 "--prompt-tokens", str(isl),
@@ -539,11 +725,20 @@ pools:
         # when the recipe config lacks the field — run 253 simulated a
         # single instance because getattr(cfg, "replicas", 1) returned the
         # default 1 and single_test_replicas was never reached).
-        _rep = instances or getattr(cfg, "prefill_pods", None) \
-            or getattr(cfg, "replicas", None) \
-            or getattr(cfg, "single_test_replicas", None) or 1
-        if int(_rep) > 1:
-            args += ["--num-instances", str(int(_rep))]
+        _arch = (getattr(cfg, "architecture", "aggregated") or "aggregated").lower()
+        _pre, _dec = getattr(self, "last_instance_counts", (0, 0))
+        if _arch == "pd" and int(_pre) > 0 and int(_dec) > 0:
+            # Dissaggregated: every instance is prefill or decode and the
+            # per-role counts must add up to --num-instances
+            args += ["--prefill-instances", str(int(_pre)),
+                     "--decode-instances", str(int(_dec)),
+                     "--num-instances", str(int(_pre) + int(_dec))]
+        else:
+            _rep = instances or getattr(cfg, "prefill_pods", None) \
+                or getattr(cfg, "replicas", None) \
+                or getattr(cfg, "single_test_replicas", None) or 1
+            if int(_rep) > 1:
+                args += ["--num-instances", str(int(_rep))]
 
         self._record_scenario_epp(scenario_path)
         self.last_command = " ".join(str(a) for a in args)
@@ -637,7 +832,8 @@ pools:
         return None
 
     @staticmethod
-    def build_workload_spec(shapes, duration_s: int = 300, out_dir: str = "/tmp"):
+    def build_workload_spec(shapes, duration_s: int = 300, out_dir: str = "/tmp",
+                            max_model_len: int = None):
         """Convert ServeIt parallel-workload shapes to a BLIS workload spec.
 
         Each shape becomes a closed-loop ClientSpec with its own
@@ -672,6 +868,21 @@ pools:
             else:
                 params = {"mean": non_prefix, "std_dev": 0,
                           "min": non_prefix, "max": non_prefix}
+            # BLIS prepends the prefix, so the *total* prompt must fit the
+            # model window: clamp the non-prefix part. Real guidellm serves
+            # nothing longer than the deployment's limit, and a capped
+            # request makes the simulator emit an invalid Result (PD runs
+            # even abort on it).
+            if max_model_len:
+                headroom = max(64, int(osl))
+                allowed = max(2, int(max_model_len) - headroom - prefix_len)
+                if params["max"] > allowed:
+                    params["max"] = allowed
+                    params["min"] = min(params["min"], allowed)
+                    params["mean"] = min(params["mean"], allowed)
+                    if params.get("std_dev"):
+                        params["std_dev"] = max(1, min(params["std_dev"],
+                                                       (allowed - params["min"]) // 2 or 1))
             clients.append({
                 "id": sh.get("name") or f"shape-{len(clients)}",
                 "concurrency": conc,

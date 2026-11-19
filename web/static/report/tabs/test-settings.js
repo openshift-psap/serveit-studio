@@ -23,7 +23,7 @@ const advToggle = (key, fallback) => { const s = adv[key]; return s ? (s.mode ==
 // BLIS runs: dedicated section with the simulator command line AND the
 // workload spec it executed (parallel shapes run through that spec)
 try {
-    var _blis = { cmd: null, spec: null, epp: null, eppName: null };
+    var _blis = { cmd: null, spec: null, epp: null, eppName: null, settings: null, notModelled: null, arch: null };
     (data.all_results || []).forEach(function (r) {
         var mj = r.metrics_json;
         try { mj = typeof mj === 'string' ? JSON.parse(mj) : mj; } catch (e) { return; }
@@ -31,6 +31,9 @@ try {
         if (!_blis.cmd && am.blis_command) _blis.cmd = am.blis_command;
         if (!_blis.spec && am.blis_workload_spec) _blis.spec = am.blis_workload_spec;
         if (!_blis.epp && am.blis_epp_config) { _blis.epp = am.blis_epp_config; _blis.eppName = am.blis_epp_config_name || 'router config'; }
+        if (!_blis.settings && am.blis_engine_settings) _blis.settings = am.blis_engine_settings;
+        if (!_blis.notModelled && am.blis_not_modelled) _blis.notModelled = am.blis_not_modelled;
+        if (!_blis.arch && am.blis_scenario_arch) _blis.arch = am.blis_scenario_arch;
 
     });
     if (_blis.cmd) {
@@ -56,6 +59,36 @@ try {
                 ' <span style="font-weight:400;color:#64748b;font-size:0.85em;">(' + _esc(_blis.eppName) +
                 ' — the EndpointPickerConfig the simulator routed with)</span></div>' +
                 '<pre style="' + _pre + '">' + _esc(_blis.epp) + '</pre>';
+        }
+        if (_blis.settings) {
+            var _sh = _blis.settings.shared || {};
+            var _roles = [];
+            ['colocated', 'prefill', 'decode'].forEach(function (r) {
+                if (_blis.settings[r]) _roles.push([r, _blis.settings[r]]);
+            });
+            html += '<div style="font-weight:800;color:#0e7490;font-size:0.95em;margin-top:18px;">Engine settings mirrored' +
+                ' <span style="font-weight:400;color:#64748b;font-size:0.85em;">(what the simulated deployment ran with;' +
+                ' the real deployment passes a flag only when the wizard overrides the default)</span></div>' +
+                '<table class="results-table" style="margin-top:8px;"><tr><th>Setting</th>' +
+                _roles.map(function (r) { return '<th>' + r[0] + '</th>'; }).join('') + '</tr>';
+            var _sharedRows = [['block_size', _sh.block_size], ['kv_cache_dtype', _sh.kv_cache_dtype],
+                ['dtype', _sh.dtype || 'auto'], ['enable_prefix_caching', _sh.enable_prefix_caching],
+                ['enable_chunked_prefill', _sh.enable_chunked_prefill], ['max_model_len', _sh.max_model_len]];
+            _sharedRows.forEach(function (row) {
+                html += '<tr><td style="color:#64748b;">' + row[0] + '</td>' +
+                    _roles.map(function () { return '<td>' + (row[1] == null ? '—' : String(row[1])) + '</td>'; }).join('') + '</tr>';
+            });
+            [['max_num_seqs', 'max_num_seqs'], ['max_num_batched_tokens', 'max_num_batched_tokens'],
+             ['gpu_memory_utilization', 'gpu_memory_utilization']].forEach(function (row) {
+                html += '<tr><td style="color:#64748b;">' + row[0] + '</td>' +
+                    _roles.map(function (r) { var v = r[1][row[1]]; return '<td>' + (v == null ? '—' : String(v)) + '</td>'; }).join('') + '</tr>';
+            });
+            html += '</table>';
+            if (_blis.notModelled && _blis.notModelled.length) {
+                html += '<div style="margin-top:10px;padding:9px 13px;background:#fffbeb;border:1px solid #fde68a;' +
+                    'border-radius:6px;color:#92400e;font-size:0.85em;">Not modelled by BLIS: ' +
+                    _esc(_blis.notModelled.join(', ')) + '</div>';
+            }
         }
         html += '</div></div>';
     }

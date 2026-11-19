@@ -2,13 +2,16 @@
 # Runs as a persistent pod, receives benchmark commands via kubectl exec.
 
 # BLIS (Blackbox Inference Simulator) — CPU-only discrete-event simulator
-# for llm-d deployments (real llm-d router embedded, vLLM 0.32.0 cost models).
+# for llm-d deployments (real llm-d router embedded, vLLM 0.33.0 cost models).
 # Static binary: CGO_ENABLED=0 so it runs on any linux/amd64 host regardless
 # of glibc. Pinned to the commit validated against the ServeIt integration;
 # bump deliberately — Result schema and catalog coverage move with upstream.
 FROM golang:1.27.2 AS blis-builder
+# inference-sim v0.18.1 ships blis-vllm v0.33.0-blis.1 and router
+# v1.0.0-blis.5; the scenario's engine.version must name a release this
+# build models (see core/blis.py SIM_ENGINE_VERSION).
 RUN git clone https://github.com/inference-sim/inference-sim.git /src && \
-    git -C /src checkout c79c745 && \
+    git -C /src checkout v0.18.1 && \
     cd /src && CGO_ENABLED=0 GOFLAGS=-trimpath go build -o /blis main.go
 
 FROM registry.access.redhat.com/ubi9/ubi:9.4
