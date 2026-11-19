@@ -22,7 +22,7 @@
                         <!-- Custom Model (toggle) -->
                         <div style="border:2px solid #0ea5e9;border-radius:12px;overflow:hidden;margin-bottom:16px;">
                             <!-- BLIS simulation toggle — execution target, switches the gallery -->
-                        <div class="vllm-toggle" id="blis-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');document.getElementById('blis-enabled').checked=on;config.use_blis=on;saveConfig();loadModelGallery();">
+                        <div class="vllm-toggle" id="blis-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');document.getElementById('blis-enabled').checked=on;config.use_blis=on;saveConfig();loadModelGallery();if(typeof updateCalibrateCopy==='function')updateCalibrateCopy();">
                             <div style="font-size:1.5em;flex-shrink:0;">🔬</div>
                             <div>
                                 <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Run in BLIS Simulation</div>

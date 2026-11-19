@@ -372,8 +372,13 @@ class PrereqManager:
                              or getattr(optimizer_config, "gpu_type", None) or "")
                 _tp = getattr(optimizer_config, "tensor_parallelism", 1) or 1
                 _db = "/mnt/storage/serveit.db"
+                _cal_on = bool(getattr(optimizer_config, "epp_calibrate_affinity", False))
                 _stored = get_stored_calibration(_db, _model, _gpu, _tp, gpu_type=_gpu_type)
-                if _stored:
+                # Calibration ON  -> use the stored measurement for this
+                #                    (model, gpu, tp), else the estimate
+                # Calibration OFF -> estimate only (never the stored value)
+                # Real runs overwrite with a fresh measurement after deploy.
+                if _stored and _cal_on:
                     epp_peak = _stored["peak_prefill_throughput"]
                     msg = (f"   📐 EPP affinity: stored calibration {epp_peak} tok/s "
                            f"({_stored.get('source', 'real')}, "
@@ -390,7 +395,9 @@ class PrereqManager:
                     # value after deploy when calibration is on.
                     epp_peak = estimate_peak_prefill(_gpu, _tp, {})
                     if epp_peak:
-                        msg = (f"   📐 EPP affinity: no stored calibration — "
+                        _why = ("calibration off" if not _cal_on
+                                else "no stored calibration")
+                        msg = (f"   📐 EPP affinity: {_why} — "
                                f"injecting estimate {epp_peak} tok/s")
                         if log_callback:
                             log_callback(msg)

@@ -15,6 +15,24 @@ function saveConfig() {
     localStorage.setItem('serveit-step', currentStep.toString());
 }
 
+// The affinity-calibration toggle means different things in a simulation:
+// BLIS cannot run the ~90 s live prefill measurement, it can only consume a
+// stored calibration (or the analytical estimate).
+window.updateCalibrateCopy = function() {
+    var el = document.getElementById('epp-calibrate-desc');
+    if (!el) return;
+    if (config && config.use_blis) {
+        el.innerHTML = 'Use the stored affinity calibration for this model / GPU / TP ' +
+            '(measured on a real deployment, or derived from a previous simulation) on the ' +
+            'prefix-cache-affinity-filter. A simulation cannot run the ~90&nbsp;s live ' +
+            'measurement; with this off, the filter uses the analytical estimate.';
+    } else {
+        el.innerHTML = 'Measure peak prefill throughput (~90s, once per model/GPU/TP) and set ' +
+            'workload-aware stickiness parameters on the prefix-cache-affinity-filter. Without this, ' +
+            'the filter uses defaults calibrated for Qwen-32B on 2&times;H100.';
+    }
+};
+
 // Update UI from current config state
 function updateUIFromConfig() {
     // Restore UI selections
@@ -549,6 +567,7 @@ function updateUIFromConfig() {
         if (blisToggle) { if (config.use_blis) blisToggle.classList.add('active'); else blisToggle.classList.remove('active'); }
         var calToggle = document.getElementById('epp-calibrate-toggle');
         if (calToggle) { if (config.epp_calibrate_affinity) calToggle.classList.add('active'); else calToggle.classList.remove('active'); }
+        if (typeof updateCalibrateCopy === 'function') updateCalibrateCopy();
         var eppInner = document.getElementById('epp-benchmark-inner');
         if (eppInner) eppInner.style.opacity = eppCb.checked ? '1' : '0.5';
         var eppBudget = document.getElementById('epp-max-evals');
