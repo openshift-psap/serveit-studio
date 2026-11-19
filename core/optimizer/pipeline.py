@@ -1981,6 +1981,65 @@ class RecipeOptimizer(
                     "instance": _i,
                     "session": _r0.get("session_id"),
                 })
+            # Per-shape workload stats — the report's Workloads tab and the
+            # long-run per-shape table read result.workloads (real runs get
+            # it from guidellm; a simulation must derive it from the
+            # simulator's request rows). Assigned once `result` exists.
+            _wl_stats = None
+            try:
+                import re as _re_wl
+
+                def _wl_pct(vals, p):
+                    vals = sorted(v for v in vals if v is not None)
+                    if not vals:
+                        return None
+                    k = (len(vals) - 1) * p / 100.0
+                    f = int(k)
+                    c = min(f + 1, len(vals) - 1)
+                    return round(vals[f] + (vals[c] - vals[f]) * (k - f), 2)
+
+                _win = (sim.get("window") or {})
+                _dur = float(_win.get("duration_s") or 0) or None
+                _wl = {}
+                for _r0 in _rows:
+                    _sess = str(_r0.get("session_id") or "")
+                    _m = _re_wl.search(r"concurrency_([^_]+)_user_", _sess)
+                    _nm = _m.group(1) if _m else "unknown"
+                    _wl.setdefault(_nm, {"total": 0, "ok": []})
+                    _wl[_nm]["total"] += 1
+                    if _r0.get("fate") == "completed":
+                        _wl[_nm]["ok"].append(_r0)
+                _wl_out = []
+                for _nm, _g in _wl.items():
+                    _ok = _g["ok"]
+                    _ttft = [(r.get("ttft_us") or 0) / 1000.0 for r in _ok if r.get("ttft_us") is not None]
+                    _tpot = [r.get("tpot_us") / 1000.0 for r in _ok if r.get("tpot_us")]
+                    _e2e = [(r.get("e2e_us") or 0) / 1000.0 for r in _ok if r.get("e2e_us") is not None]
+                    _ptok = [r.get("prompt_tokens") or 0 for r in _ok]
+                    _otok = [r.get("output_tokens") or 0 for r in _ok]
+                    _tokens = sum(_ptok) + sum(_otok)
+                    _wl_out.append({
+                        "name": _nm,
+                        "isl": round(sum(_ptok) / len(_ptok), 1) if _ptok else None,
+                        "osl": round(sum(_otok) / len(_otok), 1) if _otok else None,
+                        "request_successful": len(_ok),
+                        "request_total": _g["total"],
+                        "tokens": _tokens,
+                        "tokens_per_second": round(_tokens / _dur, 1) if _dur else None,
+                        "ttft_p50": _wl_pct(_ttft, 50),
+                        "ttft_p90": _wl_pct(_ttft, 90),
+                        "ttft_p99": _wl_pct(_ttft, 99),
+                        "itl_p90": _wl_pct(_tpot, 90),
+                        "e2e_latency_p50": _wl_pct(_e2e, 50),
+                        "e2e_latency_p90": _wl_pct(_e2e, 90),
+                        "e2e_latency_p99": _wl_pct(_e2e, 99),
+                        "throughput_mean": round(len(_ok) / _dur, 3) if _dur else None,
+                    })
+                if _wl_out:
+                    _wl_stats = _wl_out
+            except Exception as _e:
+                self.log(f"   BLIS: per-shape workload stats failed: {_e}", 'warning')
+
             # Full per-instance token work (the report's work-distribution
             # heatmap must cover every instance; per_request is capped below)
             _inst_tokens = {}
@@ -2189,6 +2248,8 @@ class RecipeOptimizer(
             if _nm:
                 blis_metrics['blis_not_modelled'] = _nm
 
+        if _wl_stats:
+            result.workloads = _wl_stats
         result.blis_metrics = blis_metrics
         # itl_mean feeds the DB saver's metrics_json.itl_mean field (the
         # saver reads this attribute; tpot_mean lands nowhere)
