@@ -614,6 +614,16 @@ class PrereqManager:
                 # Render template
                 log(f"   Applying {resource_type}...")
                 manifest = self.template_mgr.render_template(template_path, **context)
+                if not (manifest or "").strip():
+                    # An empty render used to be applied silently, leaving the
+                    # EPP with no configuration (BLIS then ran router defaults).
+                    _fallback = template_path.replace("-3.6", "").replace("-3.5", "")
+                    if _fallback != template_path:
+                        log(f"   ⚠️  {template_path} rendered empty — using {_fallback}")
+                        manifest = self.template_mgr.render_template(_fallback, **context)
+                if not (manifest or "").strip():
+                    log(f"   ❌ {resource_type} template {template_path} is empty — skipping")
+                    continue
 
                 # The EPP loads its config ONCE at startup — a configmap
                 # update alone is never picked up by the running pods.

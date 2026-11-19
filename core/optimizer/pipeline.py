@@ -1754,6 +1754,7 @@ class RecipeOptimizer(
         # config and the render+deploy pass dominates cycle time.
         epp_doc = getattr(self, "_blis_epp_doc", None)
         if epp_doc is None:
+            self._blis_dropped_plugins = []
             try:
                 from core import PrereqManager
                 prereq_mgr = PrereqManager(
@@ -1793,6 +1794,31 @@ class RecipeOptimizer(
                             # pinned router (llm-d v1.0.0)
                             if str(doc.get("apiVersion", "")).endswith("v1alpha1"):
                                 doc["apiVersion"] = "llm-d.ai/v1"
+                            # The simulator's router build cannot load Alpha
+                            # plugins (it has no --allow-experimental-plugins
+                            # flag, and the scenario has no key for router
+                            # flags). Drop them and record it as not-modelled
+                            # so the comparison is honest.
+                            _alpha = {"session-affinity-scorer", "lora-affinity-scorer"}
+                            _dropped = []
+                            if isinstance(doc.get("plugins"), list):
+                                _keep = []
+                                for _p in doc["plugins"]:
+                                    if isinstance(_p, dict) and _p.get("type") in _alpha:
+                                        _dropped.append(_p["type"])
+                                    else:
+                                        _keep.append(_p)
+                                doc["plugins"] = _keep
+                            for _prof in (doc.get("schedulingProfiles") or []):
+                                _pl = _prof.get("plugins") or []
+                                _prof["plugins"] = [
+                                    _r for _r in _pl
+                                    if not (isinstance(_r, dict) and _r.get("pluginRef") in _alpha)]
+                            self._blis_dropped_plugins = _dropped
+                            if _dropped:
+                                self.log(
+                                    f"   BLIS: dropping Alpha EPP plugins the simulator "
+                                    f"cannot load: {', '.join(sorted(set(_dropped)))}", "warning")
                             epp_doc = doc
                             self.log(f"   BLIS: EPP config taken from ConfigMap key '{key}'", "info")
                             break
@@ -1838,8 +1864,12 @@ class RecipeOptimizer(
                 f"prefix={_sh.get('enable_prefix_caching')} seqs={_role.get('max_num_seqs')} "
                 f"batched={_role.get('max_num_batched_tokens')} "
                 f"gmu={_role.get('gpu_memory_utilization')}", 'info')
-            for _nm in (getattr(runner_scenario, "last_not_modelled", None) or []):
-                self.log(f"   BLIS: deployment setting not modelled by the simulator: {_nm}", 'warning')
+            _nm_all = list(getattr(runner_scenario, "last_not_modelled", None) or [])
+            for _dp in sorted(set(getattr(self, "_blis_dropped_plugins", None) or [])):
+                _nm_all.append(f"{_dp} (Alpha EPP plugin, not loadable in the pinned router)")
+            runner_scenario.last_not_modelled = _nm_all
+            for _nm in _nm_all:
+                self.log(f"   BLIS: not modelled by the simulator: {_nm}", 'warning')
         if not scenario:
             self.log(
                 f"❌ BLIS: model '{self.config.model_name}' is not in the BLIS catalog "
