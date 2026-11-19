@@ -2014,7 +2014,8 @@ class RecipeOptimizer(
                     _ok = _g["ok"]
                     _ttft = [(r.get("ttft_us") or 0) / 1000.0 for r in _ok if r.get("ttft_us") is not None]
                     _tpot = [r.get("tpot_us") / 1000.0 for r in _ok if r.get("tpot_us")]
-                    _e2e = [(r.get("e2e_us") or 0) / 1000.0 for r in _ok if r.get("e2e_us") is not None]
+                    # report convention: e2e_latency_* is SECONDS
+                    _e2e = [(r.get("e2e_us") or 0) / 1e6 for r in _ok if r.get("e2e_us") is not None]
                     _ptok = [r.get("prompt_tokens") or 0 for r in _ok]
                     _otok = [r.get("output_tokens") or 0 for r in _ok]
                     _tokens = sum(_ptok) + sum(_otok)
