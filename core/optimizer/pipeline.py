@@ -1756,24 +1756,33 @@ class RecipeOptimizer(
         if epp_doc is None:
             self._blis_dropped_plugins = []
             try:
-                # READ-ONLY: take the EPP ConfigMap already deployed for this
-                # architecture. A simulation must never render-and-apply the
-                # prereqs — applying an EPP schema the deployed image rejects
-                # crash-loops the real router (it did exactly that once).
+                # RENDER THIS RUN'S EPP CONFIG — read-only. The prereqs are
+                # rendered through a recording kubectl (no apply): a
+                # simulation must never touch the deployed router (applying a
+                # schema the EPP image rejects crash-looped it once), and
+                # reading the deployed ConfigMap instead would make every
+                # simulated run ignore its own preset/calibration settings.
+                import yaml as _yaml
                 _arch_name = (test_config.architecture or "aggregated").lower()
-                _cm_name = {"pd": "gaie-pd-epp",
-                            "ep": "gaie-ep-epp"}.get(_arch_name, "gaie-aggregated-epp")
-                _r = kubectl.run(
-                    ["get", "configmap", _cm_name, "-n", self.config.namespace, "-o", "yaml"],
-                    check=False)
-                cm_yaml = _r.stdout if _r.returncode == 0 else None
-                if not cm_yaml:
-                    self.log(
-                        f"   BLIS: EPP ConfigMap '{_cm_name}' not found — the simulator "
-                        f"will use the router's built-in defaults", "warning")
-                if cm_yaml:
-                    import yaml as _yaml
-                    cm = _yaml.safe_load(cm_yaml) or {}
+                cm = self._render_epp_configmap_readonly(_arch_name)
+                if cm is not None:
+                    self.log("   BLIS: EPP config rendered from this run's settings "
+                             "(read-only — nothing applied)", "info")
+                else:
+                    # Fallback: the ConfigMap already deployed for this arch
+                    _cm_name = {"pd": "gaie-pd-epp",
+                                "ep": "gaie-ep-epp"}.get(_arch_name, "gaie-aggregated-epp")
+                    _r = kubectl.run(
+                        ["get", "configmap", _cm_name, "-n", self.config.namespace, "-o", "yaml"],
+                        check=False)
+                    if _r.returncode == 0 and _r.stdout:
+                        cm = _yaml.safe_load(_r.stdout) or {}
+                    else:
+                        self.log(
+                            f"   BLIS: EPP ConfigMap '{_cm_name}' not found and the "
+                            f"render failed — the simulator will use the router's "
+                            f"built-in defaults", "warning")
+                if cm:
                     data = cm.get("data") or {}
                     # The rendered ConfigMap's key varies by EPP version
                     # (observed: 'default-plugins.yaml'; older layouts used
@@ -2179,6 +2188,61 @@ class RecipeOptimizer(
                  f"ITL mean {summary.get('itl_mean_ms', 0):,.1f}ms, "
                  f"throughput {summary.get('request_throughput', 0):,.2f} req/s", 'success')
         return result
+    def _render_epp_configmap_readonly(self, architecture: str):
+        """Render the EPP ConfigMap for this run WITHOUT touching the cluster.
+
+        The prereq manager is pointed at a recording kubectl: `apply -f`
+        captures the manifest, `get` reports missing, readiness reports
+        ready. Nothing is sent to the API server.
+        """
+        try:
+            from core import PrereqManager
+
+            class _Rec:
+                def __init__(self, rc=0, stdout="", stderr=""):
+                    self.returncode, self.stdout, self.stderr = rc, stdout, stderr
+
+            class _RecordingKubectl:
+                kubeconfig = "/dev/null"
+                def __init__(self):
+                    self.applied = []
+                def run(self, args, **kw):
+                    if args[:2] == ["apply", "-f"]:
+                        self.applied.append(kw.get("input_data") or "")
+                        return _Rec(0)
+                    if args and args[0] == "get":
+                        return _Rec(1)
+                    return _Rec(0)
+                def run_json(self, args, **kw):
+                    return {"status": {"replicas": 1, "readyReplicas": 1,
+                                       "availableReplicas": 1}}
+
+            rec = _RecordingKubectl()
+            pm = PrereqManager(
+                namespace=self.config.namespace,
+                kubectl_runner=rec,
+                scheduler_image=getattr(self.config, "scheduler_image", None),
+                gateway_class=getattr(self.config, "gateway_class", "istio"),
+            )
+            pm.deploy_prereqs(
+                architecture=architecture,
+                log_callback=lambda msg: None,
+                epp_config=self._build_epp_config(),
+                optimizer_config=self.config,
+            )
+            import yaml as _yaml
+            for manifest in rec.applied:
+                try:
+                    doc = _yaml.safe_load(manifest)
+                except Exception:
+                    continue
+                if (isinstance(doc, dict) and doc.get("kind") == "ConfigMap"
+                        and "epp" in str((doc.get("metadata") or {}).get("name", ""))):
+                    return doc
+        except Exception as e:
+            self.log(f"   BLIS: read-only EPP render failed ({e})", "warning")
+        return None
+
     def _build_epp_config(self) -> Optional[Dict]:
         """Build EPP config dict for prereq_manager from optimizer config."""
         # Raw-YAML passthrough: the user's exact EndpointPickerConfig —
