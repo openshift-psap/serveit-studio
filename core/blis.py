@@ -19,6 +19,7 @@ Layout on shared storage (BLIS_HOME):
 import json
 import math
 import copy
+import gzip
 import os
 import subprocess
 from typing import Optional
@@ -323,14 +324,69 @@ class BlisRunner:
             pass
         stdout_text = ""
         if rc == 0:
+            # The Result for a high-concurrency run is ~70 MB of JSON. A
+            # plain `kubectl cp` of that tar stream intermittently truncates
+            # while returning success-like output, which surfaced as
+            # "result parse failed: Unterminated string" on 2 of 10 cycles
+            # (run 327). Compress in the pod first, verify the copy's exit
+            # code, and fall back to the raw transfer before giving up.
+            _gz_remote = remote_out + ".gz"
+            _gz_local = out_file + ".gz"
+            _copied = False
             try:
+                # gzip INSIDE the pod, then kubectl cp the archive file —
+                # no large JSON crosses an exec stdout stream.
                 self.kubectl.run(
-                    ["cp", f"{self.pod_name}:{remote_out}", out_file,
+                    ["exec", self.pod_name, "-n", self.namespace, "--",
+                     "gzip", "-kf", remote_out],
+                    check=False, timeout=timeout)
+                cr = self.kubectl.run(
+                    ["cp", f"{self.pod_name}:{_gz_remote}", _gz_local,
                      "-n", self.namespace], check=False, timeout=timeout)
-                with open(out_file) as f:
-                    stdout_text = f.read()
-            except OSError:
-                stdout_text = ""
+                if getattr(cr, "returncode", 1) == 0 and os.path.isfile(_gz_local):
+                    with gzip.open(_gz_local, "rb") as f:
+                        stdout_text = f.read().decode("utf-8", "replace")
+                    _copied = True
+            except (OSError, ValueError, EOFError):
+                _copied = False
+            if not _copied:
+                try:
+                    cr = self.kubectl.run(
+                        ["cp", f"{self.pod_name}:{remote_out}", out_file,
+                         "-n", self.namespace], check=False, timeout=timeout)
+                    if getattr(cr, "returncode", 1) == 0:
+                        with open(out_file) as f:
+                            stdout_text = f.read()
+                except OSError:
+                    stdout_text = ""
+            else:
+                try:
+                    with open(out_file, "w") as f:
+                        f.write(stdout_text)
+                except OSError:
+                    pass
+            if stdout_text:
+                try:
+                    json.loads(stdout_text)
+                except json.JSONDecodeError as e:
+                    # Truncated transfer: try the raw copy once more.
+                    try:
+                        cr = self.kubectl.run(
+                            ["cp", f"{self.pod_name}:{remote_out}", out_file,
+                             "-n", self.namespace], check=False,
+                            timeout=timeout)
+                        if getattr(cr, "returncode", 1) == 0:
+                            with open(out_file) as f:
+                                stdout_text = f.read()
+                    except OSError:
+                        stdout_text = ""
+                    if stdout_text:
+                        try:
+                            json.loads(stdout_text)
+                        except json.JSONDecodeError:
+                            self._log(
+                                "BLIS: Result transfer is truncated "
+                                f"({e}); retrying the copy did not help", "warn")
         class _R:
             pass
         o = _R()
