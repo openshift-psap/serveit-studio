@@ -408,8 +408,13 @@ class PrereqManager:
                     f"          peakPrefillThroughput: {epp_peak}\n"
                     f"          maxTTFTPenaltyMs: {epp_penalty}\n"
                 )
-                if getattr(optimizer_config, "epp_calibrate_affinity", False):
-                    epp_affinity_params += "          explorationProbability: 0.10\n"
+                # explorationProbability is NOT implied by calibration.
+                # It was hardcoded to 0.10 here (and in the runner), quietly
+                # making the router ignore affinity for 10% of requests.
+                # Pass it explicitly in the EPP config to opt in.
+                _explore = float((epp or {}).get("explorationProbability") or 0)
+                if _explore > 0:
+                    epp_affinity_params += f"          explorationProbability: {_explore}\n"
             context = {
                 "namespace": self.namespace,
                 "architecture": architecture,
