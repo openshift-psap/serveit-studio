@@ -469,6 +469,20 @@
             // the GPU heatmaps (there are no pods to profile)
             if (rs.some(blisTel)) {
                 (function() {
+                    // 1. Routing heatmap: requests per instance per cycle
+                    var instSeen = {};
+                    rs.forEach(function(r) {
+                        var t = blisTel(r);
+                        ['instances', 'instance_tokens'].forEach(function(k) {
+                            if (t && t[k]) Object.keys(t[k]).forEach(function(i) { instSeen[i] = 1; });
+                        });
+                        if (t && t.instance_report) Object.keys(t.instance_report).forEach(function(i) { instSeen[i] = 1; });
+                    });
+                    var _instNum = function(i) { var m = /(\d+)/.exec(String(i)) ; return m ? parseInt(m[1], 10) : 0; };
+                    var insts = Object.keys(instSeen).sort(function(a, b) {
+                        var d = _instNum(a) - _instNum(b); return d !== 0 ? d : String(a).localeCompare(String(b));
+                    });
+                    var _instH = Math.max(220, insts.length * 22 + 90);
                     var heatLayout = {
                         margin: { l: 70, r: 15, t: 8, b: 48 },
                         xaxis: {
@@ -478,23 +492,20 @@
                         },
                         yaxis: { automargin: true, tickfont: H.MONO_9 },
                         plot_bgcolor: '#fff',
-                        height: Math.max(180, 24 * 8 + 60)
+                        height: _instH
                     };
                     var heatOpts = { displayModeBar: false, responsive: true };
-
-                    // 1. Routing heatmap: requests per instance per cycle
-                    var instSeen = {};
-                    rs.forEach(function(r) {
-                        var t = blisTel(r);
-                        if (t && t.instances) Object.keys(t.instances).forEach(function(i) { instSeen[i] = 1; });
-                    });
-                    var insts = Object.keys(instSeen).sort();
                     var elR = document.getElementById(id + '-pods-activity');
                     if (elR && insts.length) {
                         var zR = insts.map(function(i) {
                             return rs.map(function(r) {
                                 var t = blisTel(r);
-                                return (t && t.instances && t.instances[i] != null) ? t.instances[i] : null;
+                                if (t && t.instances && t.instances[i] != null) return t.instances[i];
+                                if (t && t.instance_report && t.instance_report[i]) {
+                                    return t.instance_report[i].completed_requests != null
+                                        ? t.instance_report[i].completed_requests : null;
+                                }
+                                return null;
                             });
                         });
                         Plotly.newPlot(elR, [{
@@ -517,7 +528,15 @@
                         var zW = insts.map(function(i) {
                             return rs.map(function(r) {
                                 var t = blisTel(r);
-                                if (!t || !t.per_request) return null;
+                                if (!t) return null;
+                                // Full per-instance token totals (all requests)
+                                if (t.instance_tokens) {
+                                    var tot0 = 0;
+                                    Object.keys(t.instance_tokens).forEach(function(k) { tot0 += t.instance_tokens[k] || 0; });
+                                    var mine0 = t.instance_tokens[i] || 0;
+                                    if (tot0 > 0) return Math.round(1000 * mine0 / tot0) / 10;
+                                }
+                                if (!t.per_request) return null;
                                 var mine = 0, total = 0, hasTok = false;
                                 t.per_request.forEach(function(p) {
                                     var w = (p.prompt_tokens != null)
@@ -577,7 +596,12 @@
                             mode: 'markers', type: 'scatter', name: 'requests',
                             marker: { size: 8, color: '#0f172a', symbol: 'circle' },
                             text: reqs.map(function(p) {
-                                return p.session + ' &middot; TTFT ' + p.ttft_ms.toFixed(0) + 'ms &middot; ' +
+                                // session ids look like
+                                // 'concurrency_W3-burst_user_32_round_5_...'
+                                var sess = String(p.session || '');
+                                var m = /concurrency_([^_]+)_user_(\d+)/.exec(sess);
+                                var label = m ? (m[1] + ' · user ' + m[2]) : sess;
+                                return label + ' · TTFT ' + p.ttft_ms.toFixed(0) + 'ms · ' +
                                     (p.e2e_ms / 1000).toFixed(2) + 's residence';
                             }),
                             hovertemplate: '%{text}<extra>%{y}</extra>',

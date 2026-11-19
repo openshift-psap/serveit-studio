@@ -1981,10 +1981,20 @@ class RecipeOptimizer(
                     "instance": _i,
                     "session": _r0.get("session_id"),
                 })
+            # Full per-instance token work (the report's work-distribution
+            # heatmap must cover every instance; per_request is capped below)
+            _inst_tokens = {}
+            for _r0 in _rows:
+                if _r0.get("fate") != "completed":
+                    continue
+                _i = _r0.get("instance") or "?"
+                _inst_tokens[_i] = _inst_tokens.get(_i, 0) + int(
+                    (_r0.get("prompt_tokens") or 0) + (_r0.get("output_tokens") or 0))
             blis_metrics = {
                 "blis": True,
                 "fate": sim.get("requests"),
                 "instances": _inst,
+                "instance_tokens": _inst_tokens,
                 "per_request": _per_req[:2000],
                 "breakdowns": sim.get("breakdowns"),
             }
