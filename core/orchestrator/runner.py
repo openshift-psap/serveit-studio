@@ -414,16 +414,26 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
         model = config.model_name
         tp = getattr(config, "tensor_parallelism", 1) or 1
-        # Hardware label for the calibration key — the orchestrator may not
-        # carry cluster_resources; the TestConfig/config does.
-        _cr = {}
-        for _src in (getattr(self, "cluster_resources", None),
-                     getattr(config, "cluster_resources", None)):
-            if isinstance(_src, dict) and _src:
-                _cr = _src
+        # Hardware label for the calibration key. The scanner exposes a
+        # ClusterResources *object*, while session configs carry a dict —
+        # handle both, then fall back to explicit fields on the config.
+        def _labels(src):
+            if not src:
+                return "", ""
+            if isinstance(src, dict):
+                return (src.get("gpu_model") or "", src.get("gpu_type") or "")
+            return (getattr(src, "gpu_model", None) or "",
+                    getattr(src, "gpu_type", None) or "")
+
+        gpu_model, gpu_type = "", ""
+        for _src in (getattr(config, "cluster_resources", None),
+                     getattr(self, "cluster_resources", None)):
+            _m, _t = _labels(_src)
+            if _m or _t:
+                gpu_model, gpu_type = _m, _t
                 break
-        gpu_model = _cr.get("gpu_model") or getattr(config, "gpu_model", None) or ""
-        gpu_type = _cr.get("gpu_type") or ""
+        gpu_model = gpu_model or getattr(config, "gpu_model", None) or ""
+        gpu_type = gpu_type or getattr(config, "gpu_type", None) or ""
         db_path = "/mnt/storage/serveit.db"
 
         stored = get_stored_calibration(db_path, model, gpu_model, tp, gpu_type=gpu_type)

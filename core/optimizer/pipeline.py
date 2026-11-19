@@ -101,6 +101,18 @@ class RecipeOptimizer(
         # Scan cluster
         self.cluster_resources = self.scanner.scan_cluster()
 
+        # The EPP affinity calibration key is (model, gpu, tp). The hardware
+        # label lives on the scanner's ClusterResources object, but the object
+        # that renders prereqs (RecipeOptimizerConfig) has no such field — so
+        # every calibration lookup ran with an empty GPU key and missed.
+        try:
+            if not getattr(self.config, "gpu_model", None):
+                self.config.gpu_model = getattr(self.cluster_resources, "gpu_model", None)
+            if not getattr(self.config, "gpu_type", None):
+                self.config.gpu_type = getattr(self.cluster_resources, "gpu_type", None)
+        except Exception:
+            pass
+
         # Auto-detect network type if not provided
         if self.config.network_type is None:
             self.config.network_type = self._detect_network_type()

@@ -368,7 +368,8 @@ class PrereqManager:
                 if not isinstance(_cr, dict):
                     _cr = {}
                 _gpu = _cr.get("gpu_model") or getattr(optimizer_config, "gpu_model", None) or ""
-                _gpu_type = _cr.get("gpu_type") or ""
+                _gpu_type = (_cr.get("gpu_type")
+                             or getattr(optimizer_config, "gpu_type", None) or "")
                 _tp = getattr(optimizer_config, "tensor_parallelism", 1) or 1
                 _db = "/mnt/storage/serveit.db"
                 _stored = get_stored_calibration(_db, _model, _gpu, _tp, gpu_type=_gpu_type)
