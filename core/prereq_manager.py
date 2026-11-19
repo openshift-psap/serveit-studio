@@ -364,16 +364,36 @@ class PrereqManager:
                     get_stored_calibration, derive_max_ttft_penalty_ms, estimate_peak_prefill,
                 )
                 _model = getattr(optimizer_config, "model_name", "") or ""
-                _gpu = (getattr(optimizer_config, "cluster_resources", None) or {}).get("gpu_model") or ""
+                _cr = getattr(optimizer_config, "cluster_resources", None) or {}
+                if not isinstance(_cr, dict):
+                    _cr = {}
+                _gpu = _cr.get("gpu_model") or getattr(optimizer_config, "gpu_model", None) or ""
+                _gpu_type = _cr.get("gpu_type") or ""
                 _tp = getattr(optimizer_config, "tensor_parallelism", 1) or 1
                 _db = "/mnt/storage/serveit.db"
-                _stored = get_stored_calibration(_db, _model, _gpu, _tp)
+                _stored = get_stored_calibration(_db, _model, _gpu, _tp, gpu_type=_gpu_type)
                 if _stored:
                     epp_peak = _stored["peak_prefill_throughput"]
-                elif not getattr(optimizer_config, "epp_calibrate_affinity", False):
-                    # Calibration disabled: computed estimate (the runner
-                    # measures and patches when enabled)
+                    msg = (f"   📐 EPP affinity: stored calibration {epp_peak} tok/s "
+                           f"({_stored.get('source', 'real')}, "
+                           f"{str(_stored.get('calibrated_at', ''))[:16]})")
+                    if log_callback:
+                        log_callback(msg)
+                    logger.info(msg)
+                else:
+                    # No stored value: ALWAYS inject the computed estimate.
+                    # The previous code injected nothing when calibration was
+                    # enabled, so soaks ran the filter's built-in defaults
+                    # (15928 tok/s / 18000 ms, tuned for Qwen-32B on 2xH100).
+                    # The real runner still overwrites this with a measured
+                    # value after deploy when calibration is on.
                     epp_peak = estimate_peak_prefill(_gpu, _tp, {})
+                    if epp_peak:
+                        msg = (f"   📐 EPP affinity: no stored calibration — "
+                               f"injecting estimate {epp_peak} tok/s")
+                        if log_callback:
+                            log_callback(msg)
+                        logger.info(msg)
                 if epp_peak:
                     _isl = getattr(optimizer_config, "isl", 0) or 0
                     epp_penalty = derive_max_ttft_penalty_ms(_isl, epp_peak)

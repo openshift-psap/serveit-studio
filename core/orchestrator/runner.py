@@ -405,26 +405,35 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 config_key, raw_yaml = key, val
                 break
         if not raw_yaml:
+            if log_callback:
+                log_callback("   📐 EPP affinity: filter not present in the deployed "
+                             "config — calibration N/A")
             return  # no affinity filter in the deployed config
         if "peakPrefillThroughput" in raw_yaml:
             return  # explicit parameters — respect them
 
         model = config.model_name
         tp = getattr(config, "tensor_parallelism", 1) or 1
-        gpu_model = ""
-        try:
-            gpu_model = (getattr(self, "cluster_resources", None) or {}).get("gpu_model") or ""
-        except Exception:
-            pass
+        # Hardware label for the calibration key — the orchestrator may not
+        # carry cluster_resources; the TestConfig/config does.
+        _cr = {}
+        for _src in (getattr(self, "cluster_resources", None),
+                     getattr(config, "cluster_resources", None)):
+            if isinstance(_src, dict) and _src:
+                _cr = _src
+                break
+        gpu_model = _cr.get("gpu_model") or getattr(config, "gpu_model", None) or ""
+        gpu_type = _cr.get("gpu_type") or ""
         db_path = "/mnt/storage/serveit.db"
 
-        stored = get_stored_calibration(db_path, model, gpu_model, tp)
+        stored = get_stored_calibration(db_path, model, gpu_model, tp, gpu_type=gpu_type)
         if stored:
             peak = stored["peak_prefill_throughput"]
             if log_callback:
                 log_callback(
                     f"   📐 EPP affinity: using stored calibration "
-                    f"({peak} tok/s, {stored['calibrated_at'][:16]})"
+                    f"({peak} tok/s, {stored.get('source', 'real')}, "
+                    f"{stored['calibrated_at'][:16]})"
                 )
         else:
             if log_callback:
@@ -481,7 +490,8 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 return
             peak = result_cal["r_peak"]
             store_calibration(db_path, model, gpu_model, tp, peak,
-                              result_cal["median_ttft_s"], chunk)
+                              result_cal["median_ttft_s"], chunk,
+                              source="real", gpu_type=gpu_type)
 
         # Workload-aware stickiness-break threshold: the re-prefill crossover
         penalty = derive_max_ttft_penalty_ms(getattr(config, "isl", 0) or 0, peak)

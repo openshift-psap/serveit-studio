@@ -172,6 +172,25 @@ def derive_max_ttft_penalty_ms(isl_tokens: int, r_peak: int) -> int:
 
 # ── persistence ────────────────────────────────────────────────────────────
 
+# Hardware tokens we normalise to, so a stored calibration is found no
+# matter whether the caller passes 'H200', 'NVIDIA H200', 'nvidia.com/gpu
+# (H200)' or an empty string (observed: a gemma calibration was stored with
+# gpu_model='' and every later lookup with 'H200' missed it).
+_GPU_TOKENS = ("b300", "b200", "gb200", "h200", "h100", "h800", "a100",
+               "l40s", "l4", "mi300x", "mi325x", "v100")
+
+
+def normalize_gpu_key(gpu_model: str, gpu_type: str = "") -> str:
+    """Stable hardware key for calibration storage/lookup ('h200', ...)."""
+    blob = f"{gpu_model or ''} {gpu_type or ''}".lower()
+    for tok in _GPU_TOKENS:
+        if tok in blob:
+            return tok
+    # Fall back to a compact token so unknown hardware still matches itself
+    compact = "".join(ch for ch in (gpu_model or "").lower() if ch.isalnum())
+    return compact[:32]
+
+
 def _ensure_table(conn) -> None:
     conn.execute("""
         CREATE TABLE IF NOT EXISTS epp_calibrations (
@@ -182,23 +201,40 @@ def _ensure_table(conn) -> None:
             peak_prefill_throughput INTEGER NOT NULL,
             median_ttft_s REAL,
             chunk_size INTEGER,
-            calibrated_at TEXT NOT NULL
+            calibrated_at TEXT NOT NULL,
+            source TEXT DEFAULT 'real'
         )
     """)
+    # Older databases predate the source column
+    cols = [c[1] for c in conn.execute("PRAGMA table_info(epp_calibrations)")]
+    if "source" not in cols:
+        try:
+            conn.execute("ALTER TABLE epp_calibrations ADD COLUMN source TEXT DEFAULT 'real'")
+            conn.commit()
+        except Exception:
+            pass
 
 
-def get_stored_calibration(db_path: str, model_name: str, gpu_model: str, tp: int) -> Optional[dict]:
-    """Most recent calibration for (model, gpu, tp), or None."""
+def get_stored_calibration(db_path: str, model_name: str, gpu_model: str, tp: int,
+                          gpu_type: str = "") -> Optional[dict]:
+    """Most recent calibration for (model, gpu, tp), or None.
+
+    The hardware key is normalised ('H200'/'NVIDIA H200'/'' all map to
+    'h200'); a legacy row stored with an empty key still matches.
+    """
     try:
         import sqlite3
         conn = sqlite3.connect(db_path)
         _ensure_table(conn)
+        key = normalize_gpu_key(gpu_model, gpu_type)
         row = conn.execute(
-            """SELECT peak_prefill_throughput, median_ttft_s, chunk_size, calibrated_at
+            """SELECT peak_prefill_throughput, median_ttft_s, chunk_size,
+                      calibrated_at, source
                FROM epp_calibrations
-               WHERE model_name=? AND gpu_model=? AND tensor_parallelism=?
-               ORDER BY id DESC LIMIT 1""",
-            (model_name, gpu_model, tp),
+               WHERE model_name=? AND tensor_parallelism=?
+                 AND (gpu_model=? OR gpu_model='' OR gpu_model IS NULL)
+               ORDER BY (gpu_model=?) DESC, id DESC LIMIT 1""",
+            (model_name, tp, key, key),
         ).fetchone()
         conn.close()
         if row:
@@ -207,6 +243,8 @@ def get_stored_calibration(db_path: str, model_name: str, gpu_model: str, tp: in
                 "median_ttft_s": row[1],
                 "chunk_size": row[2],
                 "calibrated_at": row[3],
+                "source": row[4] or "real",
+                "gpu_key": key,
             }
     except Exception as e:
         logger.warning(f"calibration lookup failed: {e}")
@@ -214,7 +252,8 @@ def get_stored_calibration(db_path: str, model_name: str, gpu_model: str, tp: in
 
 
 def store_calibration(db_path: str, model_name: str, gpu_model: str, tp: int,
-                      r_peak: int, median_ttft_s: float, chunk_size: int) -> None:
+                      r_peak: int, median_ttft_s: float, chunk_size: int,
+                      source: str = "real", gpu_type: str = "") -> None:
     try:
         import sqlite3
         conn = sqlite3.connect(db_path)
@@ -222,10 +261,11 @@ def store_calibration(db_path: str, model_name: str, gpu_model: str, tp: int,
         conn.execute(
             """INSERT INTO epp_calibrations
                (model_name, gpu_model, tensor_parallelism, peak_prefill_throughput,
-                median_ttft_s, chunk_size, calibrated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (model_name, gpu_model, tp, r_peak, median_ttft_s, chunk_size,
-             datetime.now().isoformat()),
+                median_ttft_s, chunk_size, calibrated_at, source)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (model_name, normalize_gpu_key(gpu_model, gpu_type), tp,
+             r_peak, median_ttft_s, chunk_size,
+             datetime.now().isoformat(), source),
         )
         conn.commit()
         conn.close()
