@@ -1756,20 +1756,21 @@ class RecipeOptimizer(
         if epp_doc is None:
             self._blis_dropped_plugins = []
             try:
-                from core import PrereqManager
-                prereq_mgr = PrereqManager(
-                    namespace=self.config.namespace,
-                    kubectl_runner=kubectl,
-                    scheduler_image=getattr(self.config, "scheduler_image", None),
-                    gateway_class=getattr(self.config, "gateway_class", "istio"),
-                )
-                prereq_mgr.deploy_prereqs(
-                    architecture=(test_config.architecture or "aggregated"),
-                    log_callback=lambda msg: self.log(msg, "info"),
-                    epp_config=self._build_epp_config(),
-                    optimizer_config=self.config,
-                )
-                cm_yaml = getattr(prereq_mgr, "last_epp_configmap_yaml", None)
+                # READ-ONLY: take the EPP ConfigMap already deployed for this
+                # architecture. A simulation must never render-and-apply the
+                # prereqs — applying an EPP schema the deployed image rejects
+                # crash-loops the real router (it did exactly that once).
+                _arch_name = (test_config.architecture or "aggregated").lower()
+                _cm_name = {"pd": "gaie-pd-epp",
+                            "ep": "gaie-ep-epp"}.get(_arch_name, "gaie-aggregated-epp")
+                _r = kubectl.run(
+                    ["get", "configmap", _cm_name, "-n", self.config.namespace, "-o", "yaml"],
+                    check=False)
+                cm_yaml = _r.stdout if _r.returncode == 0 else None
+                if not cm_yaml:
+                    self.log(
+                        f"   BLIS: EPP ConfigMap '{_cm_name}' not found — the simulator "
+                        f"will use the router's built-in defaults", "warning")
                 if cm_yaml:
                     import yaml as _yaml
                     cm = _yaml.safe_load(cm_yaml) or {}
