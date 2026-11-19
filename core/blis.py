@@ -277,6 +277,64 @@ class BlisRunner:
             return True  # workload pod guarantees the binary (image or NFS)
         return os.path.isfile(self.binary) and os.access(self.binary, os.X_OK)
 
+    def _exec_result_file(self, args, out_file, timeout=600):
+        """Execute writing the Result to a file, then copy it back.
+
+        A Result with thousands of request rows is ~10 MB of JSON; streaming
+        that through kubectl exec's stdout intermittently dies with
+        'error reading from error stream: unexpected EOF' (client-go v2
+        stream). Writing to a file inside the pod keeps exec stdout to a
+        single EXIT line, and the copy is a plain file transfer.
+        """
+        if not self.remote:
+            return subprocess.run([self.binary] + args, capture_output=True,
+                                  text=True, timeout=timeout)
+        import shlex
+        remote_out = out_file + ".pod.json"
+        remote_err = out_file + ".pod.stderr"
+        cmd_str = (
+            'B=$(command -v blis || echo ' + shlex.quote(self.REMOTE_BINARY_FALLBACK) + '); '
+            '"$B" ' + " ".join(shlex.quote(a) for a in args) +
+            ' > ' + shlex.quote(remote_out) +
+            ' 2> ' + shlex.quote(remote_err) + '; echo "EXIT:$?"'
+        )
+        r = self.kubectl.run(
+            ["exec", self.pod_name, "-n", self.namespace, "--", "bash", "-c", cmd_str],
+            check=False, timeout=timeout,
+        )
+        rc = 1
+        for line in (r.stdout or "").splitlines():
+            if line.startswith("EXIT:"):
+                try:
+                    rc = int(line.split(":", 1)[1].strip())
+                except ValueError:
+                    rc = 1
+        err_text = ""
+        try:
+            er = self.kubectl.run(
+                ["exec", self.pod_name, "-n", self.namespace, "--", "cat", remote_err],
+                check=False, timeout=120)
+            err_text = er.stdout or ""
+        except Exception:
+            pass
+        stdout_text = ""
+        if rc == 0:
+            try:
+                self.kubectl.run(
+                    ["cp", f"{self.pod_name}:{remote_out}", out_file,
+                     "-n", self.namespace], check=False, timeout=timeout)
+                with open(out_file) as f:
+                    stdout_text = f.read()
+            except OSError:
+                stdout_text = ""
+        class _R:
+            pass
+        o = _R()
+        o.returncode = rc
+        o.stdout = stdout_text
+        o.stderr = err_text
+        return o
+
     def _exec(self, args, timeout=600):
         if self.remote:
             import shlex
@@ -744,7 +802,7 @@ pools:
         self._record_scenario_epp(scenario_path)
         self.last_command = " ".join(str(a) for a in args)
         try:
-            r = self._exec(args, timeout=timeout)
+            r = self._exec_result_file(args, out_file, timeout=timeout)
         except subprocess.TimeoutExpired:
             self._log(f"BLIS: simulation timed out after {timeout}s", "warn")
             return None
@@ -771,7 +829,7 @@ pools:
                          f"{self.pod_name}:{pod_scenarios_dir}/{scenario_name}",
                          "-n", self.namespace], check=False, timeout=120)
                 try:
-                    r = self._exec(args, timeout=timeout)
+                    r = self._exec_result_file(args, out_file, timeout=timeout)
                 except subprocess.TimeoutExpired:
                     self._log(f"BLIS: simulation timed out after {timeout}s", "warn")
                     return None
