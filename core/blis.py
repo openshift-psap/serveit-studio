@@ -290,8 +290,11 @@ class BlisRunner:
             return subprocess.run([self.binary] + args, capture_output=True,
                                   text=True, timeout=timeout)
         import shlex
-        remote_out = out_file + ".pod.json"
-        remote_err = out_file + ".pod.stderr"
+        # out_file is a *server-side* path; /mnt/storage is not mounted in
+        # the workload pod, so the pod writes under /tmp and we copy back
+        _base = os.path.basename(out_file)
+        remote_out = f"/tmp/{_base}.pod.json"
+        remote_err = f"/tmp/{_base}.pod.stderr"
         cmd_str = (
             'B=$(command -v blis || echo ' + shlex.quote(self.REMOTE_BINARY_FALLBACK) + '); '
             '"$B" ' + " ".join(shlex.quote(a) for a in args) +
