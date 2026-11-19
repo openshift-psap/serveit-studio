@@ -725,7 +725,8 @@ pools:
         # when the recipe config lacks the field — run 253 simulated a
         # single instance because getattr(cfg, "replicas", 1) returned the
         # default 1 and single_test_replicas was never reached).
-        _arch = (getattr(cfg, "architecture", "aggregated") or "aggregated").lower()
+        _arch = (getattr(self, "last_scenario_arch", None)
+                 or getattr(cfg, "architecture", "aggregated") or "aggregated").lower()
         _pre, _dec = getattr(self, "last_instance_counts", (0, 0))
         if _arch == "pd" and int(_pre) > 0 and int(_dec) > 0:
             # Dissaggregated: every instance is prefill or decode and the

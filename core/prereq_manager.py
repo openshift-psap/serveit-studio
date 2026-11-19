@@ -599,6 +599,16 @@ class PrereqManager:
                         result = self.kubectl.run(check_cmd, check=False)
                         if result.returncode == 0:
                             log(f"   ✓ {resource_type} already exists")
+                            # Capture the live EPP ConfigMap: BLIS needs the
+                            # config actually deployed, and skipping the render
+                            # left last_epp_configmap_yaml unset (simulator then
+                            # ran the router's built-in defaults).
+                            if resource_type == "ConfigMap" and "gaie" in template_path:
+                                _r = self.kubectl.run(
+                                    ["get", "configmap", context["gaie_name"],
+                                     "-n", self.namespace, "-o", "yaml"], check=False)
+                                if _r.returncode == 0 and _r.stdout:
+                                    self.last_epp_configmap_yaml = _r.stdout
                             continue
 
                 # Render template
