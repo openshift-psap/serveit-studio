@@ -2770,7 +2770,10 @@ class RecipeOptimizer(
             total_with_staging_gb = memory_per_pod_gb + lora_staging_gb
 
             # Validate against actual free memory — warn and cap if needed.
-            if self._cached_free_mem_gb:
+            # Simulations deploy no pods, so the node-memory guard (which
+            # exists to stop pods from being unschedulable) must not block a
+            # BLIS run on a fleet larger than the physical cluster.
+            if self._cached_free_mem_gb and not getattr(self.config, "use_blis", False):
                 free_per_pod_gb = int(self._cached_free_mem_gb / pods_per_node * 0.90)
                 # Hard floor: the CPU KV offload region must fit inside the pod
                 # memory limit (kubelet caps the shm tmpfs at the limit and tmpfs
