@@ -436,7 +436,11 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         gpu_type = gpu_type or getattr(config, "gpu_type", None) or ""
         db_path = "/mnt/storage/serveit.db"
 
-        stored = get_stored_calibration(db_path, model, gpu_model, tp, gpu_type=gpu_type)
+        # Simulation must not inherit a real-GPU measurement (BLIS policy).
+        _is_blis = bool(getattr(config, "use_blis", False))
+        stored = get_stored_calibration(db_path, model, gpu_model, tp,
+                                        gpu_type=gpu_type,
+                                        exclude_real=_is_blis)
         if stored:
             peak = stored["peak_prefill_throughput"]
             if log_callback:

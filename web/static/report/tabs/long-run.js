@@ -266,6 +266,26 @@
             if (tS.blis_cache_hit_rate != null) engBits.push('prefix cache hit <strong>' + (tS.blis_cache_hit_rate * 100).toFixed(1) + '%</strong>');
             if (tS.blis_in_flight_requests_max != null) engBits.push('in-flight peak <strong>' + Math.round(tS.blis_in_flight_requests_max) + '</strong> (mean ' + Math.round(tS.blis_in_flight_requests_mean || 0) + ')');
             if (tS.blis_kv_capacity_tokens_per_replica != null) engBits.push('KV capacity <strong>' + (tS.blis_kv_capacity_tokens_per_replica / 1000).toFixed(0) + 'k tok/replica</strong>');
+            // Batch depth and KV-ceiling use make "did we actually load the
+            // fleet" visible: 1-2/inst is the latency regime, near the
+            // sequence ceiling is saturation.
+            var _nInst = tS.instances ? Object.keys(tS.instances).length
+                        : (tS.instance_tokens ? Object.keys(tS.instance_tokens).length : 0);
+            var _lastR = rows[rows.length - 1] || {};
+            var _tokReq = (Number(_lastR.isl) || 0) + (Number(_lastR.osl) || 0);
+            if (_nInst && tS.blis_in_flight_requests_mean != null) {
+                var _depth = tS.blis_in_flight_requests_mean / _nInst;
+                var _depthTxt = 'batch depth <strong>' + _depth.toFixed(1) + '/inst</strong>';
+                if (_tokReq > 0 && tS.blis_kv_capacity_tokens_per_replica) {
+                    var _allow = tS.blis_kv_capacity_tokens_per_replica / _tokReq;
+                    if (_allow > 0) {
+                        _depthTxt += ' (<strong>' + (100 * _depth / _allow).toFixed(1) +
+                            '% of KV ceiling</strong>, &asymp;' + Math.round(_allow) +
+                            ' seq/inst)';
+                    }
+                }
+                engBits.push(_depthTxt);
+            }
             if (tS.blis_gateway_queue_delay_p90_ms != null && tS.blis_gateway_queue_delay_p90_ms > 0) engBits.push('gateway queue p90 ' + tS.blis_gateway_queue_delay_p90_ms.toFixed(0) + 'ms');
             if (engBits.length) {
                 s += '<div style="margin:0 20px 10px; padding:8px 14px; background:#f0fdf4; border:1px solid #bbf7d0; ' +
@@ -291,12 +311,12 @@
                 ts.max_input_tokens.toLocaleString() + '-token context budget and are dropped at conversion (they would 400 on a real deployment).') : '';
             s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#2dd4bf); font-size:0.9em; margin:14px 20px 0;">Simulated Routing — requests served per instance (BLIS)</div>';
             s += '<div style="margin:0 20px 6px; color:#475569; font-size:0.82em; line-height:1.5;">' +
-                '<strong>How it\'s measured:</strong> per-request <code>instance</code> from the simulator\'s Result — which simulated instance the embedded llm-d router sent each request to. Concentration exposes routing/affinity skew exactly like the pod-share heatmap does on real runs.' + tsNote +
+                '<strong>How it\'s measured:</strong> per-request <code>instance</code> from the simulator\'s Result — which simulated instance the embedded llm-d router sent each request to. Colour is <strong>&times; fair share</strong> (1.00 = an even split; &ge;1.5&times; = hotspot, &le;0.5&times; = starved). Concentration exposes routing/affinity skew exactly like the pod-share heatmap does on real runs.' + tsNote +
                 '</div>';
             s += '<div id="' + id + '-pods-activity" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
             s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee); font-size:0.9em; margin:14px 20px 0;">Work Distribution — % of fleet token work per instance (BLIS)</div>';
             s += '<div style="margin:0 20px 6px; color:#475569; font-size:0.82em; line-height:1.5;">' +
-                '<strong>How it\'s measured:</strong> <code>instance\'s (prompt + output) tokens ÷ fleet tokens</code> per cycle — how the workload\'s actual processing is split across simulated instances, the direct analog of the pod GPU-work share on real runs.' +
+                '<strong>How it\'s measured:</strong> <code>instance\'s (prompt + output) tokens ÷ fleet tokens</code> per cycle — how the workload\'s actual processing is split across simulated instances, the direct analog of the pod GPU-work share on real runs. Colour is <strong>&times; fair share</strong>: 1.00 = exact fair share, &ge;1.5&times; hotspot, &le;0.5&times; starved.' +
                 '</div>';
             s += '<div id="' + id + '-pods-share" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
             s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#2dd4bf); font-size:0.9em; margin:14px 20px 0;">Instance Occupancy — request residence timeline (BLIS)</div>';
@@ -322,7 +342,7 @@
         s += '<div id="' + id + '-pods-activity" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
         s += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee); font-size:0.9em; margin:14px 20px 0;">Work Distribution — % of fleet GPU work per pod</div>';
         s += '<div style="margin:0 20px 6px; color:#475569; font-size:0.82em; line-height:1.5;">' +
-            '<strong>How it\'s measured:</strong> <code>pod\'s kernel time ÷ fleet kernel time</code> — how the fleet\'s actual GPU work is split across pods.' +
+            '<strong>How it\'s measured:</strong> <code>pod\'s kernel time ÷ fleet kernel time</code> — how the fleet\'s actual GPU work is split across pods. Colour is <strong>&times; fair share</strong>: 1.00 = exact fair share, &ge;1.5&times; hotspot, &le;0.5&times; starved.' +
             '</div>';
         s += '<div id="' + id + '-pods-share" style="margin:0 20px 8px; width:calc(100% - 40px);"></div>';
         }
@@ -497,22 +517,38 @@
                     var heatOpts = { displayModeBar: false, responsive: true };
                     var elR = document.getElementById(id + '-pods-activity');
                     if (elR && insts.length) {
-                        var zR = insts.map(function(i) {
-                            return rs.map(function(r) {
-                                var t = blisTel(r);
-                                if (t && t.instances && t.instances[i] != null) return t.instances[i];
-                                if (t && t.instance_report && t.instance_report[i]) {
-                                    return t.instance_report[i].completed_requests != null
+                        // x fair share keeps the panel comparable across
+                        // instance counts: 1.00 = the router split traffic
+                        // exactly evenly. Raw counts ride in customdata.
+                        var zR = [], cR = [];
+                        insts.forEach(function(i) {
+                            var zr = [], cr = [];
+                            rs.forEach(function(r) {
+                                var t = blisTel(r), v = null, tot = 0;
+                                if (t && t.instances && t.instances[i] != null) v = t.instances[i];
+                                else if (t && t.instance_report && t.instance_report[i]) {
+                                    v = t.instance_report[i].completed_requests != null
                                         ? t.instance_report[i].completed_requests : null;
                                 }
-                                return null;
+                                if (t && t.instances) {
+                                    Object.keys(t.instances).forEach(function(k) { tot += t.instances[k] || 0; });
+                                } else if (t && t.instance_report) {
+                                    Object.keys(t.instance_report).forEach(function(k) {
+                                        tot += (t.instance_report[k].completed_requests || 0);
+                                    });
+                                }
+                                if (v == null || !tot) { zr.push(null); cr.push(null); return; }
+                                zr.push(Math.round(100 * v * insts.length / tot) / 100);
+                                cr.push(v);
                             });
+                            zR.push(zr); cR.push(cr);
                         });
                         Plotly.newPlot(elR, [{
                             x: xs, y: insts, z: zR, type: 'heatmap',
-                            colorscale: 'Blues',
-                            colorbar: { title: { text: 'requests', side: 'right' }, thickness: 12 },
-                            hovertemplate: '%{y} @ %{x}<br>%{z} requests<extra></extra>',
+                            colorscale: 'Reds', customdata: cR,
+                            colorbar: { title: { text: 'x fair share', side: 'right' }, thickness: 12 },
+                            zmin: 0.5, zmax: 1.5,
+                            hovertemplate: '%{y} @ %{x}<br>%{customdata} requests &middot; %{z:.2f}x fair share<extra></extra>',
                             xgap: 1, ygap: 1
                         }], JSON.parse(JSON.stringify(heatLayout)), heatOpts);
                     } else if (elR) {
@@ -551,12 +587,18 @@
                                 return tot > 0 ? Math.round(1000 * n / tot) / 10 : null;
                             });
                         });
+                        var zWr = zW.map(function(row) {
+                            return row.map(function(v) {
+                                return v == null ? null
+                                    : Math.round(10 * v * insts.length / 100) / 10;
+                            });
+                        });
                         Plotly.newPlot(elS, [{
-                            x: xs, y: insts, z: zW, type: 'heatmap',
-                            colorscale: 'Blues',
-                            colorbar: { title: { text: '% work', side: 'right' }, thickness: 12 },
-                            zmin: 0,
-                            hovertemplate: '%{y} @ %{x}<br>%{z:.1f}% of fleet work<extra></extra>',
+                            x: xs, y: insts, z: zWr, type: 'heatmap',
+                            colorscale: 'Reds', customdata: zW,
+                            colorbar: { title: { text: 'x fair share', side: 'right' }, thickness: 12 },
+                            zmin: 0.5, zmax: 1.5,
+                            hovertemplate: '%{y} @ %{x}<br>%{customdata:.1f}% of fleet work &middot; %{z:.2f}x fair share<extra></extra>',
                             xgap: 1, ygap: 1
                         }], JSON.parse(JSON.stringify(heatLayout)), heatOpts);
                     } else if (elS) {
@@ -747,7 +789,18 @@
                 // 2. Share of fleet GPU work
                 var elS = document.getElementById(id + '-pods-share');
                 if (elS) {
+                    // Same semantic as the BLIS panel: x fair share, so a
+                    // balanced fleet reads pale in both views and only real
+                    // concentration turns red.
                     var zS = pods.map(function(p) {
+                        return rs.map(function(r) {
+                            var fleetMs = fleetGpuMs(r);
+                            if (!(fleetMs > 0)) return 0;
+                            var pct = 1000 * podGpuMs(r, p) / fleetMs;
+                            return Math.round(10 * pct * pods.length / 100) / 10;
+                        });
+                    });
+                    var cS = pods.map(function(p) {
                         return rs.map(function(r) {
                             var fleetMs = fleetGpuMs(r);
                             return fleetMs > 0 ? Math.round(1000 * podGpuMs(r, p) / fleetMs) / 10 : 0;
@@ -755,10 +808,10 @@
                     });
                     Plotly.newPlot(elS, [{
                         x: xsA, y: yLabels, z: zS, type: 'heatmap',
-                        colorscale: 'Reds',
-                        colorbar: { title: { text: '% fleet', side: 'right' }, thickness: 12 },
-                        zmin: 0, zmax: 100,
-                        hovertemplate: '%{y} @ %{x}<br>%{z:.1f}% of fleet GPU work<extra></extra>',
+                        colorscale: 'Reds', customdata: cS,
+                        colorbar: { title: { text: 'x fair share', side: 'right' }, thickness: 12 },
+                        zmin: 0.5, zmax: 1.5,
+                        hovertemplate: '%{y} @ %{x}<br>%{customdata:.1f}% of fleet GPU work &middot; %{z:.2f}x fair share<extra></extra>',
                         xgap: 1, ygap: 1
                     }], JSON.parse(JSON.stringify(heatLayout)), heatOpts);
                 }

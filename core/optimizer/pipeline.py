@@ -1848,6 +1848,34 @@ class RecipeOptimizer(
                 self.log(f"   BLIS: EPP config render failed ({e}) — simulator "
                          f"falls back to router defaults", "warn")
             self._blis_epp_doc = epp_doc
+        # Verification gate (Step 2): exploration only reaches the simulator
+        # through the rendered router config. If the payload asks for an
+        # alpha but the document lacks the key, the run would silently
+        # measure alpha=0 — refuse to waste the run.
+        try:
+            _want_explore = float(
+                (getattr(self.config, "epp_config", None) or {})
+                .get("explorationProbability") or 0)
+        except (TypeError, ValueError):
+            _want_explore = 0.0
+        if _want_explore > 0 and "explorationProbability" not in json.dumps(epp_doc or {}):
+            msg = (f"explorationProbability={_want_explore} was requested but is "
+                   f"absent from the rendered EPP config — the run would measure "
+                   f"alpha=0. Fix the EPP affinity settings and resubmit.")
+            self.log(f"   ❌ BLIS: {msg}", "error")
+            return TestResult(
+                test_id=test_config.test_id,
+                architecture=test_config.architecture,
+                deployment_success=False,
+                deployment_ready=False,
+                guidellm_success=False,
+                metrics_collected=False,
+                deployment_start_time=datetime.datetime.now().isoformat(),
+                error_message=msg,
+            )
+        if _want_explore > 0:
+            self.log(f"   BLIS: explorationProbability={_want_explore} verified in "
+                     f"the rendered router config", "info")
         if epp_doc:
             self.log("   BLIS: using ServeIt's rendered EndpointPickerConfig "
                      "(calibrated scorers/affinity)", "info")
@@ -2355,6 +2383,7 @@ class RecipeOptimizer(
                         getattr(self.config, "model_name", "") or "",
                         _gpu,
                         getattr(self.config, "tensor_parallelism", 1) or 1,
+                        exclude_real=bool(getattr(self.config, "use_blis", False)),
                     )
                     _cal_on = bool(getattr(self.config, "epp_calibrate_affinity", False))
                     if _stored:
@@ -2375,13 +2404,34 @@ class RecipeOptimizer(
                             getattr(self.config, "isl", 0) or 0,
                             _peak,
                         )
+                        _explore_raw = float(
+                            (getattr(self.config, "epp_config", None) or {})
+                            .get("explorationProbability") or 0)
                         user_epp_raw = inject_affinity_filter_params(
-                            user_epp_raw, _peak, _penalty)
+                            user_epp_raw, _peak, _penalty,
+                            exploration_probability=_explore_raw)
+                except Exception:
+                    pass
+            _ex = float((getattr(self.config, "epp_config", None) or {})
+                        .get("explorationProbability") or 0)
+            if _ex > 0 and "explorationProbability" not in user_epp_raw:
+                try:
+                    from core.epp_calibration import inject_affinity_filter_params
+                    user_epp_raw = inject_affinity_filter_params(
+                        user_epp_raw, None, None, exploration_probability=_ex)
                 except Exception:
                     pass
             return {"preset": "custom", "raw_yaml": user_epp_raw}
+        _user_epp_cfg = self.config.epp_config or {}
+        _explore_cfg = float(_user_epp_cfg.get("explorationProbability") or 0)
         if not getattr(self.config, "epp_custom_enabled", True):
-            return {"preset": "default"}
+            # The wizard's default 3.6 preset still honours an explicit
+            # explorationProbability: it is the only channel through which
+            # the simulator/router receives alpha.
+            out = {"preset": "default"}
+            if _explore_cfg > 0:
+                out["explorationProbability"] = _explore_cfg
+            return out
         block_size = self._compute_block_size()
         lru_capacity = self._compute_lru_capacity(block_size)
         plugins = None
@@ -2400,6 +2450,7 @@ class RecipeOptimizer(
             "peakPrefillThroughput",
             "prefixCacheAutoTune",
             "usePrefixBasedDecider",
+            "explorationProbability",
         ):
             if k in user_epp:
                 result[k] = user_epp[k]

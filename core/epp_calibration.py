@@ -216,24 +216,32 @@ def _ensure_table(conn) -> None:
 
 
 def get_stored_calibration(db_path: str, model_name: str, gpu_model: str, tp: int,
-                          gpu_type: str = "") -> Optional[dict]:
+                          gpu_type: str = "", exclude_real: bool = False) -> Optional[dict]:
     """Most recent calibration for (model, gpu, tp), or None.
 
     The hardware key is normalised ('H200'/'NVIDIA H200'/'' all map to
     'h200'); a legacy row stored with an empty key still matches.
+
+    ``exclude_real`` drops rows measured on real GPUs (source='real', and
+    the legacy NULL default). Simulation runs must set it: a simulator
+    seeded with a real measurement silently transports hardware noise into
+    the model, so BLIS uses source='sim' or falls back to the estimate.
     """
     try:
         import sqlite3
         conn = sqlite3.connect(db_path)
         _ensure_table(conn)
         key = normalize_gpu_key(gpu_model, gpu_type)
+        clause = ""
+        if exclude_real:
+            clause = " AND COALESCE(source, 'real') != 'real'"
         row = conn.execute(
             """SELECT peak_prefill_throughput, median_ttft_s, chunk_size,
                       calibrated_at, source
                FROM epp_calibrations
                WHERE model_name=? AND tensor_parallelism=?
-                 AND (gpu_model=? OR gpu_model='' OR gpu_model IS NULL)
-               ORDER BY (gpu_model=?) DESC, id DESC LIMIT 1""",
+                 AND (gpu_model=? OR gpu_model='' OR gpu_model IS NULL)""" + clause + """
+               ORDER BY (gpu_model=?) DESC, (COALESCE(source,'')='sim') DESC, id DESC LIMIT 1""",
             (model_name, tp, key, key),
         ).fetchone()
         conn.close()
@@ -275,72 +283,88 @@ def store_calibration(db_path: str, model_name: str, gpu_model: str, tp: int,
 
 # ── config injection ───────────────────────────────────────────────────────
 
-def inject_affinity_filter_params(raw_yaml: str, peak_prefill_throughput: int,
-                                  max_ttft_penalty_ms: int,
+def inject_affinity_filter_params(raw_yaml: str, peak_prefill_throughput: int = None,
+                                  max_ttft_penalty_ms: int = None,
                                   exploration_probability: float = 0) -> str:
     """Add parameters to the prefix-cache-affinity-filter in an EPP raw config.
 
     Works on the textual YAML (the raw config is passed through verbatim, so
-    we preserve formatting): finds the plugin entry and inserts/updates a
-    parameters block. Returns the modified YAML, or the input unchanged if
-    the filter isn't present.
+    we preserve formatting): updates the plugin's parameters block, creating
+    it when absent. ``exploration_probability`` is written whenever it is
+    requested, including when the block already carries peak/penalty values —
+    otherwise a custom config would silently run with exploration disabled.
+    Returns the modified YAML, or the input unchanged if the filter is absent.
     """
+    marker = "- type: prefix-cache-affinity-filter"
     if "prefix-cache-affinity-filter" not in raw_yaml:
         return raw_yaml
 
+    newline = "\n" if raw_yaml.endswith("\n") else ""
     lines = raw_yaml.splitlines()
-    out = []
-    in_filter = False
-    filter_indent = None
-    injected = False
 
-    for line in lines:
-        stripped = line.strip()
-        indent = len(line) - len(line.lstrip())
+    fi = next((i for i, ln in enumerate(lines)
+               if ln.strip().startswith(marker)), None)
+    if fi is None:
+        return raw_yaml
+    findent = len(lines[fi]) - len(lines[fi].lstrip())
 
-        # Detect the filter plugin entry
-        if stripped.startswith("- type: prefix-cache-affinity-filter"):
-            in_filter = True
-            filter_indent = indent
-            out.append(line)
-            continue
+    # Plugin block: until the next sibling list item at or above its indent.
+    end = len(lines)
+    for j in range(fi + 1, len(lines)):
+        st = lines[j].strip()
+        ind = len(lines[j]) - len(lines[j].lstrip())
+        if st.startswith("- ") and ind <= findent:
+            end = j
+            break
 
-        if in_filter:
-            # Still inside this plugin entry? (same or deeper indentation,
-            # and not a new list item at the filter's level)
-            is_sibling = stripped.startswith("- ") and indent <= filter_indent
-            if is_sibling or (stripped and indent < filter_indent):
-                # Leaving the filter entry — inject parameters before the
-                # next sibling if we haven't already
-                if not injected:
-                    pi = " " * (filter_indent + 4)
-                    out.append(" " * (filter_indent + 2) + "parameters:")
-                    out.append(f"{pi}peakPrefillThroughput: {peak_prefill_throughput}")
-                    out.append(f"{pi}maxTTFTPenaltyMs: {max_ttft_penalty_ms}")
-                    if exploration_probability and exploration_probability > 0:
-                        out.append(f"{pi}explorationProbability: {exploration_probability}")
-                    injected = True
-                in_filter = False
-            elif "peakPrefillThroughput:" in stripped or "maxTTFTPenaltyMs:" in stripped:
-                # Existing parameter — update in place
-                if "peakPrefillThroughput:" in stripped:
-                    out.append(f"{line.split(':')[0]}: {peak_prefill_throughput}")
-                else:
-                    out.append(f"{line.split(':')[0]}: {max_ttft_penalty_ms}")
-                injected = True
+    block = lines[fi:end]
+    param_i = next((k for k, ln in enumerate(block)
+                    if ln.strip() == "parameters:"), None)
+    explore_set = False
+
+    if param_i is not None:
+        pindent = len(block[param_i]) - len(block[param_i].lstrip())
+        child_indent = pindent + 2
+        # Rewrite known keys, capture the child indent from real entries.
+        for k in range(param_i + 1, len(block)):
+            st = block[k].strip()
+            ind = len(block[k]) - len(block[k].lstrip())
+            if st and ind <= pindent:
+                break
+            if not st:
                 continue
-        out.append(line)
-
-    # Filter was the last entry in the file
-    if in_filter and not injected:
-        pi = " " * (filter_indent + 4)
-        out.append(" " * (filter_indent + 2) + "parameters:")
-        out.append(f"{pi}peakPrefillThroughput: {peak_prefill_throughput}")
-        out.append(f"{pi}maxTTFTPenaltyMs: {max_ttft_penalty_ms}")
+            child_indent = ind
+            if st.startswith("peakPrefillThroughput:"):
+                if peak_prefill_throughput is not None:
+                    block[k] = f"{' ' * ind}peakPrefillThroughput: {peak_prefill_throughput}"
+            elif st.startswith("maxTTFTPenaltyMs:"):
+                if max_ttft_penalty_ms is not None:
+                    block[k] = f"{' ' * ind}maxTTFTPenaltyMs: {max_ttft_penalty_ms}"
+            elif st.startswith("explorationProbability:"):
+                block[k] = f"{' ' * ind}explorationProbability: {exploration_probability}"
+                explore_set = True
+        if exploration_probability and exploration_probability > 0 and not explore_set:
+            # Insert after the last populated parameter line.
+            insert_at = param_i + 1
+            for k in range(param_i + 1, len(block)):
+                st = block[k].strip()
+                ind = len(block[k]) - len(block[k].lstrip())
+                if st and ind <= pindent:
+                    break
+                if st:
+                    insert_at = k + 1
+            block.insert(insert_at,
+                         f"{' ' * child_indent}explorationProbability: {exploration_probability}")
+    else:
+        block.append(f"{' ' * (findent + 2)}parameters:")
+        if peak_prefill_throughput is not None:
+            block.append(f"{' ' * (findent + 4)}peakPrefillThroughput: {peak_prefill_throughput}")
+        if max_ttft_penalty_ms is not None:
+            block.append(f"{' ' * (findent + 4)}maxTTFTPenaltyMs: {max_ttft_penalty_ms}")
         if exploration_probability and exploration_probability > 0:
-            out.append(f"{pi}explorationProbability: {exploration_probability}")
+            block.append(f"{' ' * (findent + 4)}explorationProbability: {exploration_probability}")
 
-    return "\n".join(out) + ("\n" if raw_yaml.endswith("\n") else "")
+    return "\n".join(lines[:fi] + block + lines[end:]) + newline
 
 
 # ── computed default (no measurement) ──────────────────────────────────────

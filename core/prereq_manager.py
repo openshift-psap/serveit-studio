@@ -373,9 +373,16 @@ class PrereqManager:
                 _tp = getattr(optimizer_config, "tensor_parallelism", 1) or 1
                 _db = "/mnt/storage/serveit.db"
                 _cal_on = bool(getattr(optimizer_config, "epp_calibrate_affinity", False))
-                _stored = get_stored_calibration(_db, _model, _gpu, _tp, gpu_type=_gpu_type)
+                # Simulation never consumes a real-GPU measurement: it uses a
+                # sim-derived row if one exists, otherwise the estimate. This
+                # keeps hardware noise out of BLIS runs (see Step 2 plan).
+                _is_blis = bool(getattr(optimizer_config, "use_blis", False))
+                _stored = get_stored_calibration(_db, _model, _gpu, _tp,
+                                                 gpu_type=_gpu_type,
+                                                 exclude_real=_is_blis)
                 # Calibration ON  -> use the stored measurement for this
-                #                    (model, gpu, tp), else the estimate
+                #                    (model, gpu, tp), else the estimate.
+                #                    BLIS never accepts source='real'.
                 # Calibration OFF -> estimate only (never the stored value)
                 # Real runs overwrite with a fresh measurement after deploy.
                 if _stored and _cal_on:
@@ -396,6 +403,8 @@ class PrereqManager:
                     epp_peak = estimate_peak_prefill(_gpu, _tp, {})
                     if epp_peak:
                         _why = ("calibration off" if not _cal_on
+                                else "BLIS never uses real calibration"
+                                if _is_blis
                                 else "no stored calibration")
                         msg = (f"   📐 EPP affinity: {_why} — "
                                f"injecting estimate {epp_peak} tok/s")

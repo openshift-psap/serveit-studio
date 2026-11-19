@@ -18,6 +18,7 @@ Layout on shared storage (BLIS_HOME):
 
 import json
 import math
+import copy
 import os
 import subprocess
 from typing import Optional
@@ -945,16 +946,35 @@ pools:
                     if params.get("std_dev"):
                         params["std_dev"] = max(1, min(params["std_dev"],
                                                        (allowed - params["min"]) // 2 or 1))
-            clients.append({
-                "id": sh.get("name") or f"shape-{len(clients)}",
-                "concurrency": conc,
+            # Distinct per-user prefixes: split the shape's concurrency
+            # across `prefix_count` prefix groups so the router sees
+            # independent caches instead of one shared warm group. A single
+            # shared prefix makes every pod equally warm, which masks the
+            # affinity hotspots this knob exists to study.
+            prefix_count = int(sh.get("prefix_count") or 1)
+            name = sh.get("name") or f"shape-{len(clients)}"
+            client = {
                 "closed_loop": True,
-                "prefix_group": sh.get("name") or f"shape-{len(clients)}",
                 "prefix_length": prefix_len,
                 "input_distribution": {"type": "gaussian", "params": params},
                 "output_distribution": {
                     "type": "constant", "params": {"value": osl}},
-            })
+            }
+            if prefix_count > 1 and prefix_len > 0 and conc > 1:
+                groups = min(prefix_count, conc)
+                per, extra = divmod(conc, groups)
+                for gi in range(groups):
+                    c = per + (1 if gi < extra else 0)
+                    if c <= 0:
+                        continue
+                    entry = copy.deepcopy(client)
+                    entry.update(id=f"{name}-p{gi}", concurrency=c,
+                                 prefix_group=f"{name}-p{gi}")
+                    clients.append(entry)
+            else:
+                entry = copy.deepcopy(client)
+                entry.update(id=name, concurrency=conc, prefix_group=name)
+                clients.append(entry)
         # enough requests to fill the window at these concurrencies;
         # horizon caps the simulated duration
         # generous request budget — the horizon is the binding
