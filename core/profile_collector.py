@@ -243,6 +243,20 @@ class ProfileCollector:
             except OSError:
                 pass
             if proc.returncode != 0 or size == 0:
+                # The capture is a `kubectl exec ... curl` subprocess. A
+                # non-zero exit is almost always a dead exec stream (pod
+                # restarted, network hop) or curl's own timeout, and the
+                # old code discarded the reason. Keep it: stderr names the
+                # exact failure (curl 28 = timeout, 7 = refused, 52 = empty
+                # reply), and the EPP restart case is otherwise invisible.
+                _err = ""
+                try:
+                    _err = Path(cap["errfile"]).read_text(errors="replace")[-400:]
+                except OSError:
+                    pass
+                logger.warning(
+                    f"profile capture {label}: no data (rc={proc.returncode}, "
+                    f"bytes={size}, stderr={_err.strip() or '-'})")
                 return None
             data = Path(cap["outfile"]).read_bytes()
             if data and data[:2] != b'\x1f\x8b':
@@ -258,6 +272,28 @@ class ProfileCollector:
                     os.unlink(cap[f])
                 except (OSError, KeyError):
                     pass
+
+    def _capture_epp_cpu_once(self, epp: Optional[Dict], seconds: int = 30) -> Optional[Dict]:
+        """One short EPP CPU capture, used when the long window returned nothing.
+
+        The main capture spans the whole measurement window; if the EPP pod
+        restarts during it (deploy/config patch), the exec stream dies and
+        the profile is lost. A 30 s capture right after the load still gives
+        a usable hotspot profile for the report.
+        """
+        if not epp or not self.workload_pod:
+            return None
+        url = (f"http://{epp['ip']}:{epp['port']}"
+               f"/debug/pprof/profile?seconds={seconds}")
+        cmd = ["kubectl", "exec", self.workload_pod, "-n", self.namespace, "--",
+               "curl", "-s", "--max-time", str(seconds + 30), url]
+        cap = self._spawn_capture(cmd, seconds + 30)
+        data = self._reap_capture(cap, label="epp-cpu-retry")
+        if not data:
+            return None
+        return {"kind": "epp", "pod": epp["name"], "node": epp.get("node"),
+                "port": epp["port"], "ptype": "cpu", "data": data,
+                "post_load": True}
 
     # ── pod discovery ───────────────────────────────────────────────────────
 
@@ -327,6 +363,7 @@ class ProfileCollector:
             "enable_vllm": enable_vllm,
             "started": time.time(),
             "epp_spawn": None,
+            "epp": None,
             "vllm_spawns": [],
             "torch_procs": None,
         }
@@ -334,6 +371,7 @@ class ProfileCollector:
         # EPP (toggle: enable_epp_profile, default on)
         enable_epp = getattr(config, 'enable_epp_profile', True)
         epp = self.discover_epp_pod(config.architecture) if enable_epp else None
+        handle["epp"] = epp
         if epp and self.workload_pod:
             url = f"http://{epp['ip']}:{epp['port']}/debug/pprof/profile?seconds={window}"
             cmd = ["kubectl", "exec", self.workload_pod, "-n", self.namespace, "--",
@@ -764,8 +802,16 @@ class ProfileCollector:
                 cpu_captures.append({"kind": "epp", "pod": spawn["pod"],
                                      "node": spawn.get("node"),
                                      "port": spawn["port"], "ptype": "cpu", "data": data})
-            elif log_callback:
-                log_callback("   \u26a0\ufe0f  EPP CPU profile capture returned no data")
+            else:
+                retry = self._capture_epp_cpu_once(handle.get("epp"), 30)
+                if retry:
+                    cpu_captures.append(retry)
+                    if log_callback:
+                        log_callback(
+                            "   \u2139\ufe0f  EPP CPU profile capture fell back to a "
+                            "30s post-load profile (the main window returned nothing)")
+                elif log_callback:
+                    log_callback("   \u26a0\ufe0f  EPP CPU profile capture returned no data")
 
         # 2. Reap vLLM CPU capture subprocesses
         for spawn in handle.get("vllm_spawns", []):
