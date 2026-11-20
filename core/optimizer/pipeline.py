@@ -1917,6 +1917,14 @@ class RecipeOptimizer(
             _nm_all = list(getattr(runner_scenario, "last_not_modelled", None) or [])
             for _dp in sorted(set(getattr(self, "_blis_dropped_plugins", None) or [])):
                 _nm_all.append(f"{_dp} (Alpha EPP plugin, not loadable in the pinned router)")
+            if _want_explore > 0:
+                # Proven empirically (Step 2, runs 330 vs 335 and a hand-run
+                # alpha=1.0 experiment): the pinned router parses
+                # explorationProbability and ignores it — routing is
+                # bit-identical. Record it instead of implying it was modelled.
+                _nm_all.append(
+                    "explorationProbability (the pinned BLIS router parses but "
+                    "does not implement it; alpha has no effect in simulation)")
             runner_scenario.last_not_modelled = _nm_all
             for _nm in _nm_all:
                 self.log(f"   BLIS: not modelled by the simulator: {_nm}", 'warning')
