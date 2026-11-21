@@ -213,6 +213,12 @@ class PrereqManager:
 
             # Resolve EPP plugin weights from preset
             epp = epp_config or {}
+            try:
+                log(f"   EPP config for render: preset={epp.get('preset')!r} "
+                    f"exploration={epp.get('explorationProbability')!r} "
+                    f"raw_yaml={bool(epp.get('raw_yaml'))}")
+            except Exception:
+                pass
             epp_preset = (
                 epp.get("preset") or optimizer_config.epp_preset
                 if optimizer_config and hasattr(optimizer_config, "epp_preset")
