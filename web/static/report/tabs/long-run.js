@@ -92,11 +92,22 @@
     // torch entries (parsed or not) and resource snapshots. Pods that
     // never served load still get a (permanently dark) heatmap row.
     function fleetPods(rows) {
+        // The row list is the union of every pod that appears in ANY cycle's
+        // profile or resource snapshot, plus the deployment's pod list when
+        // the collector recorded one. Profiles are per-cycle and can be
+        // missing (pod restart, failed trace export, offline export that
+        // stripped pprof), and dropping a pod from the union silently
+        // removes its ROW from the heatmaps — the fleet then looks smaller
+        // than it is. A null cell is honest; a missing row is not.
         var seen = {};
         rows.forEach(function(r) {
             (((mj(r).pprof || {}).torch) || []).forEach(function(t) { if (t && t.pod) seen[t.pod] = 1; });
             var snap = mj(r).resource_snapshot || {};
             Object.keys(snap).forEach(function(p) { seen[p] = 1; });
+            var series = mj(r).resource_series || {};
+            (Array.isArray(series.pods) ? series.pods : []).forEach(function(p) {
+                if (p) seen[p] = 1;
+            });
         });
         return Object.keys(seen).sort();
     }
