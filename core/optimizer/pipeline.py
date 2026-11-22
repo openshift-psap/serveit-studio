@@ -717,6 +717,33 @@ class RecipeOptimizer(
             log_func = getattr(logger, level, logger.info)
             log_func(message)
 
+    @staticmethod
+    def _epp_configmap_from_doc(doc, namespace: str, architecture: str = "aggregated") -> Optional[str]:
+        """Serialize an EndpointPickerConfig into the ConfigMap a run deployed.
+
+        Used for BLIS runs (read-only render, never applied) and when the
+        bundle needs the EPP document the simulator actually loaded.
+        """
+        if not isinstance(doc, dict) or not doc.get("kind"):
+            return None
+        try:
+            import yaml as _yaml
+            body = _yaml.safe_dump(doc, sort_keys=False)
+        except Exception:
+            import json as _json
+            body = _json.dumps(doc, indent=2)
+        indented = "\n".join("    " + ln for ln in body.rstrip().splitlines())
+        name = {"pd": "gaie-pd-epp", "ep": "gaie-ep-epp"}.get(
+            (architecture or "aggregated").lower(), "gaie-aggregated-epp")
+        return (
+            f"apiVersion: v1\nkind: ConfigMap\nmetadata:\n"
+            f"  name: {name}\n  namespace: {namespace}\n"
+            f"  labels:\n    app.kubernetes.io/name: {name}\n"
+            f"    component: serveit-epp\n"
+            f"    architecture: {architecture or 'aggregated'}\n"
+            f"data:\n  default-plugins.yaml: |\n{indented}\n"
+        )
+
     def _render_manifests_json(self, test_config: TestConfig) -> Optional[str]:
         """
         Render LWS + EPP configmap templates for a test config and return as JSON string.
@@ -730,29 +757,27 @@ class RecipeOptimizer(
 
             tmgr = TemplateManager()
             manifests = tmgr.render_config(test_config)
-            # Add EPP configmap from run-level EPP config
-            epp_cfg = getattr(self.config, "epp_config", None) or {}
-            epp_preset = getattr(self.config, "epp_preset", "balanced")
-            presets = {
-                "balanced": {"pcw": 3, "kvw": 2, "qw": 2, "arw": 2, "sw": 0},
-                "cache_optimized": {"pcw": 5, "kvw": 1, "qw": 2, "arw": 1, "sw": 0},
-                "queue_balanced": {"pcw": 1, "kvw": 1, "qw": 3, "arw": 3, "sw": 0},
-                "latency_aware": {"pcw": 3, "kvw": 2, "qw": 2, "arw": 2, "sw": 0},
-            }
-            w = presets.get(epp_preset, presets["balanced"])
+            # EPP ConfigMap in the bundle must be the document the run
+            # actually loaded. Real runs capture the applied ConfigMap; BLIS
+            # runs only render it read-only, which used to fall through to a
+            # fabricated pre-3.6 `scheduler-config` weights file that no run
+            # ever used (runs 312-335 all shipped that stub). Never invent a
+            # config: prefer the captured CM, then the rendered EndpointPicker
+            # document, and omit the entry when neither exists.
             ns = test_config.namespace or "serveit"
             applied_epp_cm = getattr(test_config, "_epp_configmap_yaml", None)
             if applied_epp_cm:
                 manifests["epp-configmap"] = applied_epp_cm
             else:
-                manifests["epp-configmap"] = (
-                    f"apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: scheduler-config\n  namespace: {ns}\ndata:\n  config.yaml: |\n"
-                    f"    prefixCacheWeight: {w['pcw']}\n    kvCacheWeight: {w['kvw']}\n    queueWeight: {w['qw']}\n"
-                    f"    activeRequestWeight: {w['arw']}\n    sloWeight: {w['sw']}\n"
-                    f"    maxPrefixBlocksToMatch: {epp_cfg.get('maxPrefixBlocksToMatch', 256)}\n"
-                    f"    lruCapacityPerServer: {epp_cfg.get('lruCapacityPerServer', 31250)}\n"
-                    f"    nonCachedTokens: {epp_cfg.get('nonCachedTokens', 16)}\n"
-                )
+                _doc = getattr(self, "_blis_epp_doc", None)
+                _cm = self._epp_configmap_from_doc(
+                    _doc, ns, test_config.architecture or "aggregated")
+                if _cm:
+                    manifests["epp-configmap"] = _cm
+                else:
+                    self.log("  ⚠️  No EPP config captured for this run — "
+                             "omitting epp-configmap from the bundle instead of "
+                             "emitting a config that was never used", "warning")
             return json.dumps(manifests)
         except Exception as e:
             self.log(f"  ⚠️  Failed to render templates for DB: {e}", "warning")
@@ -1848,6 +1873,18 @@ class RecipeOptimizer(
                 self.log(f"   BLIS: EPP config render failed ({e}) — simulator "
                          f"falls back to router defaults", "warn")
             self._blis_epp_doc = epp_doc
+        if epp_doc:
+            # Persist the document as the run's EPP ConfigMap so the bundle
+            # export shows what the simulator loaded (the CLUSTER is never
+            # touched — this is a read-only render).
+            try:
+                _cm = self._epp_configmap_from_doc(
+                    epp_doc, self.config.namespace or "serveit",
+                    test_config.architecture or "aggregated")
+                if _cm:
+                    test_config._epp_configmap_yaml = _cm
+            except Exception:
+                pass
         # Verification gate (Step 2): exploration only reaches the simulator
         # through the rendered router config. If the payload asks for an
         # alpha but the document lacks the key, the run would silently
