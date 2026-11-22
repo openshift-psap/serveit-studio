@@ -273,6 +273,10 @@ class TestConfig:
     # EPP configuration (passed to prereq_manager for configmap generation)
     epp_calibrate_affinity: bool = False
     epp_config: Optional[Dict] = None
+    # Upstream-default era for the EPP ConfigMap ('auto' matches the image,
+    # '3.5'/'3.6' pin it). Without this field prereq_manager always fell back
+    # to 'auto' on real runs, so a 3.5 selection silently deployed 3.6.
+    epp_default_version: str = "auto"
 
 
 @dataclass
