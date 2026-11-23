@@ -800,6 +800,12 @@ class PrereqManager:
         # handler or picker).
         raw_yaml = (epp.get("raw_yaml") or "").strip()
         if raw_yaml:
+            # The ConfigMap template already emits the document header
+            # (apiVersion/kind). A raw EndpointPickerConfig carries its own,
+            # and pasting both produced a YAML document with duplicate keys.
+            _lines = [l for l in raw_yaml.split("\n")
+                      if not (l.startswith("apiVersion:") or l.startswith("kind:"))]
+            raw_yaml = "\n".join(_lines).lstrip()
             body = "\n".join("    " + l if l.strip() else l for l in raw_yaml.split("\n"))
             return {
                 "namespace": namespace or "",
