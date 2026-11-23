@@ -1265,7 +1265,9 @@ pools:
         if slo_ttft_ms and int(slo_ttft_ms) > 0:
             args += ["--slo-ttft", f"standard={int(slo_ttft_ms)}ms"]
         # Saturation detection: composite detector + verdict trace
-        args += ["--detectors", "composite"]
+        # inference-sim v0.18.1 replaced the composite/threshold/backlog
+        # detectors with "settle"; any other value is a fatal error.
+        args += ["--detectors", "settle"]
         if self.remote:
             args += ["--saturation-report", f"{pod_scenarios_dir}/saturation.json"]
 

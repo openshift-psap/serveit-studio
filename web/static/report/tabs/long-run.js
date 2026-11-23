@@ -262,7 +262,7 @@
         if (isBlis) {
             // Saturation verdict from the composite detector
             var tS = blisTel(rows[rows.length - 1]) || {};
-            var satV = (tS.saturation || {}).composite;
+            var satV = (tS.saturation || {}).composite || (tS.saturation || {}).settle;
             if (satV) {
                 var satColor = satV === 'OVERLOADED' ? '#b91c1c' :
                                (satV === 'BACKLOGGED' || satV === 'SATURATED') ? '#b45309' : '#166534';
