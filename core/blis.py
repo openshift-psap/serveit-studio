@@ -1101,6 +1101,22 @@ pools:
                     skipped += 1
                     continue
                 reqs.append(r)
+            # Conversation budget: guidellm's native weka deserializer drops a
+            # turn (and all later turns of that session) once cumulative
+            # input+output exceeds max_context_len. Mirror it here so BLIS and
+            # the real replay serve the SAME request set — a per-request filter
+            # kept ~3.7x more long turns and made the two incomparable.
+            if max_input_tokens:
+                _cum = 0
+                _kept = []
+                for _r in reqs:
+                    _tok = int(_r.get("in", 0) or 0) + max(1, int(_r.get("out", 1) or 1))
+                    if _cum + _tok > max_input_tokens:
+                        skipped += len(reqs) - len(_kept)
+                        break
+                    _cum += _tok
+                    _kept.append(_r)
+                reqs = _kept
             prev_ids = []
             for r_idx, r in enumerate(reqs):
                 t = float(r.get("t", 0) or 0)
