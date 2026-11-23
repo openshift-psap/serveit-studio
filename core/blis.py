@@ -939,7 +939,7 @@ pools:
             return cached
         try:
             os.makedirs(os.path.dirname(cached), exist_ok=True)
-            r = self.kubectl.run(
+            self.kubectl.run(
                 ["cp", f"{self.pod_name}:{traces_path}", cached,
                  "-n", self.namespace], check=False, timeout=600)
             if os.path.isfile(cached):
@@ -1077,7 +1077,7 @@ pools:
                         sessions.append(json.loads(line))
                     except json.JSONDecodeError:
                         continue
-        except OSError as e:
+        except OSError:
             return None, None
         sessions = [s for s in sessions if s.get("requests")]
         if max_traces and max_traces > 0:
@@ -1169,7 +1169,7 @@ pools:
             f.write("mode: converted\n"
                     "time_unit: us\n"
                     "trace_version: 4\n"
-                    f"workload_seed: 42\n")
+                    "workload_seed: 42\n")
         if skipped:
             import sys as _sys
             print(f"WekaTrace->TraceV2: kept {len(rows)} requests, dropped "
@@ -1199,7 +1199,6 @@ pools:
             self._log("BLIS: binary not found — skipping replay", "warn")
             return None
 
-        import shlex as _shlex
         pod_scenarios_dir = None
         if self.remote:
             pod_scenarios_dir = "/tmp/blis-runs"

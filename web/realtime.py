@@ -2378,7 +2378,6 @@ def _verify_model_on_node_caches(model, namespace, include_pvc=None):
     files — config.json alone (staged for BLIS overlays) is not enough
     for a real deployment.
     """
-    import re as _re
     import subprocess as _sp
     import time as _time
     repo = model.split('/')[-1]
@@ -2428,7 +2427,6 @@ def _verify_model_on_node_caches(model, namespace, include_pvc=None):
 def _download_model_to_pvcs(model, pvcs, namespace, hf_token):
     """Download the model into the given per-node cache PVCs (jobs)."""
     import subprocess as _sp
-    import time as _time
     from core import TemplateManager
     tm = TemplateManager()
     jobs = []

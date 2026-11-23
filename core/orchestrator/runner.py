@@ -2057,6 +2057,19 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 # profiler_stop ±8s). The profiling pass absorbs the freeze
                 # — its latency data is discarded, its only job is to
                 # generate realistic load while the trace records.
+                # Smoke-test the gateway before ANY load, including the
+                # profiling pass: a wedged EPP would otherwise burn the 90 s
+                # profile load and poison the trace with stuck requests.
+                if not self._smoke_test_gateway(endpoint, config, log_callback=log_callback):
+                    result.error_message = ("Gateway smoke test failed — gateway is not "
+                                            "completing requests")
+                    if log_callback:
+                        log_callback(
+                            "❌ Gateway is not completing requests — aborting before "
+                            "the profiling pass (check EPP/gateway pods)"
+                        )
+                    return result
+
                 _profiles_from_pass = None
                 _prof_pass_ran = False
                 _dur = getattr(config, "test_duration", 0) or 0
