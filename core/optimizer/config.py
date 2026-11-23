@@ -230,6 +230,17 @@ class RecipeOptimizerConfig:
     blis_cluster_nodes: int = 0  # fleet size override for simulation (capacity planning)
     wekatrace_source: str = "/app/traces/cc-traces-weka.jsonl"
     wekatrace_max_traces: int = 0
+    # Native guidellm trace replay (kind=weka): conversation graphs, session
+    # timing, subagent chains and tool turns come from the trace itself.
+    # When wekatrace_native is set the flat dataset pre-generation path is
+    # bypassed and guidellm reads the corpus directly.
+    wekatrace_native: bool = False
+    wekatrace_max_context_len: Optional[int] = None
+    wekatrace_schedule_turn: str = "idle_gap"      # idle_gap | timestamp
+    wekatrace_max_wait: Optional[float] = 1.0
+    wekatrace_min_concurrent_sessions: Optional[int] = None
+    wekatrace_time_scale: Optional[float] = None
+    wekatrace_copies: int = 1
 
     # Speculative decoding
     speculative_config_method: Optional[str] = None  # 'mtp', 'draft', None

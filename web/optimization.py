@@ -1063,6 +1063,17 @@ data:
                 dataset_source_mode=_get("dataset_source_mode", "synthetic") or "synthetic",
                 wekatrace_source=_get("wekatrace_source", "/mnt/storage/tmp/cc-traces-weka.jsonl"),
                 wekatrace_max_traces=int(_get("wekatrace_max_traces", 0) or 0),
+                wekatrace_native=bool(_get("wekatrace_native", True)),
+                wekatrace_max_context_len=(int(_get("wekatrace_max_context_len"))
+                                           if _get("wekatrace_max_context_len") else None),
+                wekatrace_schedule_turn=str(_get("wekatrace_schedule_turn", "idle_gap") or "idle_gap"),
+                wekatrace_max_wait=(float(_get("wekatrace_max_wait"))
+                                    if _get("wekatrace_max_wait") is not None else 1.0),
+                wekatrace_min_concurrent_sessions=(int(_get("wekatrace_min_concurrent_sessions"))
+                                                   if _get("wekatrace_min_concurrent_sessions") else None),
+                wekatrace_time_scale=(float(_get("wekatrace_time_scale"))
+                                      if _get("wekatrace_time_scale") else None),
+                wekatrace_copies=int(_get("wekatrace_copies", 1) or 1),
                 use_blis=bool(_get("use_blis", False)),
                 blis_cluster_nodes=int(_get("blis_cluster_nodes", 0) or 0),
                 epp_max_evals=epp_max_evals,

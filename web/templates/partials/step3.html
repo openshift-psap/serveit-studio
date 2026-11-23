@@ -321,10 +321,13 @@
                                                 <!-- Corpus Source selector -->
                                                 <div id="corpus-source-section" style="display:none;border-top:1px solid #dcfce7;padding:10px 20px;">
                                                     <label style="font-weight:600;color:#15803d;font-size:0.88em;display:block;margin-bottom:6px;">Corpus Source:</label>
-                                                    <select id="corpus-source-select" onchange="config.dataset_source_mode=this.value;saveConfig();" style="width:100%;padding:8px 12px;border:1.5px solid #86efac;border-radius:8px;font-size:0.9em;background:#f0fdf4;color:#166534;cursor:pointer;">
+                                                    <select id="corpus-source-select" onchange="config.dataset_source_mode=this.value;var n=document.getElementById('wekatrace-native-note');if(n)n.style.display=(this.value==='wekatrace')?'block':'none';saveConfig();" style="width:100%;padding:8px 12px;border:1.5px solid #86efac;border-radius:8px;font-size:0.9em;background:#f0fdf4;color:#166534;cursor:pointer;">
                                                         <option value="corpus">wikitext-103 — English prose for speculative decoding</option>
                                                         <option value="wekatrace">Agentic Traces (AgentX / WekaTrace) — 393 real Claude Code sessions, multi-turn ISL growth + hash-block cache sharing</option>
                                                     </select>
+                                                    <div id="wekatrace-native-note" style="display:none;margin-top:8px;padding:8px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#1e3a8a;font-size:0.8em;line-height:1.45;">
+                                                        <strong>Native trace replay.</strong> Conversations, turn order, session timing and tool/subagent turns come from the corpus itself. Synthetic turn settings (turns, turn delays, first-prompt sizes) are ignored, and the trace is read directly from the workload pod.
+                                                    </div>
                                                 </div>
 
                                                 <!-- Prefix Cache Simulation toggle (Continuous) -->

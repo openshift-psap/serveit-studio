@@ -14,6 +14,40 @@ from core.config_generator import TestConfig
 logger = logging.getLogger(__name__)
 
 
+def build_wekatrace_data_arg(config, source_path: str) -> str:
+    """JSON data args for guidellm's native Weka trace replay (`kind=weka`).
+
+    Conversation graphs, session timing, tool turns and subagent chains are
+    derived by guidellm from the trace; this only carries the knobs.
+    """
+    arg = {
+        "kind": "weka",
+        "source": {"kind": "json_file", "path": source_path},
+        "timestamp_column": "t",
+        "prompt_tokens_column": "in",
+        "output_tokens_column": "out",
+        "conversation_id_column": "id",
+        "hash_ids_column": "hash_ids",
+        "hash_id_block_size": 64,
+    }
+    cap = getattr(config, "wekatrace_max_context_len", None) or getattr(config, "max_model_len", 0) or 0
+    if cap:
+        arg["max_context_len"] = int(cap)
+    max_wait = getattr(config, "wekatrace_max_wait", None)
+    if max_wait:
+        arg["max_wait"] = float(max_wait)
+    min_sessions = getattr(config, "wekatrace_min_concurrent_sessions", None)
+    if min_sessions:
+        arg["min_concurrent_sessions"] = int(min_sessions)
+    time_scale = getattr(config, "wekatrace_time_scale", None)
+    if time_scale:
+        arg["time_scale"] = float(time_scale)
+    copies = int(getattr(config, "wekatrace_copies", 1) or 1)
+    if copies > 1:
+        arg["copies"] = copies
+    return json.dumps(arg)
+
+
 def _build_synthetic_data_dict(config, turns):
     """Synthetic-text data spec from a config's shape fields.
 
@@ -343,7 +377,12 @@ class GuidellmMixin:
         workload_mode = getattr(config, "workload_mode", "synthetic") or "synthetic"
         data_arg = ""
         column_args = ""
-        if workload_mode == "dataset" and getattr(config, "dataset_source", None):
+        _native_weka = bool(getattr(config, "wekatrace_native", False))
+        if _native_weka:
+            _src = (getattr(config, "wekatrace_source", None)
+                    or "/app/traces/cc-traces-weka.jsonl")
+            data_arg = build_wekatrace_data_arg(config, _src)
+        elif workload_mode == "dataset" and getattr(config, "dataset_source", None):
             dataset_path = config.dataset_source
             exists = (
                 kubectl.run(
@@ -393,7 +432,7 @@ class GuidellmMixin:
             data_arg = _build_synthetic_data_dict(config, turns)
 
         # Profile argument (rate type + rate)
-        request_format = "/v1/chat/completions" if turns > 1 else "/v1/completions"
+        request_format = ("/v1/chat/completions" if (_native_weka or turns > 1) else "/v1/completions")
         warmup = min(60, max(0, config.test_duration - 30)) if hasattr(config, "test_duration") else 60
         # Dataset mode: warmup consumes requests from the SAME file — a
         # dataset smaller than the warmup count completes with zero
@@ -422,7 +461,10 @@ class GuidellmMixin:
                 # completes with zero requests). Trace/corpus rows are the
                 # measurement — never warmup fodder.
                 warmup = 0
-        if request_profile in ("concurrent",):
+        if _native_weka:
+            _st = getattr(config, "wekatrace_schedule_turn", "idle_gap") or "idle_gap"
+            profile_arg = f"kind=replay,schedule_turn={_st},warmup=0"
+        elif request_profile in ("concurrent",):
             profile_arg = f"kind=concurrent,streams={request_rate},warmup={warmup}"
         elif request_profile == "sweep":
             profile_arg = f"kind=sweep,warmup={warmup}"
@@ -1392,8 +1434,13 @@ class GuidellmMixin:
             workload_mode = getattr(config, "workload_mode", "synthetic") or "synthetic"
             turns = getattr(config, "turns", 1) or 1
             column_mapper = None
+            _native_weka = bool(getattr(config, "wekatrace_native", False))
 
-            if workload_mode == "dataset" and getattr(config, "dataset_source", None):
+            if _native_weka:
+                _src = (getattr(config, "wekatrace_source", None)
+                        or "/app/traces/cc-traces-weka.jsonl")
+                data_arg = build_wekatrace_data_arg(config, _src)
+            elif workload_mode == "dataset" and getattr(config, "dataset_source", None):
                 dataset_path = config.dataset_source
                 col = getattr(config, "dataset_column", None) or "prompt"
                 column_mapper = f'{{"kind":"generative_column_mapper","column_mappings":{{"text_column":"{col}"}}}}'
@@ -1457,11 +1504,14 @@ class GuidellmMixin:
                         if prompt_max > 0:
                             data_arg += f",prompt_tokens_max={prompt_max}"
 
-            request_format = "/v1/chat/completions" if turns > 1 else "/v1/completions"
+            request_format = ("/v1/chat/completions" if (_native_weka or turns > 1) else "/v1/completions")
             warmup = min(60, max(0, config.test_duration - 30)) if hasattr(config, "test_duration") else 60
 
             # Profile
-            if request_profile == "concurrent":
+            if _native_weka:
+                _st = getattr(config, "wekatrace_schedule_turn", "idle_gap") or "idle_gap"
+                profile_arg = f"kind=replay,schedule_turn={_st},warmup=0"
+            elif request_profile == "concurrent":
                 profile_arg = f"kind=concurrent,streams={request_rate},warmup={warmup}"
             elif request_profile == "sweep":
                 profile_arg = f"kind=sweep,warmup={warmup}"

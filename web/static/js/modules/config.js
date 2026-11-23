@@ -507,6 +507,8 @@ function updateUIFromConfig() {
     var corpusSelect = document.getElementById('corpus-source-select');
     if (corpusSelect) {
         corpusSelect.value = config.dataset_source_mode || 'corpus';
+        var _wtNote = document.getElementById('wekatrace-native-note');
+        if (_wtNote) _wtNote.style.display = (corpusSelect.value === 'wekatrace') ? 'block' : 'none';
     }
 
     if (config.epp_preset && document.querySelector('[data-epp]')) {

@@ -3302,12 +3302,18 @@ spec:
                         f"synthetic parallel workload shape(s) — using trace data instead", "info"
                     )
                     self.config.parallel_workloads = None
-                self._generate_random_dataset()
-                self.config.workload_mode = "dataset"
-                self.config.dataset_source = self.random_dataset_path
-                self.config.dataset_column = "prompt"
-                self.config.dataset_max_output = self.config.osl
-                self.log("   Workload switched to WekaTrace dataset mode", "info")
+                # Native replay: hand the corpus to guidellm's `kind=weka`
+                # deserializer, which rebuilds conversation graphs, session
+                # timing, tool turns and subagent chains. Pre-generating a
+                # flat {prompt, output_tokens_count} dataset here would throw
+                # all of that away (multi-turn became single-turn).
+                self.config.wekatrace_native = True
+                self.config.workload_mode = "synthetic"
+                self.config.dataset_source = None
+                self.log(
+                    "   Workload uses native WekaTrace replay (guidellm kind=weka) — "
+                    "conversations, session timing and tool turns come from the trace",
+                    "info")
             elif _has_shaped_workloads:
                 pass  # shaped workloads: no dataset generation needed
             elif self.config.prefix_cache_hit_pct > 0 and self.config.workload_mode == "synthetic":
