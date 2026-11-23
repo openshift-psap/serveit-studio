@@ -795,7 +795,6 @@ def run_optimization_background(data):
         if hf_token and hf_token.strip():
             try:
                 log_to_ui("🔑 Creating HuggingFace token secret...", "info")
-                import subprocess
                 import base64
 
                 # Create secret YAML
@@ -1701,7 +1700,6 @@ data:
                 log_to_ui("🧪 Waiting for vLLM to finish loading model...", "info")
 
                 inference_validated = False
-                import subprocess
 
                 # Get all pod IPs for this deployment
                 try:
