@@ -84,22 +84,25 @@ RUN chmod +x /usr/local/bin/generate_turn_dataset
 COPY docker/scripts/generate_wekatrace_dataset.py /usr/local/bin/generate_wekatrace_dataset
 RUN chmod +x /usr/local/bin/generate_wekatrace_dataset
 
-# Bundle the WekaTrace agentic traces (10 curated Claude Code sessions,
-# ~430 requests, ISL 448-500k, 97-99% hash-block prefix sharing).
-# These are REAL production agentic sessions from SemiAnalysis traces.
-COPY docker/data/cc-traces-subset.jsonl /app/traces/cc-traces-weka.jsonl
-
-# AgentX — the full 393-session SemiAnalysis Weka corpus behind AIPerf's
-# `inferencex-agentx-mvp` scenario (dataset semianalysis_cc_traces_weka_062126,
-# apache-2.0). Baked in so workload pods stay offline-safe. This is the
-# canonical agentic profile for BLIS trace replay:
-#   wekatrace_source=/app/traces/agentx-062126.jsonl, wekatrace_max_traces=393,
-#   test_duration=1800. It is NOT interchangeable with the 10-session subset
-#   above (cc-traces-weka.jsonl, ~430 requests, used for guidellm synthesis).
+# WekaTrace / AgentX — the full 393-session SemiAnalysis Weka corpus behind
+# AIPerf's `inferencex-agentx-mvp` scenario (dataset
+# semianalysis_cc_traces_weka_062126, apache-2.0). Baked in so workload pods
+# stay offline-safe.
+#
+# ONE corpus, TWO names: `/app/traces/cc-traces-weka.jsonl` is a symlink to
+# the same file, so every existing default/selector resolves to the full set.
+# Volume is controlled by `wekatrace_max_traces` (default 10; 393 = all):
+#   wekatrace_max_traces=10   -> ~1.4k requests  (fast smoke)
+#   wekatrace_max_traces=393  -> 56.8k requests  (full AgentX)
+# The old 10-session curated subset (docker/data/cc-traces-subset.jsonl) is
+# intentionally no longer baked — it hid 383 sessions and made the two names
+# mean different data.
 RUN wget -q -O /app/traces/agentx-062126.jsonl \
       https://huggingface.co/datasets/semianalysisai/cc-traces-weka-062126/resolve/main/traces.jsonl && \
     python3.11 -c "import json; n=sum(1 for _ in open('/app/traces/agentx-062126.jsonl')); assert n == 393, n; print('agentx: %d sessions' % n)" && \
-    test "$(stat -c %s /app/traces/agentx-062126.jsonl)" -gt 1500000000
+    test "$(stat -c %s /app/traces/agentx-062126.jsonl)" -gt 1500000000 && \
+    ln -sf /app/traces/agentx-062126.jsonl /app/traces/cc-traces-weka.jsonl && \
+    test "$(python3.11 -c "print(sum(1 for _ in open('/app/traces/cc-traces-weka.jsonl')))")" = "393"
 
 # BLIS simulator from the builder stage (see blis-builder above).
 # Catalog + registry + router reference configs are embedded in the binary.
