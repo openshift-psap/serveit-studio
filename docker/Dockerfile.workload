@@ -94,9 +94,6 @@ RUN chmod +x /usr/local/bin/generate_wekatrace_dataset
 # Volume is controlled by `wekatrace_max_traces` (default 10; 393 = all):
 #   wekatrace_max_traces=10   -> ~1.4k requests  (fast smoke)
 #   wekatrace_max_traces=393  -> 56.8k requests  (full AgentX)
-# The old 10-session curated subset (docker/data/cc-traces-subset.jsonl) is
-# intentionally no longer baked — it hid 383 sessions and made the two names
-# mean different data.
 RUN mkdir -p /app/traces && \
     wget -q -O /app/traces/agentx-062126.jsonl \
       https://huggingface.co/datasets/semianalysisai/cc-traces-weka-062126/resolve/main/traces.jsonl && \
