@@ -140,7 +140,7 @@ class DatasetMixin:
             self.log(f"Generating {mode} dataset on workload pod: {pool_size} rows, ISL={isl}, OSL={osl}{corpus_note}", 'info')
             if mode == 'wekatrace':
                 traces_path = getattr(self.config, 'wekatrace_source', '/app/traces/cc-traces-weka.jsonl')
-                max_traces = int(getattr(self.config, 'wekatrace_max_traces', 10) or 10)
+                max_traces = int(getattr(self.config, 'wekatrace_max_traces', 0) or 0)
                 cmd = (
                     f'generate_wekatrace_dataset'
                     f' --traces "{traces_path}"'

@@ -1989,7 +1989,7 @@ class RecipeOptimizer(
             traces = runner_scenario.fetch_traces(getattr(
                 self.config, "wekatrace_source",
                 "/app/traces/cc-traces-weka.jsonl"))
-            max_traces = int(getattr(self.config, "wekatrace_max_traces", 10) or 10)
+            max_traces = int(getattr(self.config, "wekatrace_max_traces", 0) or 0)
             duration = int(getattr(self.config, "test_duration", 300) or 300)
             # requests over the model's context budget are unservable in
             # the simulator exactly as they would 400 on a real deployment
@@ -1997,7 +1997,7 @@ class RecipeOptimizer(
             osl_budget = int(getattr(self.config, "osl", 512) or 512)
             max_input = (mml - osl_budget - 512) if mml > (osl_budget + 512) else None
             # cache the conversion — cycles share the same trace files
-            trace_tag = f"wekatrace-{max_traces}-{duration}-{max_input or 0}"
+            trace_tag = f"wekatrace-{max_traces or 'all'}-{duration}-{max_input or 0}"
             self._blis_trace_tag = trace_tag
             th = os.path.join(run_dir, f"{trace_tag}.trace-header.yaml")
             td = os.path.join(run_dir, f"{trace_tag}.trace-data.csv")

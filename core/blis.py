@@ -1047,7 +1047,7 @@ pools:
 
     @staticmethod
     def convert_wekatrace(traces_path: str, out_dir: str, name: str,
-                          max_traces: int = 10, duration_s: int = 300,
+                          max_traces: int = 0, duration_s: int = 300,
                           model_name: str = "model", block_tokens: int = 64,
                           max_input_tokens: int = None):
         """Convert WekaTrace agentic-session JSONL to BLIS TraceV2.
@@ -1079,7 +1079,9 @@ pools:
                         continue
         except OSError as e:
             return None, None
-        sessions = [s for s in sessions if s.get("requests")][:max_traces]
+        sessions = [s for s in sessions if s.get("requests")]
+        if max_traces and max_traces > 0:
+            sessions = sessions[:max_traces]
         if not sessions:
             return None, None
 

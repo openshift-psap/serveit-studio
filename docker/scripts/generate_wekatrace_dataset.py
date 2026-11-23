@@ -137,7 +137,7 @@ def main():
     parser.add_argument('--traces', required=True, help='Path to WekaTrace JSONL file')
     parser.add_argument('--model', required=True, help='Model name (for tokenizer)')
     parser.add_argument('--output', required=True, help='Output JSONL path')
-    parser.add_argument('--max-traces', type=int, default=10, help='Max traces to convert')
+    parser.add_argument('--max-traces', type=int, default=0, help='Max traces to convert (0 = all available)')
     parser.add_argument('--max-is-blocks', type=int, default=16000,
                         help='Skip requests above this block count (16000*64=1M tokens)')
     parser.add_argument('--max-is-tokens', type=int, default=None,
@@ -176,7 +176,7 @@ def main():
             continue
         valid.append(t)
 
-    traces = valid[:args.max_traces]
+    traces = valid[:args.max_traces] if args.max_traces and args.max_traces > 0 else valid
     print(f'{len(traces)} traces after filtering (max_is_blocks={args.max_is_blocks})',
           file=sys.stderr)
 

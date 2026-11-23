@@ -229,7 +229,7 @@ class RecipeOptimizerConfig:
     use_blis: bool = False  # run tests in BLIS simulation instead of on GPUs
     blis_cluster_nodes: int = 0  # fleet size override for simulation (capacity planning)
     wekatrace_source: str = "/app/traces/cc-traces-weka.jsonl"
-    wekatrace_max_traces: int = 10
+    wekatrace_max_traces: int = 0
 
     # Speculative decoding
     speculative_config_method: Optional[str] = None  # 'mtp', 'draft', None
