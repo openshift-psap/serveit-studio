@@ -561,7 +561,14 @@ def run_optimization_background(data):
         if optimization_goal == "balanced":
             optimization_goal = "full_coverage"  # legacy rename
         stop_mode = _get("stop_mode", "duration")
-        test_duration = int(_get("max_test_duration", 300, ui_key="duration"))
+        # Payloads carry `test_duration`; the legacy UI key is `max_test_duration`
+        # (saved as `duration`). Reading only the legacy key silently pinned
+        # every API payload to the saved 300 s — trace replays requested 1800 s
+        # and got 300 s.
+        _td = data.get("test_duration")
+        if _td is None:
+            _td = _get("max_test_duration", 300, ui_key="duration")
+        test_duration = int(_td)
         max_requests = _get("max_requests")
         thanos_url = data.get("thanos_url", os.environ.get("THANOS_URL"))
         # Auto-detect Prometheus if not configured
