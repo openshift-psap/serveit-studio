@@ -503,7 +503,8 @@ class RecipeOptimizer(
 
         # Validate workload fits within model's architectural limit
         model_max_pos = (self._model_config.get("max_position_embeddings") or None) if self._model_config else None
-        if model_max_pos and computed_max_model_len > model_max_pos:
+        if (getattr(self.config, "dataset_source_mode", "") != "wekatrace"
+                and model_max_pos and computed_max_model_len > model_max_pos):
             raise ValueError(
                 f"Workload settings require {computed_max_model_len} tokens "
                 f"({turns_n} turns × isl={isl}±{isl_stdev}, osl={osl}±{osl_stdev}, "
@@ -529,7 +530,19 @@ class RecipeOptimizer(
             self._kv_bytes_per_token = 0
 
         # Always use computed max_model_len since default 8192 is not a user-provided value
-        self.config.max_model_len = computed_max_model_len
+        if getattr(self.config, "dataset_source_mode", "") == "wekatrace":
+            # Trace prompts carry their own lengths (up to ~1M tokens); the
+            # synthetic planner's isl/osl math is meaningless here. Pin the
+            # window to the model's real limit (capped at 128k so one
+            # max-length sequence fits the H200 KV budget).
+            _mm = (self._model_config or {}).get("max_position_embeddings") or 40960
+            self.config.max_model_len = min(int(_mm), 131072)
+            self.log(
+                f"   WekaTrace: max_model_len set to trace window "
+                f"{self.config.max_model_len:,} (model max_position_embeddings)",
+                "info")
+        else:
+            self.config.max_model_len = computed_max_model_len
         self.log(
             f"max_model_len: {computed_max_model_len} (from workload: isl={isl}±{isl_stdev}, osl={osl}±{osl_stdev})"
         )
