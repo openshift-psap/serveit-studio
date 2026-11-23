@@ -89,6 +89,18 @@ RUN chmod +x /usr/local/bin/generate_wekatrace_dataset
 # These are REAL production agentic sessions from SemiAnalysis traces.
 COPY docker/data/cc-traces-subset.jsonl /app/traces/cc-traces-weka.jsonl
 
+# AgentX — the full 393-session SemiAnalysis Weka corpus behind AIPerf's
+# `inferencex-agentx-mvp` scenario (dataset semianalysis_cc_traces_weka_062126,
+# apache-2.0). Baked in so workload pods stay offline-safe. This is the
+# canonical agentic profile for BLIS trace replay:
+#   wekatrace_source=/app/traces/agentx-062126.jsonl, wekatrace_max_traces=393,
+#   test_duration=1800. It is NOT interchangeable with the 10-session subset
+#   above (cc-traces-weka.jsonl, ~430 requests, used for guidellm synthesis).
+RUN wget -q -O /app/traces/agentx-062126.jsonl \
+      https://huggingface.co/datasets/semianalysisai/cc-traces-weka-062126/resolve/main/traces.jsonl && \
+    python3.11 -c "import json; n=sum(1 for _ in open('/app/traces/agentx-062126.jsonl')); assert n == 393, n; print('agentx: %d sessions' % n)" && \
+    test "$(stat -c %s /app/traces/agentx-062126.jsonl)" -gt 1500000000
+
 # BLIS simulator from the builder stage (see blis-builder above).
 # Catalog + registry + router reference configs are embedded in the binary.
 COPY --from=blis-builder /blis /usr/local/bin/blis
