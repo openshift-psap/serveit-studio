@@ -323,12 +323,12 @@
                                                     <label style="font-weight:600;color:#15803d;font-size:0.88em;display:block;margin-bottom:6px;">Corpus Source:</label>
                                                     <select id="corpus-source-select" onchange="config.dataset_source_mode=this.value;document.getElementById('wekatrace-options').style.display=(this.value==='wekatrace')?'block':'none';saveConfig();" style="width:100%;padding:8px 12px;border:1.5px solid #86efac;border-radius:8px;font-size:0.9em;background:#f0fdf4;color:#166534;cursor:pointer;">
                                                         <option value="corpus">wikitext-103 — English prose for speculative decoding</option>
-                                                        <option value="wekatrace">Agentic Traces (WekaTrace) — real Claude Code sessions with multi-turn ISL growth + hash-block cache sharing</option>
+                                                        <option value="wekatrace">Agentic Traces (AgentX / WekaTrace) — 393 real Claude Code sessions, multi-turn ISL growth + hash-block cache sharing</option>
                                                     </select>
                                                     <div id="wekatrace-options" style="display:none;margin-top:10px;">
-                                                        <label style="font-weight:600;color:#15803d;font-size:0.85em;display:block;margin-bottom:4px;">Max traces to replay:</label>
+                                                        <label style="font-weight:600;color:#15803d;font-size:0.85em;display:block;margin-bottom:4px;">Max traces to replay (1–393):</label>
                                                         <input type="number" id="wekatrace-max-traces" value="10" min="1" max="393" style="width:80px;padding:6px 10px;border:1.5px solid #86efac;border-radius:8px;font-size:0.9em;" onchange="config.wekatrace_max_traces=parseInt(this.value)||10;saveConfig();">
-                                                        <span style="color:#166534;font-size:0.8em;margin-left:8px;">each trace = 1 full agentic session (23-466 requests, ISL 7k-680k)</span>
+                                                        <span style="color:#166534;font-size:0.8em;margin-left:8px;display:inline-block;max-width:70%;">Full AgentX corpus — 393 sessions, 56,798 requests. 1 trace = 1 agentic session (2–2,977 requests, ISL 7k–990k). 10 = fast smoke; 393 = whole corpus.</span>
                                                     </div>
                                                 </div>
 
