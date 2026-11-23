@@ -84,23 +84,21 @@ RUN chmod +x /usr/local/bin/generate_turn_dataset
 COPY docker/scripts/generate_wekatrace_dataset.py /usr/local/bin/generate_wekatrace_dataset
 RUN chmod +x /usr/local/bin/generate_wekatrace_dataset
 
-# WekaTrace / AgentX — the full 393-session SemiAnalysis Weka corpus behind
-# AIPerf's `inferencex-agentx-mvp` scenario (dataset
-# semianalysis_cc_traces_weka_062126, apache-2.0). Baked in so workload pods
-# stay offline-safe.
+# WekaTrace / AgentX corpus — the full 393-session SemiAnalysis Weka dataset
+# behind AIPerf's `inferencex-agentx-mvp` scenario
+# (semianalysisai/cc-traces-weka-062126, apache-2.0), baked in so workload
+# pods stay offline-safe.
 #
-# ONE corpus, TWO names: `/app/traces/cc-traces-weka.jsonl` is a symlink to
-# the same file, so every existing default/selector resolves to the full set.
-# Volume is controlled by `wekatrace_max_traces` (default 10; 393 = all):
-#   wekatrace_max_traces=10   -> ~1.4k requests  (fast smoke)
-#   wekatrace_max_traces=393  -> 56.8k requests  (full AgentX)
+# ONE file, one name: /app/traces/cc-traces-weka.jsonl. Every default
+# (wekatrace_source in config.py / config_generator.py / dataset.py) already
+# points here; "AgentX" is only the benchmark profile that replays it, not a
+# second dataset. Volume is controlled by `wekatrace_max_traces`
+# (0/absent = all 393 sessions = 56,798 requests).
 RUN mkdir -p /app/traces && \
-    wget -q -O /app/traces/agentx-062126.jsonl \
+    wget -q -O /app/traces/cc-traces-weka.jsonl \
       https://huggingface.co/datasets/semianalysisai/cc-traces-weka-062126/resolve/main/traces.jsonl && \
-    python3.11 -c 'import json; n=sum(1 for _ in open("/app/traces/agentx-062126.jsonl")); assert n == 393, n; print("agentx: %d sessions" % n)' && \
-    test "$(stat -c %s /app/traces/agentx-062126.jsonl)" -gt 1500000000 && \
-    ln -sf /app/traces/agentx-062126.jsonl /app/traces/cc-traces-weka.jsonl && \
-    python3.11 -c 'import json; n=sum(1 for _ in open("/app/traces/cc-traces-weka.jsonl")); assert n == 393, n; print("alias: %d sessions" % n)'
+    python3.11 -c 'import json; n=sum(1 for _ in open("/app/traces/cc-traces-weka.jsonl")); assert n == 393, n; print("weka corpus: %d sessions" % n)' && \
+    test "$(stat -c %s /app/traces/cc-traces-weka.jsonl)" -gt 1500000000
 
 
 # BLIS simulator from the builder stage (see blis-builder above).
