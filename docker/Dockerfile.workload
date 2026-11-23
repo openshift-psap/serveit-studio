@@ -99,10 +99,11 @@ RUN chmod +x /usr/local/bin/generate_wekatrace_dataset
 # mean different data.
 RUN wget -q -O /app/traces/agentx-062126.jsonl \
       https://huggingface.co/datasets/semianalysisai/cc-traces-weka-062126/resolve/main/traces.jsonl && \
-    python3.11 -c "import json; n=sum(1 for _ in open('/app/traces/agentx-062126.jsonl')); assert n == 393, n; print('agentx: %d sessions' % n)" && \
+    python3.11 -c 'import json; n=sum(1 for _ in open("/app/traces/agentx-062126.jsonl")); assert n == 393, n; print("agentx: %d sessions" % n)' && \
     test "$(stat -c %s /app/traces/agentx-062126.jsonl)" -gt 1500000000 && \
     ln -sf /app/traces/agentx-062126.jsonl /app/traces/cc-traces-weka.jsonl && \
-    test "$(python3.11 -c "print(sum(1 for _ in open('/app/traces/cc-traces-weka.jsonl')))")" = "393"
+    python3.11 -c 'import json; n=sum(1 for _ in open("/app/traces/cc-traces-weka.jsonl")); assert n == 393, n; print("alias: %d sessions" % n)'
+
 
 # BLIS simulator from the builder stage (see blis-builder above).
 # Catalog + registry + router reference configs are embedded in the binary.
