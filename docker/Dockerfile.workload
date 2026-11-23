@@ -97,7 +97,8 @@ RUN chmod +x /usr/local/bin/generate_wekatrace_dataset
 # The old 10-session curated subset (docker/data/cc-traces-subset.jsonl) is
 # intentionally no longer baked — it hid 383 sessions and made the two names
 # mean different data.
-RUN wget -q -O /app/traces/agentx-062126.jsonl \
+RUN mkdir -p /app/traces && \
+    wget -q -O /app/traces/agentx-062126.jsonl \
       https://huggingface.co/datasets/semianalysisai/cc-traces-weka-062126/resolve/main/traces.jsonl && \
     python3.11 -c 'import json; n=sum(1 for _ in open("/app/traces/agentx-062126.jsonl")); assert n == 393, n; print("agentx: %d sessions" % n)' && \
     test "$(stat -c %s /app/traces/agentx-062126.jsonl)" -gt 1500000000 && \
