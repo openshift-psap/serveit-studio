@@ -1122,12 +1122,21 @@ pools:
                 t = float(r.get("t", 0) or 0)
                 t_max = max(t_max, t)
                 hash_ids = r.get("hash_ids") or []
-                # prefix shared with the previous request of this session
+                # The corpus's hash_ids are a per-request LOCAL block list
+                # (0..N-1), not global content hashes: two requests in different
+                # sessions both start at 0 even when their content differs. The
+                # only real reuse the ids encode is cumulative within a session
+                # (turn k's prompt contains turn k-1), so we credit the leading
+                # match against the previous turn of THIS session. Cross-session
+                # sharing is not recoverable from this trace; it needs the real
+                # prompt text/hashes (see routing.md: BLIS uses placeholder
+                # tokens and only models "which prompts share a prefix").
                 shared = 0
                 for a, b in zip(prev_ids, hash_ids):
                     if a != b:
                         break
                     shared += 1
+                _in_tok = int(r.get("in", 0) or 0)
                 rows.append({
                     "_t": t,
                     "request_id": request_id,
@@ -1135,9 +1144,9 @@ pools:
                     "client_id": sid,
                     "round_index": r_idx,
                     "arrival_time_us": 0,  # filled after scaling
-                    "input_tokens": int(r.get("in", 0) or 0),
+                    "input_tokens": _in_tok,
                     "output_tokens": max(1, int(r.get("out", 1) or 1)),
-                    "prefix_length": shared * block_tokens,
+                    "prefix_length": min(shared * block_tokens, _in_tok),
                     "prefix_group": sid,
                     "model": model_name,
                     "status": "completed",
@@ -1192,12 +1201,22 @@ pools:
                   f"{skipped} over the {max_input_tokens}-token context budget",
                   file=_sys.stderr)
         # sidecar stats so reports can explain thin routing cells
+        with_prefix = sum(1 for r in rows if r.get("prefix_length", 0) > 0)
+        shared_tokens = sum(r.get("prefix_length", 0) for r in rows)
+        total_in = sum(max(1, r.get("input_tokens", 0)) for r in rows)
         try:
             with open(os.path.join(out_dir, f"{name}.stats.json"), "w") as f:
                 json.dump({"kept": len(rows), "dropped_over_budget": skipped,
-                           "max_input_tokens": max_input_tokens}, f)
+                           "max_input_tokens": max_input_tokens,
+                           "requests_with_prefix": with_prefix,
+                           "shared_token_fraction": round(shared_tokens / total_in, 4) if total_in else 0.0}, f)
         except OSError:
             pass
+        if rows and with_prefix / len(rows) < 0.05:
+            import sys as _sys
+            print(f"WekaTrace->TraceV2: only {with_prefix}/{len(rows)} requests carry a "
+                  f"prefix — the affinity filter's affinityThreshold will not be met; "
+                  f"lower it or widen max_input_tokens", file=_sys.stderr)
         return header_path, csv_path
 
     def run_replay(self, scenario_path: str, scenario_name: str,

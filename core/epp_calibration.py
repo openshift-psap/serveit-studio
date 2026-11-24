@@ -285,18 +285,34 @@ def store_calibration(db_path: str, model_name: str, gpu_model: str, tp: int,
 
 def inject_affinity_filter_params(raw_yaml: str, peak_prefill_throughput: int = None,
                                   max_ttft_penalty_ms: int = None,
-                                  exploration_probability: float = 0) -> str:
-    """Add parameters to the prefix-cache-affinity-filter in an EPP raw config.
+                                  exploration_probability: float = 0,
+                                  affinity_threshold: float = None,
+                                  ttft_source: str = None) -> str:
+    """Add/update parameters on the prefix-cache-affinity-filter EPP plugin.
 
-    Works on the textual YAML (the raw config is passed through verbatim, so
-    we preserve formatting): updates the plugin's parameters block, creating
-    it when absent. ``exploration_probability`` is written whenever it is
-    requested, including when the block already carries peak/penalty values —
-    otherwise a custom config would silently run with exploration disabled.
+    Textual edit so the user's formatting is preserved. Only the values given
+    are written. ``explorationProbability`` is written whenever > 0.
+    ``affinityThreshold`` and ``ttftSource`` are written when provided — BLIS
+    refuses the filter only when ``ttftSource: latencyPredictor`` is chosen, so
+    pinning ``prefillThroughput`` makes the intent explicit and version-safe.
     Returns the modified YAML, or the input unchanged if the filter is absent.
     """
     marker = "- type: prefix-cache-affinity-filter"
     if "prefix-cache-affinity-filter" not in raw_yaml:
+        return raw_yaml
+
+    desired = {}
+    if peak_prefill_throughput is not None:
+        desired["peakPrefillThroughput"] = peak_prefill_throughput
+    if max_ttft_penalty_ms is not None:
+        desired["maxTTFTPenaltyMs"] = max_ttft_penalty_ms
+    if exploration_probability and exploration_probability > 0:
+        desired["explorationProbability"] = exploration_probability
+    if affinity_threshold is not None:
+        desired["affinityThreshold"] = affinity_threshold
+    if ttft_source:
+        desired["ttftSource"] = ttft_source
+    if not desired:
         return raw_yaml
 
     newline = "\n" if raw_yaml.endswith("\n") else ""
@@ -320,12 +336,12 @@ def inject_affinity_filter_params(raw_yaml: str, peak_prefill_throughput: int = 
     block = lines[fi:end]
     param_i = next((k for k, ln in enumerate(block)
                     if ln.strip() == "parameters:"), None)
-    explore_set = False
 
     if param_i is not None:
         pindent = len(block[param_i]) - len(block[param_i].lstrip())
         child_indent = pindent + 2
-        # Rewrite known keys, capture the child indent from real entries.
+        seen = set()
+        last = param_i
         for k in range(param_i + 1, len(block)):
             st = block[k].strip()
             ind = len(block[k]) - len(block[k].lstrip())
@@ -334,35 +350,19 @@ def inject_affinity_filter_params(raw_yaml: str, peak_prefill_throughput: int = 
             if not st:
                 continue
             child_indent = ind
-            if st.startswith("peakPrefillThroughput:"):
-                if peak_prefill_throughput is not None:
-                    block[k] = f"{' ' * ind}peakPrefillThroughput: {peak_prefill_throughput}"
-            elif st.startswith("maxTTFTPenaltyMs:"):
-                if max_ttft_penalty_ms is not None:
-                    block[k] = f"{' ' * ind}maxTTFTPenaltyMs: {max_ttft_penalty_ms}"
-            elif st.startswith("explorationProbability:"):
-                block[k] = f"{' ' * ind}explorationProbability: {exploration_probability}"
-                explore_set = True
-        if exploration_probability and exploration_probability > 0 and not explore_set:
-            # Insert after the last populated parameter line.
-            insert_at = param_i + 1
-            for k in range(param_i + 1, len(block)):
-                st = block[k].strip()
-                ind = len(block[k]) - len(block[k].lstrip())
-                if st and ind <= pindent:
-                    break
-                if st:
-                    insert_at = k + 1
-            block.insert(insert_at,
-                         f"{' ' * child_indent}explorationProbability: {exploration_probability}")
+            last = k
+            key = st.split(":", 1)[0].strip()
+            if key in desired:
+                block[k] = f"{' ' * ind}{key}: {desired[key]}"
+                seen.add(key)
+        for key, val in desired.items():
+            if key not in seen:
+                last += 1
+                block.insert(last, f"{' ' * child_indent}{key}: {val}")
     else:
         block.append(f"{' ' * (findent + 2)}parameters:")
-        if peak_prefill_throughput is not None:
-            block.append(f"{' ' * (findent + 4)}peakPrefillThroughput: {peak_prefill_throughput}")
-        if max_ttft_penalty_ms is not None:
-            block.append(f"{' ' * (findent + 4)}maxTTFTPenaltyMs: {max_ttft_penalty_ms}")
-        if exploration_probability and exploration_probability > 0:
-            block.append(f"{' ' * (findent + 4)}explorationProbability: {exploration_probability}")
+        for key, val in desired.items():
+            block.append(f"{' ' * (findent + 4)}{key}: {val}")
 
     return "\n".join(lines[:fi] + block + lines[end:]) + newline
 

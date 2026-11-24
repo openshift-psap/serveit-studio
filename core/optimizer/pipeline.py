@@ -2458,25 +2458,43 @@ class RecipeOptimizer(
                             model_config=self._model_config or {},
                         )
                     if _peak:
-                        _penalty = derive_max_ttft_penalty_ms(
-                            getattr(self.config, "isl", 0) or 0,
-                            _peak,
-                        )
-                        _explore_raw = float(
-                            (getattr(self.config, "epp_config", None) or {})
-                            .get("explorationProbability") or 0)
+                        if getattr(self.config, "dataset_source_mode", "") == "wekatrace":
+                            # Trace replay has no single ISL: config.isl is a UI
+                            # placeholder (e.g. 1024) and would clamp the penalty to
+                            # its 200 ms floor, which breaks affinity almost
+                            # immediately. AgentX prompts are long; use the upstream
+                            # llm-d default (18000 ms), which keeps stickiness.
+                            _penalty = 18000
+                        else:
+                            _penalty = derive_max_ttft_penalty_ms(
+                                getattr(self.config, "isl", 0) or 0,
+                                _peak,
+                            )
+                        _cfg_epp = (getattr(self.config, "epp_config", None) or {})
+                        _explore_raw = float(_cfg_epp.get("explorationProbability") or 0)
+                        _thr = _cfg_epp.get("affinityThreshold")
                         user_epp_raw = inject_affinity_filter_params(
                             user_epp_raw, _peak, _penalty,
-                            exploration_probability=_explore_raw)
+                            exploration_probability=_explore_raw,
+                            affinity_threshold=(float(_thr) if _thr is not None else None),
+                            ttft_source="prefillThroughput")
                 except Exception:
                     pass
             _ex = float((getattr(self.config, "epp_config", None) or {})
                         .get("explorationProbability") or 0)
-            if _ex > 0 and "explorationProbability" not in user_epp_raw:
+            _cfg_epp2 = (getattr(self.config, "epp_config", None) or {})
+            _thr2 = _cfg_epp2.get("affinityThreshold")
+            if "prefix-cache-affinity-filter" in user_epp_raw and (
+                    (_ex > 0 and "explorationProbability" not in user_epp_raw)
+                    or "ttftSource" not in user_epp_raw
+                    or (_thr2 is not None and "affinityThreshold" not in user_epp_raw)):
                 try:
                     from core.epp_calibration import inject_affinity_filter_params
                     user_epp_raw = inject_affinity_filter_params(
-                        user_epp_raw, None, None, exploration_probability=_ex)
+                        user_epp_raw, None, None,
+                        exploration_probability=_ex,
+                        affinity_threshold=(float(_thr2) if _thr2 is not None else None),
+                        ttft_source="prefillThroughput")
                 except Exception:
                     pass
             return {"preset": "custom", "raw_yaml": user_epp_raw}
