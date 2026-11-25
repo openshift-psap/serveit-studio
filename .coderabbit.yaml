@@ -1,0 +1,74 @@
+# CodeRabbit configuration
+# Docs: https://docs.coderabbit.ai/reference/configuration
+# NOTE: this file only configures behaviour; install the CodeRabbit GitHub App
+# on the repository (or org) for reviews to run.
+language: en-US
+early_access: false
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  sequence_diagrams: true
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    base_branches:
+      - main
+
+  path_filters:
+    - "!**/__pycache__/**"
+    - "!**/*.pyc"
+    - "!**/node_modules/**"
+    - "!web/static/vendor/**"
+    - "!images/**"
+
+  path_instructions:
+    - path: "core/blis.py"
+      instructions: >-
+        Generates BLIS scenarios and embeds the real llm-d EndpointPickerConfig.
+        Preserve parity with the deployed config: never drop a router plugin
+        silently, keep fallbacks explicit, and require evidence (a run/test) for
+        any "not modelled" claim. Note that the corpus hash_ids are per-request
+        local counters, not global content hashes.
+    - path: "core/optimizer/pipeline.py"
+      instructions: >-
+        Renders EPP configs and drives the optimizer. Keep the explorationProbability
+        verification gate (a requested alpha must appear in the rendered config) and
+        fail fast / warn clearly on BLIS refusals. Never silently measure alpha=0 or
+        a different router policy than requested.
+    - path: "core/epp_calibration.py"
+      instructions: >-
+        Injects affinity-filter parameters (peakPrefillThroughput, maxTTFTPenaltyMs,
+        affinityThreshold, ttftSource, explorationProbability). Preserve the caller's
+        YAML formatting and write only values that were derived or measured.
+    - path: "core/**"
+      instructions: >-
+        Python backend. Prefer deterministic, unit-testable code; BLIS/desktop paths
+        must not require a GPU. Add or update tests in tests/ when behavior changes.
+    - path: "web/**"
+      instructions: >-
+        Flask + vanilla JS UI. Do not break the /api/start_optimization, resume, or
+        restart_run contracts.
+    - path: "tests/**"
+      instructions: >-
+        Tests must be deterministic and GPU-free; avoid network calls.
+
+  tools:
+    ruff:
+      enabled: true
+    gitleaks:
+      enabled: true
+    markdownlint:
+      enabled: true
+    hadolint:
+      enabled: true
+    yamllint:
+      enabled: true
+
+chat:
+  auto_reply: true
